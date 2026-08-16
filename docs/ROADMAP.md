@@ -6,6 +6,8 @@ Milestones are outcome-based. Estimates assume one developer learning parts of t
 
 Estimated effort: 2–4 days.
 
+Status: backend foundation complete; frontend generation and the backend/frontend connectivity check remain.
+
 - Generate Spring Boot 4.1/Java 21 Maven project.
 - Generate Next.js TypeScript project.
 - Add Maven wrapper and pnpm lockfile.

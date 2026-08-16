@@ -2,7 +2,7 @@
 
 OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, saves reusable knowledge in PostgreSQL, and exposes the same capabilities to AI agents through the Model Context Protocol (MCP).
 
-> Status: architecture and delivery planning. Application source code has not been generated yet.
+> Status: Java backend foundation complete. The Spring Boot application, PostgreSQL catalog schema, health endpoints, modular boundaries, Docker setup, and backend CI are ready; the OpenAlex search slice is next.
 
 ## Product goals
 
@@ -67,6 +67,10 @@ The platform will use supported APIs and legal repository links. It will not byp
 ## Initial success criteria
 
 The MVP is complete when a user can search an academic topic, receive normalized and deduplicated results from OpenAlex, resolve legal full-text availability through Unpaywall or arXiv, revisit cached results, save papers to a collection, open supported PDFs in the web reader, and invoke the core search operations through an MCP client.
+
+## Backend development
+
+See the [backend README](backend/README.md) for current Java setup and verification commands.
 
 ## License
 

@@ -1,22 +1,21 @@
 # Development Plan
 
-## Intended local workflow
+## Current backend workflow
 
-After application generation:
+From the `backend` directory, start the application with Docker running:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Spring Boot manages the PostgreSQL/pgvector Compose service automatically. To manage it separately:
 
 ```bash
 docker compose up -d postgres
-./mvnw -f backend/pom.xml spring-boot:run
-pnpm --dir frontend dev
+SPRING_DOCKER_COMPOSE_ENABLED=false ./mvnw spring-boot:run
 ```
 
-The complete container profile will support:
-
-```bash
-docker compose up --build
-```
-
-These are targets; the repository currently contains planning documents only.
+Run `./mvnw verify` for the unit, web, architecture, and PostgreSQL Testcontainers tests. The frontend and full application container profile remain future milestones.
 
 ## Planned environment variables
 
@@ -96,5 +95,5 @@ Optional embedding, OAuth, storage, and monitoring variables arrive only with th
 
 - Git and Docker 29.6.1 are available.
 - Java 26 is installed; builds will target Java 21.
-- GitHub CLI is installed but authentication needs refresh before push.
-- No global Maven was detected; generated source will commit Maven Wrapper.
+- GitHub CLI is authenticated for repository publishing and CI inspection.
+- No global Maven is required; the backend commits Maven Wrapper 3.9.16.
