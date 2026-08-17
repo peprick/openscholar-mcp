@@ -47,13 +47,18 @@ Inbound MCP tokens are never forwarded to OpenAlex, Unpaywall, CORE, or other pr
 
 ## URL and document security
 
-- Accept fetchable URLs only from trusted provider responses or allowlisted hosts.
-- Resolve DNS and block loopback, private, link-local, cloud-metadata, and unsafe redirect targets.
-- Revalidate every redirect and permit only HTTPS outside local development.
-- Enforce content type, byte limit, timeout, and redirect count.
-- Stream bounded downloads rather than buffering unbounded PDFs.
+- Accept verification candidates only from configured provider responses; there is no arbitrary-URL REST or MCP fetch operation.
+- Permit absolute HTTPS URLs by default, with HTTP available only through explicit local/test configuration. Reject credentials, fragments, and non-default ports.
+- Resolve each request through the validating connection-layer DNS resolver and reject any hostname with a loopback, any-local, link-local, site-local/private, multicast, carrier-grade NAT, documentation/benchmark, or IPv6 unique-local answer.
+- Disable automatic redirects and revalidate the URL and DNS answers for every manually followed redirect. Redirect count, connection time, response time, and probe bytes are bounded.
+- Do not forward inbound authorization, cookies, or provider credentials to candidate hosts; automatic authentication, cookies, retries, decompression, and connection reuse are disabled for link probes.
+- Probe PDF candidates with a bounded range `GET` and require either `application/pdf` or a `%PDF-` prefix. Probe landing pages with `HEAD`, using a bounded range `GET` only when `HEAD` is unsupported.
+- Close a probe immediately after the bounded prefix. The current access slice never downloads, buffers, proxies, or persists a complete PDF.
+- Bound Unpaywall JSON and arXiv Atom responses while reading them from HTTP, before deserialization or XML parsing.
 - Scan retained files and render in a sandboxed browser context.
 - Do not execute embedded scripts, attachments, or external PDF actions.
+
+The final two controls apply when permitted document retention and the reader are implemented; retained files do not exist in the current backend slice.
 
 ## Prompt-injection boundary
 
@@ -65,6 +70,8 @@ Papers, abstracts, repository pages, and PDF metadata are data. They cannot modi
 - Never commit tokens or embed private configuration in frontend code.
 - Redact authorization headers, keys, provider-identification emails, and signed URLs from logs.
 - Rotate credentials after suspected exposure.
+
+Unpaywall's contact email is backend-owned configuration. It is not accepted from a REST caller and is used only on exact DOI requests to Unpaywall. If it is absent, Unpaywall is reported as not configured without disabling arXiv access checks.
 
 ## Open-access and copyright policy
 
@@ -86,9 +93,17 @@ Default behavior:
 - Do not expose retained documents to others unless permitted.
 - Delete retained bytes and embeddings when permission is withdrawn or an upload is deleted.
 
+The implemented `V4` schema enforces this default: every active access location is `LINK_ONLY`, and `retention_allowed` is constrained to `false`. A successful PDF probe verifies that a provider-reported URL currently behaves like a PDF endpoint; it does not grant redistribution, text-mining, or retention rights.
+
 ## Paywalled content
 
 The system may retain allowed metadata and a canonical landing page. It must not bypass paywalls or institutional logins, share credentials, evade controls, retrieve pirated copies, or label unverified mirrors as legal open access. If no open version exists, show `RESTRICTED` or `ABSTRACT_ONLY`.
+
+Unpaywall and arXiv are queried only by exact identifiers attached to the canonical paper. Provider responses must echo/match that DOI or arXiv ID before their locations are considered. Providers are isolated: one source's failure produces bounded warnings and cannot erase a verified location from another source. A 24-hour cache reduces repeated provider calls, and a total outage may return an explicitly labelled stale result.
+
+Normal refresh requests reuse the cache. Forced refresh is an explicit bypass protected by a PostgreSQL-backed, per-paper cooldown (`openscholar.access.force-refresh-cooldown`, five minutes by default). Early repeats fail with `429 ACCESS_REFRESH_RATE_LIMITED` and a bounded `Retry-After` value instead of creating additional provider traffic.
+
+The local server binds to loopback by default. Any remote/container exposure must deliberately change `SERVER_ADDRESS` and add authentication plus aggregate/principal rate limiting before public use; the per-paper cooldown is not a substitute for those hosted controls.
 
 ## Privacy and retention
 

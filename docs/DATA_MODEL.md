@@ -14,6 +14,8 @@
 ```mermaid
 erDiagram
     PAPER ||--o{ PAPER_EXTERNAL_ID : has
+    PAPER ||--o| PAPER_ACCESS_RESOLUTION : summarized_by
+    PAPER ||--o| PAPER_ACCESS_REFRESH_GUARD : rate_limited_by
     PAPER ||--o{ PAPER_VERSION : has
     PAPER ||--o{ PAPER_AUTHOR : credits
     AUTHOR ||--o{ PAPER_AUTHOR : writes
@@ -60,15 +62,31 @@ Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local 
 | Column | Purpose |
 |---|---|
 | `paper_id` | Canonical work |
-| `version_type` | Publisher, accepted manuscript, repository, preprint, thesis |
-| `landing_url` | Human-facing canonical page |
-| `pdf_url` | Direct PDF only when supplied/verified legitimately |
+| `source`, `source_location_key` | Provider provenance plus a stable SHA-256 location identity |
+| `active`, `is_best` | Current-source membership and provider preference |
+| `version_type` | Published, accepted manuscript, submitted manuscript, preprint, or unknown |
+| `host_type` | Publisher, repository, preprint server, or unknown |
+| `landing_url` | Verified human-facing page |
+| `pdf_url` | Direct link only after a bounded PDF probe succeeds |
 | `host_domain` | Provenance/policy evaluation |
 | `access_status` | Open PDF, repository, restricted, unknown, etc. |
 | `license_code` | Licence when available |
-| `retention_allowed` | Explicit policy result; default false |
-| `last_verified_at` | Link/access freshness |
-| `content_checksum` | Optional version detection |
+| `content_handling` | `LINK_ONLY` in the current implementation |
+| `verification_*` | Verification status, HTTP status, content type/failure code, and time |
+| `provider_updated_at`, `retrieved_at`, `last_seen_at` | Provider and local freshness evidence |
+| `retention_allowed` | Database-enforced `false` for this link-only milestone |
+
+`(paper_id, source, source_location_key)` is unique. A committed refresh deactivates the participating providers' previously active locations before applying newly verified evidence, without deleting historical rows. If no newly reported candidate can be verified and a compatible older resolution exists, it is returned unchanged as an explicit `STALE_FALLBACK` instead of being renewed as fresh.
+
+### `paper_access_resolution`
+
+One row per canonical paper stores the current overall access status, `checked_at`, `fresh_until`, a SHA-256 lookup fingerprint over access-relevant paper metadata, bounded provider-coverage JSON, warnings, and an optimistic-lock version. The current default freshness window is 24 hours. Fresh reads return `CACHE_HIT`; identifier/abstract-presence enrichment invalidates an incompatible cache entry, and a provider outage or failed candidate re-verification can serve a compatible stored result as `STALE_FALLBACK` without advancing its timestamps.
+
+The implemented status vocabulary includes open PDF, open landing page, repository copy, preprint, abstract-only, restricted, unknown, and unavailable. A result with no supported DOI or arXiv identifier is cached with `NO_SUPPORTED_IDENTIFIER` rather than repeatedly calling inapplicable providers.
+
+### `paper_access_refresh_guard`
+
+One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a forced refresh only when the configurable cooldown has elapsed, so concurrent or repeated bypass requests cannot multiply provider traffic. The current default cooldown is five minutes.
 
 ### Provider, author, and topic data
 
@@ -132,6 +150,7 @@ All user-owned tables include owner-aware constraints and authorization tests.
 ## Migrations
 
 - Flyway owns production schema changes.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

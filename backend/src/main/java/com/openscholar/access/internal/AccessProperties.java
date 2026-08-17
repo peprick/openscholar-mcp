@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 class AccessProperties {
 
 	private Duration cacheTtl = Duration.ofHours(24);
+	private Duration forceRefreshCooldown = Duration.ofMinutes(5);
 	private int maxLocationsToVerify = 3;
 
 	public Duration getCacheTtl() {
@@ -19,6 +20,20 @@ class AccessProperties {
 			throw new IllegalArgumentException("Access cache TTL must be positive");
 		}
 		this.cacheTtl = cacheTtl;
+	}
+
+	public Duration getForceRefreshCooldown() {
+		return forceRefreshCooldown;
+	}
+
+	public void setForceRefreshCooldown(Duration forceRefreshCooldown) {
+		if (forceRefreshCooldown == null
+				|| forceRefreshCooldown.isZero()
+				|| forceRefreshCooldown.isNegative()
+				|| forceRefreshCooldown.compareTo(Duration.ofHours(24)) > 0) {
+			throw new IllegalArgumentException("Access force refresh cooldown must be between 1 nanosecond and 24 hours");
+		}
+		this.forceRefreshCooldown = forceRefreshCooldown;
 	}
 
 	public int getMaxLocationsToVerify() {

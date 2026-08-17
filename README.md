@@ -2,7 +2,7 @@
 
 OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, saves reusable knowledge in PostgreSQL, and exposes the same capabilities to AI agents through the Model Context Protocol (MCP).
 
-> Status: cached OpenAlex search is implemented in the Java backend. Topic queries now flow through a typed provider adapter into conflict-safe canonical paper, author, provenance, and immutable search-snapshot storage with exact-cache reuse and stale fallback.
+> Status: cached OpenAlex search and the first legal-access backend slice are implemented. Canonical papers can now be resolved by exact DOI through Unpaywall and by exact arXiv ID, with provider-isolated failures, safe outbound-link verification, 24-hour reuse, stale fallback, and link-only persistence. The API never returns PDF bytes, and the backend retains no PDF documents.
 
 ## Product goals
 
@@ -45,7 +45,7 @@ The backend will begin as a modular monolith. REST, MCP, provider integrations, 
 
 ## Planned research sources
 
-The first providers are OpenAlex, Unpaywall, and arXiv. CORE, PubMed Central, DOAJ, OATD, Shodhganga, and compatible institutional repositories follow after the core pipeline is stable.
+The implemented backend providers are OpenAlex for discovery, Unpaywall for exact DOI access evidence, and arXiv for exact identifier access evidence. CORE, PubMed Central, DOAJ, OATD, Shodhganga, and compatible institutional repositories follow after the core pipeline is stable.
 
 The platform will use supported APIs and legal repository links. It will not bypass paywalls, authentication, CAPTCHAs, robots restrictions, or publisher controls.
 

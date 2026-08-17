@@ -35,13 +35,17 @@ Exit: persisted results, repeated-query reuse, and useful partial/failure respon
 
 Estimated effort: 1–2 weeks.
 
-- Unpaywall DOI resolution and arXiv integration.
-- Paper-version/access model and safe URL verification.
+Status: backend legal-access resolution is complete; the web reader, result/version UI, citation exports, and final milestone hardening remain.
+
+- Implemented: exact DOI resolution through Unpaywall with optional backend-email configuration.
+- Implemented: exact arXiv-ID lookup with canonical response matching and provider-compliant request pacing.
+- Implemented: paper-version/access persistence, 24-hour cache, cooldown-protected forced refresh, stale fallback, and provider isolation.
+- Implemented: safe link-only verification for landing pages and PDF candidates without retaining PDF bytes.
 - PDF/landing-page reader experience.
 - BibTeX and CSL-JSON export.
 - Restricted/unavailable/repository-copy tests.
 
-Exit: users identify/read legal open versions without bypassing controls.
+Exit: users identify and open legal versions in the UI, and export citations, without bypassing controls.
 
 ## Milestone 3 — Library
 

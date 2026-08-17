@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import com.openscholar.access.AccessUnavailableException;
+import com.openscholar.access.AccessRefreshTooSoonException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchUnavailableException;
@@ -95,14 +96,35 @@ public class ApiExceptionHandler {
 	}
 
 	@ExceptionHandler(AccessUnavailableException.class)
-	ProblemDetail handleAccessUnavailable(AccessUnavailableException exception) {
+	ResponseEntity<ProblemDetail> handleAccessUnavailable(AccessUnavailableException exception) {
 		ProblemDetail problem = problem(
 				HttpStatus.SERVICE_UNAVAILABLE,
 				"ACCESS_PROVIDERS_UNAVAILABLE",
 				"Access providers unavailable",
 				"No access provider could complete the verification request.");
+		problem.setProperty("retryable", exception.retryable());
+		HttpHeaders headers = new HttpHeaders();
+		if (exception.retryAfter() != null && !exception.retryAfter().isNegative()) {
+			long retryAfterSeconds = Math.max(1, (exception.retryAfter().toMillis() + 999) / 1_000);
+			problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+			headers.set(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
+		}
+		return new ResponseEntity<>(problem, headers, HttpStatus.SERVICE_UNAVAILABLE);
+	}
+
+	@ExceptionHandler(AccessRefreshTooSoonException.class)
+	ResponseEntity<ProblemDetail> handleAccessRefreshTooSoon(AccessRefreshTooSoonException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.TOO_MANY_REQUESTS,
+				"ACCESS_REFRESH_RATE_LIMITED",
+				"Access refresh rate limited",
+				"This paper was force-refreshed too recently.");
 		problem.setProperty("retryable", true);
-		return problem;
+		long retryAfterSeconds = Math.max(1, (exception.retryAfter().toMillis() + 999) / 1_000);
+		problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+		HttpHeaders headers = new HttpHeaders();
+		headers.set(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
+		return new ResponseEntity<>(problem, headers, HttpStatus.TOO_MANY_REQUESTS);
 	}
 
 	private static ProblemDetail problem(

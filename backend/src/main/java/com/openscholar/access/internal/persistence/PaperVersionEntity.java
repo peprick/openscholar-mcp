@@ -56,10 +56,10 @@ class PaperVersionEntity {
 	@Column(name = "access_status", nullable = false, length = 32)
 	private AccessStatus accessStatus;
 
-	@Column(name = "landing_url")
+	@Column(name = "landing_url", columnDefinition = "text")
 	private String landingUrl;
 
-	@Column(name = "pdf_url")
+	@Column(name = "pdf_url", columnDefinition = "text")
 	private String pdfUrl;
 
 	@Column(name = "host_domain", length = 255)
@@ -68,7 +68,7 @@ class PaperVersionEntity {
 	@Column(name = "license_code", length = 255)
 	private String licenseCode;
 
-	@Column
+	@Column(columnDefinition = "text")
 	private String evidence;
 
 	@Column(name = "content_handling", nullable = false, length = 32)

@@ -34,6 +34,9 @@ class PaperAccessResolutionEntity {
 	@Column(name = "fresh_until", nullable = false)
 	private Instant freshUntil;
 
+	@Column(name = "lookup_fingerprint", nullable = false, length = 64)
+	private String lookupFingerprint;
+
 	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "provider_coverage", nullable = false, columnDefinition = "jsonb")
 	private List<Map<String, Object>> providerCoverage;
@@ -65,11 +68,12 @@ class PaperAccessResolutionEntity {
 			AccessStatus status,
 			Instant checkedAt,
 			Instant freshUntil,
+			String lookupFingerprint,
 			List<Map<String, Object>> providerCoverage,
 			List<String> warnings,
 			Instant now) {
 		PaperAccessResolutionEntity entity = new PaperAccessResolutionEntity(paperId, now);
-		entity.apply(status, checkedAt, freshUntil, providerCoverage, warnings, now);
+		entity.apply(status, checkedAt, freshUntil, lookupFingerprint, providerCoverage, warnings, now);
 		return entity;
 	}
 
@@ -77,12 +81,14 @@ class PaperAccessResolutionEntity {
 			AccessStatus status,
 			Instant checkedAt,
 			Instant freshUntil,
+			String lookupFingerprint,
 			List<Map<String, Object>> providerCoverage,
 			List<String> warnings,
 			Instant now) {
 		this.status = status;
 		this.checkedAt = checkedAt;
 		this.freshUntil = freshUntil;
+		this.lookupFingerprint = lookupFingerprint;
 		this.providerCoverage = List.copyOf(providerCoverage);
 		this.warnings = List.copyOf(warnings);
 		this.updatedAt = now;
@@ -102,6 +108,10 @@ class PaperAccessResolutionEntity {
 
 	Instant freshUntil() {
 		return freshUntil;
+	}
+
+	String lookupFingerprint() {
+		return lookupFingerprint;
 	}
 
 	List<Map<String, Object>> providerCoverage() {

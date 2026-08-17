@@ -25,7 +25,7 @@ public record AccessEvidenceLookup(String normalizedDoi, String canonicalArxivId
 				.replaceFirst("(?i)^doi:\\s*", "")
 				.strip()
 				.toLowerCase(Locale.ROOT);
-		if (!DOI.matcher(clean).matches() || containsControlCharacter(clean)) {
+		if (clean.length() > 500 || !DOI.matcher(clean).matches() || containsControlCharacter(clean)) {
 			throw new IllegalArgumentException("DOI must be a normalized DOI identifier");
 		}
 		return clean;

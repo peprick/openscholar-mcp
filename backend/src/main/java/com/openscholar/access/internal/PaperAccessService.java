@@ -1,6 +1,10 @@
 package com.openscholar.access.internal;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,6 +45,8 @@ class PaperAccessService implements PaperAccessUseCase {
 	private final AccessCandidateVerifier candidateVerifier;
 	private final PaperAccessStore accessStore;
 	private final AccessProperties properties;
+	private final PaperAccessRequestCoordinator requestCoordinator;
+	private final PaperAccessForceRefreshGuard forceRefreshGuard;
 	private final Clock clock;
 
 	PaperAccessService(
@@ -49,6 +55,8 @@ class PaperAccessService implements PaperAccessUseCase {
 			AccessCandidateVerifier candidateVerifier,
 			PaperAccessStore accessStore,
 			AccessProperties properties,
+			PaperAccessRequestCoordinator requestCoordinator,
+			PaperAccessForceRefreshGuard forceRefreshGuard,
 			Clock clock) {
 		this.paperCatalog = paperCatalog;
 		this.providers = providers.stream()
@@ -57,27 +65,40 @@ class PaperAccessService implements PaperAccessUseCase {
 		this.candidateVerifier = candidateVerifier;
 		this.accessStore = accessStore;
 		this.properties = properties;
+		this.requestCoordinator = requestCoordinator;
+		this.forceRefreshGuard = forceRefreshGuard;
 		this.clock = clock;
 	}
 
 	@Override
 	public PaperAccessView get(UUID paperId) {
 		PaperView paper = requirePaper(paperId);
+		String lookupFingerprint = lookupFingerprint(paper, lookup(paper));
 		return accessStore.find(paperId)
+				.filter(stored -> stored.matchesLookup(lookupFingerprint))
 				.map(PaperAccessStore.StoredAccess::view)
 				.orElseGet(() -> unresolvedView(paper));
 	}
 
 	@Override
 	public PaperAccessView resolve(UUID paperId, boolean forceRefresh) {
+		return requestCoordinator.execute(paperId, () -> resolveCoordinated(paperId, forceRefresh));
+	}
+
+	private PaperAccessView resolveCoordinated(UUID paperId, boolean forceRefresh) {
 		PaperView paper = requirePaper(paperId);
+		AccessEvidenceLookup lookup = lookup(paper);
+		String lookupFingerprint = lookupFingerprint(paper, lookup);
 		Instant now = clock.instant();
 		Optional<PaperAccessStore.StoredAccess> previous = accessStore.find(paperId);
-		if (!forceRefresh && previous.isPresent() && previous.orElseThrow().isFreshAt(now)) {
-			return previous.orElseThrow().view();
+		Optional<PaperAccessStore.StoredAccess> compatiblePrevious = previous
+				.filter(stored -> stored.matchesLookup(lookupFingerprint));
+		if (!forceRefresh
+				&& compatiblePrevious.isPresent()
+				&& compatiblePrevious.orElseThrow().isFreshAt(now)) {
+			return compatiblePrevious.orElseThrow().view();
 		}
 
-		AccessEvidenceLookup lookup = lookup(paper);
 		if (lookup.normalizedDoi() == null && lookup.canonicalArxivId() == null) {
 			return accessStore.store(
 					paperId,
@@ -85,10 +106,14 @@ class PaperAccessService implements PaperAccessUseCase {
 					AccessDisposition.NO_SUPPORTED_IDENTIFIER,
 					now,
 					now.plus(properties.getCacheTtl()),
+					lookupFingerprint,
 					List.of(),
 					List.of("NO_SUPPORTED_IDENTIFIER"),
 					Set.of(),
 					List.of());
+		}
+		if (forceRefresh) {
+			forceRefreshGuard.claim(paperId, now, properties.getForceRefreshCooldown());
 		}
 
 		List<AccessProviderCoverageView> coverage = new ArrayList<>();
@@ -118,27 +143,34 @@ class PaperAccessService implements PaperAccessUseCase {
 			case NOT_APPLICABLE, NOT_CONFIGURED -> false;
 		});
 		if (!failures.isEmpty() && !anyCompletedProvider) {
-			if (previous.isPresent()) {
-				return withFallback(previous.orElseThrow().view(), warnings);
+			if (compatiblePrevious.isPresent()) {
+				return withFallback(compatiblePrevious.orElseThrow().view(), warnings);
 			}
+			boolean retryable = failures.stream().anyMatch(AccessProviderException::retryable);
+			Duration retryAfter = failures.stream()
+					.filter(AccessProviderException::retryable)
+					.map(AccessProviderException::retryAfter)
+					.filter(java.util.Objects::nonNull)
+					.min(Duration::compareTo)
+					.orElse(null);
 			throw new AccessUnavailableException(
-					"Access providers could not complete the request", failures.getFirst());
+					"Access providers could not complete the request",
+					retryable,
+					retryAfter,
+					failures.getFirst());
 		}
 
 		List<ResolvedAccessLocation> verifiedLocations = new ArrayList<>();
-		Set<String> successfullyRefreshedSources = new HashSet<>();
+		Set<String> sourcesToReplace = new HashSet<>();
+		results.forEach(result -> sourcesToReplace.add(result.source().name()));
+		failures.forEach(failure -> sourcesToReplace.add(failure.source().name()));
 		boolean providerReportedCandidates = false;
 		int remainingVerifications = properties.getMaxLocationsToVerify();
 		for (AccessEvidenceResult result : results) {
-			if (result.status() == AccessResolutionStatus.CLOSED
-					|| result.status() == AccessResolutionStatus.NO_RECORD) {
-				successfullyRefreshedSources.add(result.source().name());
-			}
 			if (result.status() != AccessResolutionStatus.RESOLVED) {
 				continue;
 			}
 			providerReportedCandidates = true;
-			boolean acceptedForSource = false;
 			for (AccessCandidate candidate : orderedCandidates(result.candidates())) {
 				if (remainingVerifications-- <= 0) {
 					warnings.add("ACCESS_VERIFICATION_LIMIT_REACHED");
@@ -150,19 +182,21 @@ class PaperAccessService implements PaperAccessUseCase {
 				}
 				if (outcome.location().isPresent()) {
 					verifiedLocations.add(outcome.location().orElseThrow());
-					acceptedForSource = true;
 				}
 			}
-			if (acceptedForSource) {
-				successfullyRefreshedSources.add(result.source().name());
-			}
+		}
+		if (verifiedLocations.isEmpty()
+				&& compatiblePrevious.isPresent()
+				&& (!failures.isEmpty() || providerReportedCandidates)) {
+			warnings.add("STALE_ACCESS_FALLBACK");
+			return withFallback(compatiblePrevious.orElseThrow().view(), warnings);
 		}
 
-		List<AccessLocationView> retainedLocations = previous
+		List<AccessLocationView> retainedLocations = compatiblePrevious
 				.map(PaperAccessStore.StoredAccess::view)
 				.map(PaperAccessView::locations)
 				.orElseGet(List::of).stream()
-				.filter(location -> !successfullyRefreshedSources.contains(location.source()))
+				.filter(location -> !sourcesToReplace.contains(location.source()))
 				.toList();
 		AccessStatus status = overallStatus(
 				paper,
@@ -180,9 +214,10 @@ class PaperAccessService implements PaperAccessUseCase {
 				disposition,
 				now,
 				now.plus(properties.getCacheTtl()),
+				lookupFingerprint,
 				coverage,
 				List.copyOf(warnings),
-				successfullyRefreshedSources,
+				sourcesToReplace,
 				verifiedLocations);
 	}
 
@@ -203,6 +238,21 @@ class PaperAccessService implements PaperAccessUseCase {
 				.map(identifier -> identifier.value())
 				.findFirst()
 				.orElse(null);
+	}
+
+	private static String lookupFingerprint(PaperView paper, AccessEvidenceLookup lookup) {
+		String input = String.join(
+				"\n",
+				lookup.normalizedDoi() == null ? "" : lookup.normalizedDoi(),
+				lookup.canonicalArxivId() == null ? "" : lookup.canonicalArxivId(),
+				Boolean.toString(paper.abstractText() != null && !paper.abstractText().isBlank()));
+		try {
+			return java.util.HexFormat.of().formatHex(
+					MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8)));
+		}
+		catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable", exception);
+		}
 	}
 
 	private static List<AccessCandidate> orderedCandidates(List<AccessCandidate> candidates) {

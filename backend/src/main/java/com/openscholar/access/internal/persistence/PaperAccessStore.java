@@ -7,7 +7,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,6 +21,7 @@ import com.openscholar.access.AccessStatus;
 import com.openscholar.access.ContentHandlingMode;
 import com.openscholar.access.PaperAccessView;
 import com.openscholar.access.internal.ResolvedAccessLocation;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,19 +30,24 @@ public class PaperAccessStore {
 
 	private final PaperAccessResolutionRepository resolutionRepository;
 	private final PaperVersionRepository versionRepository;
+	private final EntityManager entityManager;
 
 	PaperAccessStore(
 			PaperAccessResolutionRepository resolutionRepository,
-			PaperVersionRepository versionRepository) {
+			PaperVersionRepository versionRepository,
+			EntityManager entityManager) {
 		this.resolutionRepository = resolutionRepository;
 		this.versionRepository = versionRepository;
+		this.entityManager = entityManager;
 	}
 
 	@Transactional(readOnly = true)
 	public Optional<StoredAccess> find(UUID paperId) {
 		return resolutionRepository.findById(paperId)
 				.map(resolution -> new StoredAccess(
-						resolution.freshUntil(), toView(resolution, AccessDisposition.CACHE_HIT)));
+						resolution.freshUntil(),
+						resolution.lookupFingerprint(),
+						toView(resolution, AccessDisposition.CACHE_HIT)));
 	}
 
 	@Transactional
@@ -52,10 +57,17 @@ public class PaperAccessStore {
 			AccessDisposition disposition,
 			Instant checkedAt,
 			Instant freshUntil,
+			String lookupFingerprint,
 			List<AccessProviderCoverageView> providerCoverage,
 			List<String> warnings,
 			Set<String> successfullyRefreshedSources,
 			List<ResolvedAccessLocation> locations) {
+		lockPaperForTransaction(paperId);
+		Optional<PaperAccessResolutionEntity> currentResolution = resolutionRepository.findById(paperId);
+		if (currentResolution.isPresent()
+				&& currentResolution.orElseThrow().checkedAt().isAfter(checkedAt)) {
+			return toView(currentResolution.orElseThrow(), AccessDisposition.CACHE_HIT);
+		}
 		Instant now = checkedAt;
 		for (String rawSource : successfullyRefreshedSources) {
 			String source = normalizeSource(rawSource);
@@ -68,12 +80,11 @@ public class PaperAccessStore {
 		for (ResolvedAccessLocation location : locations) {
 			String source = normalizeSource(location.source());
 			String locationKey = locationKey(source, location.sourceKey());
-			PaperVersionEntity entity = versionRepository
-					.findByPaperIdAndSourceAndSourceLocationKey(paperId, source, locationKey)
-					.orElseGet(() -> PaperVersionEntity.create(paperId, source, locationKey, location, now));
-			if (entity.id() != null) {
-				entity.apply(location, now);
-			}
+			Optional<PaperVersionEntity> existing = versionRepository
+					.findByPaperIdAndSourceAndSourceLocationKey(paperId, source, locationKey);
+			PaperVersionEntity entity = existing.orElseGet(
+					() -> PaperVersionEntity.create(paperId, source, locationKey, location, now));
+			existing.ifPresent(item -> item.apply(location, now));
 			versionRepository.save(entity);
 		}
 		versionRepository.flush();
@@ -84,12 +95,26 @@ public class PaperAccessStore {
 						"status", item.status(),
 						"candidateCount", item.candidateCount()))
 				.toList();
-		PaperAccessResolutionEntity resolution = resolutionRepository.findById(paperId)
+		PaperAccessResolutionEntity resolution = currentResolution
 				.orElseGet(() -> PaperAccessResolutionEntity.create(
-						paperId, status, checkedAt, freshUntil, coverageJson, warnings, now));
-		resolution.apply(status, checkedAt, freshUntil, coverageJson, warnings, now);
+						paperId,
+						status,
+						checkedAt,
+						freshUntil,
+						lookupFingerprint,
+						coverageJson,
+						warnings,
+						now));
+		resolution.apply(status, checkedAt, freshUntil, lookupFingerprint, coverageJson, warnings, now);
 		resolutionRepository.saveAndFlush(resolution);
 		return toView(resolution, disposition);
+	}
+
+	private void lockPaperForTransaction(UUID paperId) {
+		long lockKey = paperId.getMostSignificantBits() ^ paperId.getLeastSignificantBits();
+		entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(?1)")
+				.setParameter(1, lockKey)
+				.getSingleResult();
 	}
 
 	private PaperAccessView toView(
@@ -187,8 +212,10 @@ public class PaperAccessStore {
 		}
 		try {
 			URI uri = URI.create(value);
+			String scheme = uri.getScheme();
 			return uri.isAbsolute()
-					&& "https".equalsIgnoreCase(uri.getScheme())
+					&& scheme != null
+					&& ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
 					&& uri.getHost() != null
 					&& uri.getUserInfo() == null
 					? uri
@@ -203,10 +230,14 @@ public class PaperAccessStore {
 		return value instanceof Number number ? number.intValue() : 0;
 	}
 
-	public record StoredAccess(Instant freshUntil, PaperAccessView view) {
+	public record StoredAccess(Instant freshUntil, String lookupFingerprint, PaperAccessView view) {
 
 		public boolean isFreshAt(Instant now) {
 			return now.isBefore(freshUntil);
+		}
+
+		public boolean matchesLookup(String fingerprint) {
+			return lookupFingerprint.equals(fingerprint);
 		}
 	}
 }

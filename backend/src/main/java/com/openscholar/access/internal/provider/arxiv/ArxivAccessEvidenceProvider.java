@@ -71,14 +71,14 @@ final class ArxivAccessEvidenceProvider implements AccessEvidenceProvider {
 	@Override
 	public synchronized AccessEvidenceResult resolve(AccessEvidenceLookup lookup) {
 		Objects.requireNonNull(lookup, "lookup");
-		Instant retrievedAt = clock.instant();
 		String requestedId = lookup.canonicalArxivId();
 		if (requestedId == null) {
 			return AccessEvidenceResult.unresolved(
-					source(), AccessResolutionStatus.NOT_APPLICABLE, retrievedAt, "arxiv_id_missing");
+					source(), AccessResolutionStatus.NOT_APPLICABLE, clock.instant(), "arxiv_id_missing");
 		}
 
 		acquirePermit();
+		Instant retrievedAt = clock.instant();
 		try {
 			byte[] body = restClient.get()
 					.uri(uriBuilder -> uriBuilder

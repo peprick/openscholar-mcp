@@ -76,9 +76,10 @@ final class UnpaywallAccessEvidenceProvider implements AccessEvidenceProvider {
 		try {
 			UnpaywallResponse response = restClient.get()
 					.uri(uriBuilder -> uriBuilder
-							.path("/v2/{doi}")
+							.path("/v2/")
+							.path(lookup.normalizedDoi())
 							.queryParam("email", properties.email())
-							.build(lookup.normalizedDoi()))
+							.build())
 					.accept(MediaType.APPLICATION_JSON)
 					.retrieve()
 					.body(UnpaywallResponse.class);
@@ -120,10 +121,10 @@ final class UnpaywallAccessEvidenceProvider implements AccessEvidenceProvider {
 					source(), AccessResolutionStatus.CLOSED, List.of(), retrievedAt, resultEvidence);
 		}
 
-		String bestFingerprint = locationFingerprint(response.bestOpenAccessLocation());
+		UnpaywallLocation bestLocation = response.bestOpenAccessLocation();
 		List<AccessCandidate> candidates = new ArrayList<>();
 		for (UnpaywallLocation location : nullSafe(response.openAccessLocations())) {
-			AccessCandidate candidate = mapLocation(requestedDoi, location, bestFingerprint);
+			AccessCandidate candidate = mapLocation(requestedDoi, location, bestLocation);
 			if (candidate != null) {
 				candidates.add(candidate);
 			}
@@ -150,7 +151,7 @@ final class UnpaywallAccessEvidenceProvider implements AccessEvidenceProvider {
 				source(), AccessResolutionStatus.RESOLVED, bounded, retrievedAt, resultEvidence);
 	}
 
-	private AccessCandidate mapLocation(String doi, UnpaywallLocation location, String bestFingerprint) {
+	private AccessCandidate mapLocation(String doi, UnpaywallLocation location, UnpaywallLocation bestLocation) {
 		if (location == null) {
 			return null;
 		}
@@ -162,7 +163,7 @@ final class UnpaywallAccessEvidenceProvider implements AccessEvidenceProvider {
 		}
 		String fingerprint = locationFingerprint(location);
 		boolean best = Boolean.TRUE.equals(location.best())
-				|| (bestFingerprint != null && bestFingerprint.equals(fingerprint));
+				|| matchingLocation(location, bestLocation);
 		return new AccessCandidate(
 				source(),
 				sourceKey(doi, fingerprint, landingPage, pdf),
@@ -209,6 +210,21 @@ final class UnpaywallAccessEvidenceProvider implements AccessEvidenceProvider {
 				location.landingPageUrl(),
 				location.url());
 		return identity == null ? null : identity.strip();
+	}
+
+	private static boolean matchingLocation(UnpaywallLocation candidate, UnpaywallLocation best) {
+		if (candidate == null || best == null) {
+			return false;
+		}
+		return sameNonBlank(candidate.pdfUrl(), best.pdfUrl())
+				|| sameNonBlank(candidate.landingPageUrl(), best.landingPageUrl())
+				|| sameNonBlank(candidate.url(), best.url())
+				|| (sameNonBlank(candidate.endpointId(), best.endpointId())
+						&& sameNonBlank(candidate.pmhId(), best.pmhId()));
+	}
+
+	private static boolean sameNonBlank(String left, String right) {
+		return left != null && !left.isBlank() && right != null && left.strip().equals(right.strip());
 	}
 
 	private static String sourceKey(String doi, String fingerprint, URI landingPage, URI pdf) {

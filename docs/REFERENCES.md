@@ -1,6 +1,6 @@
 # Official References
 
-These links support version and architecture decisions made on 2026-08-16. Re-check them when application scaffolding or a dependency upgrade begins.
+These links support version and architecture decisions reviewed through 2026-08-17. Re-check them when application scaffolding or a dependency upgrade begins.
 
 ## Java and Spring
 
@@ -31,12 +31,18 @@ These links support version and architecture decisions made on 2026-08-16. Re-ch
 - [OpenAlex authentication and rate limits](https://help.openalex.org/api/authentication/)
 - [OpenAlex search](https://help.openalex.org/api/searching/)
 - [OpenAlex error handling](https://help.openalex.org/api/errors/)
-- [Unpaywall API](https://unpaywall.org/api)
-- [arXiv API manual](https://info.arxiv.org/help/api/user-manual.html)
+- [Unpaywall REST API, exact DOI endpoint, email, and limits](https://unpaywall.org/api)
+- [arXiv API manual, `id_list`, Atom responses, and request pacing](https://info.arxiv.org/help/api/user-manual.html)
+- [arXiv API terms of use and content restrictions](https://info.arxiv.org/help/api/tou.html)
 - [CORE API](https://core.ac.uk/services/api)
 - [Directory of Open Access Journals](https://doaj.org/)
 - [Open Access Theses and Dissertations](https://www.oatd.org/)
 - [NDLTD thesis resources](https://ndltd.org/thesis-resources/find-etds/)
+
+## Outbound-link security
+
+- [Apache HttpClient 5.6](https://hc.apache.org/httpcomponents-client-5.6.x/)
+- [Apache HttpClient `DnsResolver`](https://hc.apache.org/httpcomponents-client-5.6.x/current/httpclient5/apidocs/org/apache/hc/client5/http/DnsResolver.html)
 
 ## Version caveat
 

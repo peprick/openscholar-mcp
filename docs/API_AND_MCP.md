@@ -9,7 +9,7 @@
 - Useful partial provider results survive individual provider failures.
 - REST versioning begins at `/api/v1`.
 
-## Planned REST endpoints
+## REST endpoints
 
 ### Search
 
@@ -51,10 +51,25 @@ GET  /api/v1/papers/{paperId}
 GET  /api/v1/papers/{paperId}/versions
 GET  /api/v1/papers/{paperId}/related
 GET  /api/v1/papers/{paperId}/citation?format=bibtex
-POST /api/v1/papers/{paperId}/access/verify
+POST /api/v1/papers/{paperId}/access/verify?forceRefresh=false
 ```
 
-Access verification is rate-limited and can return an async job when it cannot finish within the interactive deadline.
+`GET /versions` and `POST /access/verify` are implemented; paper detail, related-paper, and citation endpoints remain planned. `GET /versions` reads only the stored resolution. Before the first resolution it returns `NOT_YET_RESOLVED` with no locations and does not contact Unpaywall or arXiv.
+
+`POST /access/verify` performs bounded synchronous resolution. With the default `forceRefresh=false`, it returns a fresh cached result when available. `forceRefresh=true` bypasses that fresh-cache check; refreshing an existing resolution reports `FORCED_REFRESH`, while a first resolution remains `RESOLVED`. Forced refreshes are protected per paper by `openscholar.access.force-refresh-cooldown` (five minutes by default). A repeated request inside that window returns `429 ACCESS_REFRESH_RATE_LIMITED`, a `retryAfterSeconds` problem property, and a matching `Retry-After` header. The other access cache dispositions are `CACHE_HIT`, `REFRESHED`, `STALE_FALLBACK`, `NO_SUPPORTED_IDENTIFIER`, and `NOT_YET_RESOLVED`.
+
+Access resolution uses exact identifiers already attached to the canonical paper:
+
+- Unpaywall receives one normalized DOI at `GET /v2/{doi}`. Its backend contact email is optional application configuration; without it, coverage reports `NOT_CONFIGURED` and other providers can still complete.
+- arXiv receives one canonical ID through `id_list` with `max_results=1`. The returned entry and its access paths must match the requested identifier; version suffixes are honored when explicitly requested.
+
+Results contain overall access status, freshness, provider coverage, warnings, a best-location ID, and verified version records with source, host/version classification, licence when reported, landing/PDF link, and verification timestamps. All current locations use `LINK_ONLY`: the API returns links but never PDF bytes.
+
+Access results remain fresh for 24 hours by default. The cache carries a fingerprint of the paper's DOI, arXiv ID, and abstract availability, so later catalog enrichment invalidates an incompatible negative result. Provider failures are isolated. If no provider can complete a refresh—or reported candidates cannot be safely re-verified—and a compatible older resolution exists, the API returns it unchanged as `STALE_FALLBACK` with machine-readable warnings rather than renewing stale links as fresh.
+
+The implemented access-status vocabulary is `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, and `UNAVAILABLE`. Link verification accepts only provider candidates and validates every redirect before a location can become active.
+
+Current access verification returns `404 PAPER_NOT_FOUND` for an unknown canonical paper, `429 ACCESS_REFRESH_RATE_LIMITED` for a forced-refresh cooldown violation, and `503 ACCESS_PROVIDERS_UNAVAILABLE` only when no provider can complete and there is no stored fallback. The 503 problem preserves aggregate retryability and an upstream `Retry-After` when available. An asynchronous access job is deferred until interactive provider coverage needs it.
 
 ### Collections
 
