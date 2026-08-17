@@ -33,11 +33,16 @@ Example:
     "languages": ["en"]
   },
   "pageSize": 20,
+  "cursor": "opaque cursor returned by a previous response, or omit",
   "forceRefresh": false
 }
 ```
 
 Responses include search ID, query fingerprint, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, and pagination.
+
+The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the stored snapshot without contacting OpenAlex. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
+
+Open-access flags and PDF URLs in this search response are explicitly provider-reported, not independently verified legal-access claims. Verification arrives with the access-resolution milestone.
 
 ### Papers and access
 
@@ -78,6 +83,8 @@ Metrics and detailed health components require administrative authentication.
 ## Error model
 
 REST uses RFC 9457 Problem Details with a stable error code, safe detail, correlation ID, validation violations, retryability, and optional retry-after. Stack traces and credentials never appear.
+
+The current search slice implements stable validation, not-found, and provider-unavailable codes. Correlation IDs are added with the observability milestone.
 
 ## MCP transport
 

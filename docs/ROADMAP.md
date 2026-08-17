@@ -21,6 +21,8 @@ Exit: clean clone starts through documented commands and CI passes.
 
 Estimated effort: 1–2 weeks.
 
+Status: backend vertical slice complete; search/result UI, operational request budgets, and final milestone hardening remain.
+
 - Canonical paper/search domain models and initial Flyway migrations.
 - OpenAlex adapter with rate limits and resilience.
 - Query normalization, fingerprinting, cache policy, normalization, and exact-ID deduplication.

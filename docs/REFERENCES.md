@@ -27,7 +27,10 @@ These links support version and architecture decisions made on 2026-08-16. Re-ch
 
 ## Research providers
 
-- [OpenAlex API](https://developers.openalex.org/api-reference/introduction)
+- [OpenAlex API overview](https://help.openalex.org/api/)
+- [OpenAlex authentication and rate limits](https://help.openalex.org/api/authentication/)
+- [OpenAlex search](https://help.openalex.org/api/searching/)
+- [OpenAlex error handling](https://help.openalex.org/api/errors/)
 - [Unpaywall API](https://unpaywall.org/api)
 - [arXiv API manual](https://info.arxiv.org/help/api/user-manual.html)
 - [CORE API](https://core.ac.uk/services/api)

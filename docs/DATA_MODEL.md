@@ -53,7 +53,7 @@ Indexes cover normalized title, year, type, PostgreSQL full text, and external i
 
 ### `paper_external_id`
 
-Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local IDs. A unique constraint on `(id_type, normalized_value)` prevents exact-identifier duplicates.
+Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local IDs. A unique constraint on `(id_type, namespace, normalized_value)` prevents exact-identifier duplicates while allowing different repositories to reuse local IDs.
 
 ### `paper_version`
 
@@ -90,11 +90,14 @@ Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local 
 ### `search_result`
 
 - Search ID and paper ID.
+- Renderable JSONB paper projection captured at search time, so later catalog enrichment cannot rewrite old responses.
 - Stable rank in that snapshot.
 - Total score and feature-level explanation.
 - Provider contribution set.
 
 Exact fresh fingerprints reuse snapshots. Related-topic searches retrieve canonical papers independently and are not labelled exact hits.
+
+The current implementation keeps successful snapshots immutable, retains canonical-paper references with delete protection, indexes fingerprint plus freshness, caches empty result sets, and creates a new snapshot for forced or stale refreshes. Provider failures can serve the latest exact stale snapshot with an explicit warning; they never overwrite it.
 
 ## Library
 

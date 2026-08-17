@@ -96,13 +96,40 @@ class PaperExternalIdEntity {
 				now);
 	}
 
-	private static String normalize(PaperIdentifierType type, String value) {
+	static String normalize(PaperIdentifierType type, String value) {
 		String normalized = value.toLowerCase(Locale.ROOT);
 		if (type == PaperIdentifierType.DOI) {
 			normalized = normalized
 					.replaceFirst("^https?://(?:dx\\.)?doi\\.org/", "")
 					.replaceFirst("^doi:\\s*", "");
 		}
+		if (type == PaperIdentifierType.OPENALEX) {
+			normalized = normalized.replaceFirst("^https?://openalex\\.org/", "");
+		}
 		return normalized.strip();
+	}
+
+	UUID id() {
+		return id;
+	}
+
+	UUID paperId() {
+		return paper.id();
+	}
+
+	PaperIdentifierType idType() {
+		return idType;
+	}
+
+	String namespace() {
+		return namespace;
+	}
+
+	String normalizedValue() {
+		return normalizedValue;
+	}
+
+	String rawValue() {
+		return rawValue;
 	}
 }
