@@ -41,6 +41,9 @@ class PaperAuthorEntity {
 	@Column(nullable = false)
 	private boolean corresponding;
 
+	@Column(name = "credited_name", nullable = false)
+	private String creditedName;
+
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -55,6 +58,7 @@ class PaperAuthorEntity {
 			PaperEntity paper,
 			ProviderRecordEntity providerRecord,
 			AuthorEntity author,
+			String creditedName,
 			int position,
 			boolean corresponding,
 			Instant now) {
@@ -62,6 +66,7 @@ class PaperAuthorEntity {
 		this.paper = paper;
 		this.providerRecord = providerRecord;
 		this.author = author;
+		this.creditedName = creditedName;
 		this.position = position;
 		this.corresponding = corresponding;
 		this.createdAt = now;
@@ -72,6 +77,7 @@ class PaperAuthorEntity {
 			PaperEntity paper,
 			ProviderRecordEntity providerRecord,
 			AuthorEntity author,
+			String creditedName,
 			int position,
 			boolean corresponding,
 			Instant now) {
@@ -79,7 +85,22 @@ class PaperAuthorEntity {
 			throw new IllegalArgumentException("Author position must not be negative");
 		}
 		return new PaperAuthorEntity(
-				UUID.randomUUID(), paper, providerRecord, author, position, corresponding, now);
+				UUID.randomUUID(),
+				paper,
+				providerRecord,
+				author,
+				cleanCreditedName(creditedName),
+				position,
+				corresponding,
+				now);
+	}
+
+	private static String cleanCreditedName(String value) {
+		String clean = value == null ? "" : value.strip();
+		if (clean.isEmpty()) {
+			throw new IllegalArgumentException("Credited author name must not be blank");
+		}
+		return clean;
 	}
 
 	UUID paperId() {
@@ -92,6 +113,10 @@ class PaperAuthorEntity {
 
 	AuthorEntity author() {
 		return author;
+	}
+
+	String creditedName() {
+		return creditedName;
 	}
 
 	int position() {

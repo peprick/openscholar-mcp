@@ -91,7 +91,8 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 ### Provider, author, and topic data
 
 - `provider_record`: provider, external ID, bounded raw metadata, retrieval time, mapping version.
-- `author` and `paper_author`: normalized names, ORCID, ordering, optional institution.
+- `author`: current profile display name plus normalized ORCID/OpenAlex identity.
+- `paper_author`: provider-record authorship, immutable credited-name snapshot, ordering, and corresponding flag. The association-level name prevents a later author alias from rewriting earlier paper credits.
 - `topic` and `paper_topic`: provider/user/system topics with provenance and confidence.
 
 ## Search cache
@@ -150,7 +151,7 @@ All user-owned tables include owner-aware constraints and authorization tests.
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 
 import com.openscholar.access.AccessUnavailableException;
 import com.openscholar.access.AccessRefreshTooSoonException;
+import com.openscholar.citation.UnsupportedCitationFormatException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchUnavailableException;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,13 +55,26 @@ public class ApiExceptionHandler {
 		return problem;
 	}
 
-	@ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class})
+	@ExceptionHandler({
+		IllegalArgumentException.class,
+		HttpMessageNotReadableException.class,
+		MethodArgumentTypeMismatchException.class
+	})
 	ProblemDetail handleInvalidRequest(Exception exception) {
 		return problem(
 				HttpStatus.BAD_REQUEST,
 				"INVALID_REQUEST",
 				"Invalid request",
 				"The request body or parameter values could not be accepted.");
+	}
+
+	@ExceptionHandler(UnsupportedCitationFormatException.class)
+	ProblemDetail handleUnsupportedCitationFormat(UnsupportedCitationFormatException exception) {
+		return problem(
+				HttpStatus.BAD_REQUEST,
+				"UNSUPPORTED_CITATION_FORMAT",
+				"Unsupported citation format",
+				"Citation format must be one of: bibtex, csl-json.");
 	}
 
 	@ExceptionHandler(SearchNotFoundException.class)

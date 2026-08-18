@@ -1,0 +1,41 @@
+{
+  "name": "openscholar-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "next": "16.2.11",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "server-only": "0.0.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.2.11",
+    "jsdom": "^27.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

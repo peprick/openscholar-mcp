@@ -1,0 +1,84 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { AccessPanel } from "@/features/access/access-panel";
+import {
+  paperAccessLocationFixture,
+  paperAccessResponseFixture,
+  testIds,
+} from "@/test/fixtures";
+
+afterEach(cleanup);
+
+describe("AccessPanel", () => {
+  it("never exposes an unverified external URL as a link", () => {
+    const unverifiedPdf = "https://unverified.example/paper.pdf";
+    const access = paperAccessResponseFixture({
+      bestLocationId: null,
+      locations: [
+        paperAccessLocationFixture({
+          best: false,
+          pdfUrl: unverifiedPdf,
+          verificationStatus: "UNVERIFIED",
+          verificationHttpStatus: null,
+          verificationContentType: null,
+          verificationFailureCode: "NOT_PROBED",
+          verifiedAt: null,
+        }),
+      ],
+    });
+
+    render(<AccessPanel initialAccess={access} paperId={testIds.paper} />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No independently verified external link is available for this record.",
+      ),
+    ).toBeVisible();
+    expect(document.querySelector(`[href="${unverifiedPdf}"]`)).toBeNull();
+  });
+
+  it("exposes a verified PDF with safe new-tab link attributes", () => {
+    const verifiedPdf = "https://repository.example.edu/items/paper-42.pdf";
+    const access = paperAccessResponseFixture({
+      locations: [paperAccessLocationFixture({ pdfUrl: verifiedPdf })],
+    });
+
+    render(<AccessPanel initialAccess={access} paperId={testIds.paper} />);
+
+    const link = screen.getByRole("link", {
+      name: /Open verified PDF externally/,
+    });
+    expect(link).toHaveAttribute("href", verifiedPdf);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("uses the response-level best location instead of a provider best flag", () => {
+    const canonicalLocationId = "72cc70a9-76ea-4719-b571-a244594f63d4";
+    const access = paperAccessResponseFixture({
+      bestLocationId: canonicalLocationId,
+      locations: [
+        paperAccessLocationFixture({
+          best: true,
+          hostDomain: "provider-preferred.example",
+        }),
+        paperAccessLocationFixture({
+          id: canonicalLocationId,
+          best: false,
+          hostDomain: "canonical-best.example",
+          pdfUrl: "https://canonical-best.example/paper.pdf",
+        }),
+      ],
+    });
+
+    const { container } = render(
+      <AccessPanel initialAccess={access} paperId={testIds.paper} />,
+    );
+
+    expect(container.querySelector(".accessLocation--best")).toHaveTextContent(
+      "canonical-best.example",
+    );
+  });
+});

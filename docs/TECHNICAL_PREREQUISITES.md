@@ -7,13 +7,13 @@
 | Git | Current supported release | Version control |
 | Java | JDK 21 LTS | Backend compilation/runtime baseline |
 | Docker Desktop/Engine | Current release with Compose v2 | PostgreSQL, pgvector, reproducible services |
-| Node.js | Active LTS | Next.js and MCP conformance tooling |
-| pnpm | Current stable | Frontend package management |
+| Node.js | 24 LTS recommended; `^20.19` or `>=22.12` supported | Next.js and MCP conformance tooling |
+| pnpm | 11.19.x | Frontend package management and reproducible lockfile |
 | GitHub CLI | Current stable | Repository/release workflow |
 
-Maven does not need to be globally installed after Maven Wrapper is committed; the backend will use `./mvnw` with Maven 3.9.x.
+Maven does not need to be globally installed; the backend uses the committed `./mvnw` wrapper with Maven 3.9.x.
 
-This development machine currently has Java 26 and Docker 29.6.1. Java 26 is compatible with the planned Spring Boot release, but CI and containers will target Java 21 LTS for a stable contributor baseline.
+This development machine currently has Java 26 and Docker 29.6.1. Java 26 is compatible with the current Spring Boot release, while CI and containers target Java 21 LTS for a stable contributor baseline.
 
 ## Backend knowledge
 
@@ -78,7 +78,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - OAuth identity provider.
 - Error monitoring.
 
-All credentials belong in ignored environment files or deployment secrets. `.env.example` will contain variable names and documentation only.
+All credentials belong in ignored environment files or deployment secrets. `.env.example` contains variable names, safe local defaults, and documentation only.
 
 ## Official baselines at planning time
 

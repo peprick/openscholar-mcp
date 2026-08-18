@@ -224,6 +224,164 @@ class PaperCatalogServiceTests {
 	}
 
 	@Test
+	void preservesPaperSpecificCreditedNamesWhenTheSameAuthorUsesAnAliasElsewhere() {
+		PaperAuthorCandidate originalCredit = new PaperAuthorCandidate(
+				"https://openalex.org/A9001",
+				"Alexandra Original-Credit",
+				"https://orcid.org/0000-0002-1825-0097",
+				0,
+				true);
+		PaperView originalPaper = paperCatalog.upsert(
+				paper(
+						"Original credited-name paper",
+						null,
+						0,
+						NOW,
+						List.of(new PaperIdentifier(
+								PaperIdentifierType.OPENALEX, "", "W-CREDITED-ORIGINAL")),
+						List.of(originalCredit)),
+				providerRecord("W-CREDITED-ORIGINAL", NOW, Map.of()),
+				NOW);
+
+		PaperAuthorCandidate aliasCredit = new PaperAuthorCandidate(
+				"a9001",
+				"A. Alias",
+				"0000-0002-1825-0097",
+				0,
+				false);
+		PaperView aliasPaper = paperCatalog.upsert(
+				paper(
+						"Alias credited-name paper",
+						null,
+						0,
+						NOW.plusSeconds(60),
+						List.of(new PaperIdentifier(
+								PaperIdentifierType.OPENALEX, "", "W-CREDITED-ALIAS")),
+						List.of(aliasCredit)),
+				providerRecord("W-CREDITED-ALIAS", NOW.plusSeconds(60), Map.of()),
+				NOW.plusSeconds(60));
+
+		PaperView reloadedOriginal = paperCatalog.findById(originalPaper.id()).orElseThrow();
+		assertThat(aliasPaper.authors()).singleElement().satisfies(author -> {
+			assertThat(author.id()).isEqualTo(originalPaper.authors().getFirst().id());
+			assertThat(author.displayName()).isEqualTo("A. Alias");
+		});
+		assertThat(reloadedOriginal.authors()).singleElement().satisfies(author -> {
+			assertThat(author.id()).isEqualTo(aliasPaper.authors().getFirst().id());
+			assertThat(author.displayName()).isEqualTo("Alexandra Original-Credit");
+			assertThat(author.corresponding()).isTrue();
+		});
+		assertThat(jdbcTemplate.queryForObject(
+				"select display_name from author where id = ?",
+				String.class,
+				originalPaper.authors().getFirst().id())).isEqualTo("A. Alias");
+		assertThat(jdbcTemplate.queryForList(
+				"select credited_name from paper_author order by credited_name",
+				String.class)).containsExactly("A. Alias", "Alexandra Original-Credit");
+	}
+
+	@Test
+	void derivesPublicationYearFromDateAndRejectsContradictionFromANewerYearOnlyRecord() {
+		String providerRecordId = "W-PUBLICATION-INTEGRITY";
+		LocalDate fullPublicationDate = LocalDate.of(2021, 4, 9);
+		CanonicalPaperCandidate datedCandidate = new CanonicalPaperCandidate(
+				"Dated canonical paper",
+				null,
+				fullPublicationDate,
+				1998,
+				DocumentType.ARTICLE,
+				"en",
+				"Publication Integrity Journal",
+				null,
+				null,
+				List.of(new PaperIdentifier(
+						PaperIdentifierType.OPENALEX, "", providerRecordId)),
+				List.of());
+
+		PaperView created = paperCatalog.upsert(
+				datedCandidate,
+				providerRecord(providerRecordId, NOW, Map.of()),
+				NOW);
+		assertThat(created.publicationDate()).isEqualTo(fullPublicationDate);
+		assertThat(created.publicationYear()).isEqualTo(2021);
+
+		CanonicalPaperCandidate newerYearOnlyCandidate = new CanonicalPaperCandidate(
+				"Newer metadata keeps the full publication date",
+				null,
+				null,
+				2024,
+				DocumentType.ARTICLE,
+				"en",
+				"Publication Integrity Journal",
+				null,
+				null,
+				List.of(new PaperIdentifier(
+						PaperIdentifierType.OPENALEX, "", providerRecordId)),
+				List.of());
+		PaperView updated = paperCatalog.upsert(
+				newerYearOnlyCandidate,
+				providerRecord(providerRecordId, NOW.plusSeconds(60), Map.of()),
+				NOW.plusSeconds(60));
+
+		assertThat(updated.title()).isEqualTo("Newer metadata keeps the full publication date");
+		assertThat(updated.publicationDate()).isEqualTo(fullPublicationDate);
+		assertThat(updated.publicationYear()).isEqualTo(2021);
+		assertThat(jdbcTemplate.queryForMap(
+				"select publication_date, publication_year from paper where id = ?",
+				updated.id()))
+				.containsEntry("publication_date", java.sql.Date.valueOf(fullPublicationDate))
+				.containsEntry("publication_year", 2021);
+	}
+
+	@Test
+	void olderFullPublicationDateCannotReplaceANewerCanonicalYearOnlyValue() {
+		String doi = "10.1000/publication-precedence";
+		CanonicalPaperCandidate newerYearOnlyCandidate = new CanonicalPaperCandidate(
+				"Newer year-only metadata",
+				null,
+				null,
+				2024,
+				DocumentType.ARTICLE,
+				"en",
+				"Publication Integrity Journal",
+				null,
+				null,
+				List.of(new PaperIdentifier(PaperIdentifierType.DOI, "", doi)),
+				List.of());
+		PaperView canonical = paperCatalog.upsert(
+				newerYearOnlyCandidate,
+				providerRecord("W-NEWER-YEAR", NOW, Map.of()),
+				NOW);
+
+		CanonicalPaperCandidate olderFullDateCandidate = new CanonicalPaperCandidate(
+				"Older full-date metadata",
+				null,
+				LocalDate.of(2023, 5, 1),
+				2023,
+				DocumentType.ARTICLE,
+				"en",
+				"Publication Integrity Journal",
+				null,
+				null,
+				List.of(new PaperIdentifier(PaperIdentifierType.DOI, "", doi)),
+				List.of());
+		PaperView afterOlderRecord = paperCatalog.upsert(
+				olderFullDateCandidate,
+				providerRecord("W-OLDER-DATE", NOW.minusSeconds(60), Map.of()),
+				NOW.plusSeconds(60));
+
+		assertThat(afterOlderRecord.id()).isEqualTo(canonical.id());
+		assertThat(afterOlderRecord.title()).isEqualTo("Newer year-only metadata");
+		assertThat(afterOlderRecord.publicationDate()).isNull();
+		assertThat(afterOlderRecord.publicationYear()).isEqualTo(2024);
+		assertThat(jdbcTemplate.queryForMap(
+				"select publication_date, publication_year from paper where id = ?",
+				afterOlderRecord.id()))
+				.containsEntry("publication_date", null)
+				.containsEntry("publication_year", 2024);
+	}
+
+	@Test
 	void newerEmptyAuthorshipClearsProviderAssociations() {
 		PaperView created = paperCatalog.upsert(
 				paper(

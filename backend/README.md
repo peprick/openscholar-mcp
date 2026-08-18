@@ -9,12 +9,15 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Flyway-managed schema
 - OpenAlex topic search with bounded filters and opaque cursor paging
 - Canonical DOI/OpenAlex deduplication, authors, and provider provenance
+- Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
+- Paper-specific credited author names and publication date/year integrity enforced by Flyway
 - Immutable 24-hour search snapshots with exact-cache hits and stale fallback
 - Exact DOI legal-access lookup through Unpaywall when a backend contact email is configured
 - Exact arXiv-ID access lookup with canonical entry matching and a three-second request gate
 - Provider-isolated access resolution with a 24-hour cache, forced refresh, and stale fallback
 - SSRF-resistant PDF/landing-link verification with bounded requests and manually checked redirects
 - Link-only paper-version persistence; the backend never proxies or stores complete PDF documents
+- Deterministic single-paper BibTeX and CSL-JSON citation downloads from canonical metadata
 - RFC 9457 validation, not-found, and provider-failure responses
 - Spring Boot Actuator
 - Spring Modulith boundary verification
@@ -22,7 +25,7 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Docker Compose PostgreSQL/pgvector service
 - Java 21 virtual threads
 
-The reader UI, citation exports, MCP tools, and additional scholarly providers remain to be built.
+The Next.js search, details, verified-version, and citation UI is now available in `../frontend`. An in-app PDF.js reader, richer typed publication metadata, collections, batch citation export, MCP tools, and additional scholarly providers remain to be built.
 
 ## Run locally
 
@@ -37,8 +40,10 @@ Spring Boot detects `compose.yaml`, starts PostgreSQL when required, runs Flyway
 - Application status: `http://localhost:8080/api/v1/system/status`
 - Create/reuse a search: `POST http://localhost:8080/api/v1/searches`
 - Retrieve a saved snapshot: `GET http://localhost:8080/api/v1/searches/{searchId}`
+- Read canonical paper details: `GET http://localhost:8080/api/v1/papers/{paperId}`
 - Read stored access versions: `GET http://localhost:8080/api/v1/papers/{paperId}/versions`
 - Resolve or refresh legal access: `POST http://localhost:8080/api/v1/papers/{paperId}/access/verify`
+- Download a citation: `GET http://localhost:8080/api/v1/papers/{paperId}/citation?format=bibtex`
 - Actuator health: `http://localhost:8080/actuator/health`
 - Actuator info: `http://localhost:8080/actuator/info`
 
@@ -79,9 +84,26 @@ curl --request POST \
 
 curl \
   "http://localhost:8080/api/v1/papers/${PAPER_ID}/versions"
+
+curl \
+  "http://localhost:8080/api/v1/papers/${PAPER_ID}"
 ```
 
 `forceRefresh=false` reuses a fresh access result. Set it to `true` to bypass the fresh-cache check and contact applicable providers; refreshing an existing resolution reports `FORCED_REFRESH`, while an initial resolution reports `RESOLVED`. Repeated forced refreshes for the same paper are limited by `openscholar.access.force-refresh-cooldown`, which defaults to five minutes; an early retry returns `429 ACCESS_REFRESH_RATE_LIMITED` with `Retry-After`. `GET /versions` is read-only and never contacts a provider.
+
+`GET /papers/{paperId}` is also database-only. It returns canonical metadata, ordered credited authors, every stored identifier, record-level provider provenance, metadata freshness/completeness, and a compact summary of the currently stored access result. Provider payload fragments and unverified provider PDF links are deliberately excluded; use `/versions` for verified legal locations.
+
+Export that paper's current canonical metadata without a provider call:
+
+```bash
+curl --remote-header-name --remote-name \
+  "http://localhost:8080/api/v1/papers/${PAPER_ID}/citation?format=bibtex"
+
+curl --remote-header-name --remote-name \
+  "http://localhost:8080/api/v1/papers/${PAPER_ID}/citation?format=csl-json"
+```
+
+BibTeX is the default format. Both responses are raw importable documents with deterministic UUID-based citation keys and attachment filenames. Exports omit unavailable fields; author names remain literal display names because the current catalog does not safely distinguish given, family, particle, suffix, and organization names.
 
 ## Verify
 

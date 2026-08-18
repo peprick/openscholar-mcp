@@ -291,6 +291,7 @@ class PaperCatalogService implements PaperCatalog {
 							paper,
 							providerRecord,
 							author,
+							candidate.displayName(),
 							candidate.position(),
 							candidate.corresponding(),
 							now));
@@ -400,7 +401,7 @@ class PaperCatalogService implements PaperCatalog {
 			authors.computeIfAbsent(association.paperId(), ignored -> new ArrayList<>())
 					.add(new PaperAuthorView(
 							author.id(),
-							author.displayName(),
+							association.creditedName(),
 							author.orcid(),
 							author.openAlexId(),
 							association.position(),

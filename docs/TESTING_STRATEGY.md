@@ -9,13 +9,15 @@
 - Ranking features and explanations.
 - Cache freshness/coverage.
 - Access classification.
-- Citation serialization.
+- Citation type mapping, identifier normalization, deterministic keys, Unicode, literal authors, and hostile BibTeX escaping.
 - Authorization decisions.
 
 ## Slice tests
 
 - Spring MVC validation and Problem Details.
 - JPA mappings and JSON contracts.
+- Raw BibTeX/CSL-JSON response media types, attachment headers, sparse records, and stable citation errors.
+- Canonical paper details, record-level provenance, immutable credited names, date/year integrity, and stored-access summaries without provider calls.
 - MCP annotation discovery and tool validation.
 
 ## Integration tests
@@ -44,6 +46,8 @@ If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 ## End-to-end tests
 
 Playwright covers search/filter/provenance, repeat-query caching, legal PDF or external fallback, collections, reading status, citation export, keyboard navigation, provider warnings, and restricted-paper handling.
+
+The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, RFC 9457 errors, and verified-versus-unverified access links. Manual browser smoke verification covers desktop/mobile layout and the live search → paper → arXiv access path. Automating that smoke path with Playwright remains a CI follow-up.
 
 ## Evaluation fixtures
 

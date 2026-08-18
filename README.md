@@ -1,8 +1,8 @@
 # OpenScholar MCP
 
-OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, saves reusable knowledge in PostgreSQL, and exposes the same capabilities to AI agents through the Model Context Protocol (MCP).
+OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. The same use cases are designed to be exposed to AI agents through the Model Context Protocol (MCP) in a later milestone.
 
-> Status: cached OpenAlex search and the first legal-access backend slice are implemented. Canonical papers can now be resolved by exact DOI through Unpaywall and by exact arXiv ID, with provider-isolated failures, safe outbound-link verification, 24-hour reuse, stale fallback, and link-only persistence. The API never returns PDF bytes, and the backend retains no PDF documents.
+> Status: the first end-to-end web flow is implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, and downloads BibTeX or CSL-JSON citations. PostgreSQL caches reusable metadata and access results. The API never returns PDF bytes, and the application retains no PDF documents.
 
 ## Product goals
 
@@ -14,34 +14,33 @@ OpenScholar MCP is an open-access research discovery and reading workspace. A us
 - Expose safe, typed tools through an MCP server implemented in Spring Boot.
 - Preserve provenance: every record and document link must show where it came from.
 
-## Planned stack
+## Current stack
 
 - Java 21 LTS
 - Spring Boot 4.1.x
-- Spring AI 2.0.x and the official MCP Java SDK
-- Spring MVC with stateless Streamable HTTP MCP
+- Spring MVC REST API
 - Maven Wrapper
 - PostgreSQL with pgvector
 - Flyway migrations
-- Next.js and TypeScript for the web client
-- PDF.js for in-browser reading
+- Next.js 16.2 and strict TypeScript for the web client
 - Docker Compose for local development
-- Testcontainers, JUnit 5, WireMock, and Playwright for verification
+- Testcontainers, JUnit, Vitest, and Testing Library for verification
 
-## Proposed repository layout
+Planned additions include Spring AI 2.0 with the official MCP Java SDK, stateless Streamable HTTP MCP, PDF.js, and Playwright.
+
+## Repository layout
 
 ```text
 openscholar-mcp/
-├── backend/                    # Spring Boot API, MCP server, ingestion and jobs
+├── backend/                    # Spring Boot API, providers, persistence, future MCP adapter
 ├── frontend/                   # Next.js web application
-├── infra/                      # Docker Compose and local infrastructure
 ├── docs/                       # Product, architecture, security and delivery plans
 ├── .github/workflows/          # CI pipelines
 ├── compose.yaml
 └── README.md
 ```
 
-The backend will begin as a modular monolith. REST, MCP, provider integrations, persistence, and scheduled work share one deployable application but remain separated by package boundaries. This keeps the first release understandable while leaving room to extract workers later.
+The backend is a modular monolith. REST, future MCP adapters, provider integrations, persistence, and scheduled work share one deployable application while remaining separated by package boundaries.
 
 ## Planned research sources
 
@@ -68,9 +67,38 @@ The platform will use supported APIs and legal repository links. It will not byp
 
 The MVP is complete when a user can search an academic topic, receive normalized and deduplicated results from OpenAlex, resolve legal full-text availability through Unpaywall or arXiv, revisit cached results, save papers to a collection, open supported PDFs in the web reader, and invoke the core search operations through an MCP client.
 
-## Backend development
+## Run the full stack
 
-See the [backend README](backend/README.md) for current Java setup and verification commands.
+With Docker running:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Open `http://localhost:3000`. The root stack binds PostgreSQL, the backend, and the frontend only to `127.0.0.1`. Provider credentials are passed only to the backend. Stop it with `docker compose down`; add `--volumes` only when you intentionally want to delete the local PostgreSQL data.
+
+For faster component development, run Spring Boot and Next.js separately:
+
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+
+```bash
+cd frontend
+cp .env.example .env.local
+pnpm install
+pnpm dev
+```
+
+## Verification
+
+Run `./mvnw verify` from `backend` and `pnpm check` from `frontend`. See the [backend README](backend/README.md), [frontend README](frontend/README.md), and [development guide](docs/DEVELOPMENT.md) for details.
+
+## Remaining MVP work
+
+Collections/library persistence, a supported in-app PDF.js reader, richer typed citation metadata, automated Playwright smoke coverage, and the Spring MCP adapter remain on the roadmap.
 
 ## License
 

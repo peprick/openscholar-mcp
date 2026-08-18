@@ -26,7 +26,11 @@ interface PaperAuthorRepository extends JpaRepository<PaperAuthorEntity, UUID> {
 			join fetch pa.author
 			join fetch pa.providerRecord
 			where pa.paper.id in :paperIds
-			order by pa.paper.id, pa.providerRecord.retrievedAt desc, pa.providerRecord.id, pa.position
+			order by pa.paper.id,
+				pa.providerRecord.retrievedAt desc,
+				pa.providerRecord.provider,
+				pa.providerRecord.providerRecordId,
+				pa.position
 			""")
 	List<PaperAuthorEntity> findForPaperIds(@Param("paperIds") Collection<UUID> paperIds);
 

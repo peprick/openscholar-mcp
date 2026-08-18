@@ -116,8 +116,7 @@ class PaperEntity {
 		}
 
 		abstractText = mergeText(abstractText, candidate.abstractText(), incomingIsAtLeastAsRecent);
-		publicationDate = mergeValue(publicationDate, candidate.publicationDate(), incomingIsAtLeastAsRecent);
-		publicationYear = mergeValue(publicationYear, candidate.publicationYear(), incomingIsAtLeastAsRecent);
+		mergePublication(candidate.publicationDate(), candidate.publicationYear(), incomingIsAtLeastAsRecent);
 		language = mergeText(language, candidate.language(), incomingIsAtLeastAsRecent);
 		venueName = mergeText(venueName, candidate.venueName(), incomingIsAtLeastAsRecent);
 
@@ -169,6 +168,23 @@ class PaperEntity {
 			return current;
 		}
 		return current == null || replace ? incoming : current;
+	}
+
+	private void mergePublication(
+			LocalDate incomingDate, Integer incomingYear, boolean replace) {
+		boolean missingDateCanBeEnriched = incomingDate != null
+				&& publicationDate == null
+				&& (publicationYear == null || publicationYear == incomingDate.getYear());
+		if (incomingDate != null && (replace || missingDateCanBeEnriched)) {
+			publicationDate = incomingDate;
+			publicationYear = incomingDate.getYear();
+			return;
+		}
+		if (publicationDate != null) {
+			publicationYear = publicationDate.getYear();
+			return;
+		}
+		publicationYear = mergeValue(publicationYear, incomingYear, replace);
 	}
 
 	private static String cleanRequired(String value, String message) {

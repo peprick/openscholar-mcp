@@ -44,6 +44,16 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [Apache HttpClient 5.6](https://hc.apache.org/httpcomponents-client-5.6.x/)
 - [Apache HttpClient `DnsResolver`](https://hc.apache.org/httpcomponents-client-5.6.x/current/httpclient5/apidocs/org/apache/hc/client5/http/DnsResolver.html)
 
+## Citation formats and identifiers
+
+- [CSL-JSON 1.0.2 input schema](https://raw.githubusercontent.com/citation-style-language/schema/v1.0.2/schemas/input/csl-data.json)
+- [Citation Style Language 1.0.2 specification](https://docs.citationstyles.org/en/v1.0.2/specification.html)
+- [Oren Patashnik, *BibTeXing*](https://tug.ctan.org/biblio/bibtex/contrib/doc/btxdoc.pdf)
+- [DataCite citation content negotiation](https://support.datacite.org/docs/datacite-content-resolver)
+- [DOI Handbook](https://www.doi.org/doi-handbook/html/)
+- [arXiv identifier rules](https://info.arxiv.org/help/arxiv_identifier.html)
+- [arXiv citation guidance](https://info.arxiv.org/help/faq/references.html)
+
 ## Version caveat
 
 The latest MCP specification may advance faster than the stable Java SDK. The repository therefore treats protocol support as a tested compatibility claim, not as a synonym for the newest published specification. See [ADR 0003](decisions/0003-supported-mcp-revision.md).

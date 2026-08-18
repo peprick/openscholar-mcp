@@ -1,0 +1,53 @@
+name: openscholar
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openscholar}
+      POSTGRES_USER: ${POSTGRES_USER:-openscholar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openscholar}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-openscholar}
+      POSTGRES_USER: ${POSTGRES_USER:-openscholar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openscholar}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SERVER_ADDRESS: 0.0.0.0
+      OPENALEX_API_KEY: ${OPENALEX_API_KEY:-}
+      OPENALEX_BASE_URL: ${OPENALEX_BASE_URL:-https://api.openalex.org}
+      UNPAYWALL_EMAIL: ${UNPAYWALL_EMAIL:-}
+      UNPAYWALL_BASE_URL: ${UNPAYWALL_BASE_URL:-https://api.unpaywall.org}
+      ARXIV_BASE_URL: ${ARXIV_BASE_URL:-https://export.arxiv.org/api}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      OPENSCHOLAR_API_BASE_URL: http://backend:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres-data:

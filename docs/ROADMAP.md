@@ -6,14 +6,14 @@ Milestones are outcome-based. Estimates assume one developer learning parts of t
 
 Estimated effort: 2–4 days.
 
-Status: backend foundation complete; frontend generation and the backend/frontend connectivity check remain.
+Status: complete. Backend, Next.js client, pnpm lockfile, local connectivity, and the root full-stack Compose profile are implemented.
 
 - Generate Spring Boot 4.1/Java 21 Maven project.
-- Generate Next.js TypeScript project.
+- Implemented: Next.js 16.2 App Router project with strict TypeScript.
 - Add Maven wrapper and pnpm lockfile.
-- Add Compose with PostgreSQL/pgvector.
+- Implemented: standalone backend PostgreSQL Compose and root PostgreSQL/backend/frontend stack.
 - Configure Flyway, Actuator, formatting, CI, and environment examples.
-- Add health endpoints and backend/frontend connectivity check.
+- Implemented: health/status endpoints and a visible backend connectivity state.
 
 Exit: clean clone starts through documented commands and CI passes.
 
@@ -21,13 +21,14 @@ Exit: clean clone starts through documented commands and CI passes.
 
 Estimated effort: 1–2 weeks.
 
-Status: backend vertical slice complete; search/result UI, operational request budgets, and final milestone hardening remain.
+Status: the end-to-end search, immutable result snapshot, and canonical paper-details UI are complete. Operational request budgets, pagination continuity, richer typed publication metadata, and final hardening remain.
 
 - Canonical paper/search domain models and initial Flyway migrations.
 - OpenAlex adapter with rate limits and resilience.
 - Query normalization, fingerprinting, cache policy, normalization, and exact-ID deduplication.
-- `POST /api/v1/searches` and paper details.
-- Search/result-detail UI with provenance and cache status.
+- Implemented: `POST /api/v1/searches`, immutable snapshots, and canonical paper details with stored provenance/access summary.
+- Implemented: paper-specific credited-name snapshots and publication date/year integrity.
+- Implemented: accessible search/result-detail UI with provenance, ranking rationale, provider coverage, warnings, and cache status.
 
 Exit: persisted results, repeated-query reuse, and useful partial/failure responses.
 
@@ -35,14 +36,16 @@ Exit: persisted results, repeated-query reuse, and useful partial/failure respon
 
 Estimated effort: 1–2 weeks.
 
-Status: backend legal-access resolution is complete; the web reader, result/version UI, citation exports, and final milestone hardening remain.
+Status: backend legal-access resolution, verified-version UI, external link fallback, and single-paper citation downloads are complete. The in-app PDF.js reader, richer citation metadata, and final hardening remain.
 
 - Implemented: exact DOI resolution through Unpaywall with optional backend-email configuration.
 - Implemented: exact arXiv-ID lookup with canonical response matching and provider-compliant request pacing.
 - Implemented: paper-version/access persistence, 24-hour cache, cooldown-protected forced refresh, stale fallback, and provider isolation.
 - Implemented: safe link-only verification for landing pages and PDF candidates without retaining PDF bytes.
-- PDF/landing-page reader experience.
-- BibTeX and CSL-JSON export.
+- Implemented: deterministic single-paper BibTeX and CSL-JSON downloads without provider calls.
+- Implemented: verified external PDF/repository actions with explicit link-only handling; in-app PDF.js reading remains.
+- Implemented: browser citation actions for BibTeX and CSL-JSON through a same-origin proxy.
+- Citation metadata hardening: credited-name snapshots, typed publication fields, identifier preference, and schema fixtures.
 - Restricted/unavailable/repository-copy tests.
 
 Exit: users identify and open legal versions in the UI, and export citations, without bypassing controls.

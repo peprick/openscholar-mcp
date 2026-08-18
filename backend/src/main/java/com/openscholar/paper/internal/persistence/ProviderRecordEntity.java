@@ -162,7 +162,19 @@ class ProviderRecordEntity {
 		return providerRecordId;
 	}
 
+	Instant providerUpdatedAt() {
+		return providerUpdatedAt;
+	}
+
 	Instant retrievedAt() {
 		return retrievedAt;
+	}
+
+	String sourceUrl() {
+		return sourceUrl;
+	}
+
+	boolean reportedOpenAccess() {
+		return reportedOpenAccess;
 	}
 }

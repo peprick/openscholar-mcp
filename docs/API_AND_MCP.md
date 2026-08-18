@@ -54,7 +54,13 @@ GET  /api/v1/papers/{paperId}/citation?format=bibtex
 POST /api/v1/papers/{paperId}/access/verify?forceRefresh=false
 ```
 
-`GET /versions` and `POST /access/verify` are implemented; paper detail, related-paper, and citation endpoints remain planned. `GET /versions` reads only the stored resolution. Before the first resolution it returns `NOT_YET_RESOLVED` with no locations and does not contact Unpaywall or arXiv.
+`GET /papers/{paperId}`, `GET /versions`, `POST /access/verify`, and `GET /citation` are implemented; the related-paper endpoint remains planned. `GET /versions` reads only the stored resolution. Before the first resolution it returns `NOT_YET_RESOLVED` with no locations and does not contact Unpaywall or arXiv.
+
+`GET /papers/{paperId}` is a database-only canonical-details read. It returns canonical bibliographic fields, paper-specific credited author names in provider order, every identifier, citation-count freshness, metadata completeness/freshness, deterministic record-level provenance, and a compact stored-access summary. Provenance identifies associated provider records and the record selected for canonical authorship; it is not field-level attribution. Source URLs are restricted to absolute HTTP(S) records and returned without query strings or fragments. Raw provider metadata and provider-reported landing/PDF links are excluded, while `/versions` remains the contract for verified access locations. An unknown UUID returns `404 PAPER_NOT_FOUND`; a malformed UUID returns the safe `400 INVALID_REQUEST` problem.
+
+`GET /citation` accepts `format=bibtex` (the default) or `format=csl-json`. It returns a raw UTF-8 citation document rather than the normal JSON response envelope, with `Content-Disposition: attachment` and a deterministic filename. BibTeX uses `application/x-bibtex`; CSL-JSON uses `application/vnd.citationstyles.csl+json` and a one-item top-level array, as required by the CSL data schema. The stable citation key is based only on the canonical paper UUID.
+
+Citation export is read-only and never contacts a research or access provider. It emits the best currently stored metadata, preserves Unicode, represents each author as a literal name, prefers a normalized DOI over an arXiv URL, and omits unavailable or invalid fields rather than guessing them. The current canonical model does not yet distinguish author name parts, publisher/school/institution, volume, issue, pages, article number, edition, ISBN/ISSN, or degree level; those richer fields are a catalog-hardening follow-up. `404 PAPER_NOT_FOUND` identifies an unknown paper, while an unsupported format returns `400 UNSUPPORTED_CITATION_FORMAT`.
 
 `POST /access/verify` performs bounded synchronous resolution. With the default `forceRefresh=false`, it returns a fresh cached result when available. `forceRefresh=true` bypasses that fresh-cache check; refreshing an existing resolution reports `FORCED_REFRESH`, while a first resolution remains `RESOLVED`. Forced refreshes are protected per paper by `openscholar.access.force-refresh-cooldown` (five minutes by default). A repeated request inside that window returns `429 ACCESS_REFRESH_RATE_LIMITED`, a `retryAfterSeconds` problem property, and a matching `Retry-After` header. The other access cache dispositions are `CACHE_HIT`, `REFRESHED`, `STALE_FALLBACK`, `NO_SUPPORTED_IDENTIFIER`, and `NOT_YET_RESOLVED`.
 
@@ -130,7 +136,7 @@ Output includes canonical paper IDs, bibliographic metadata, best access status,
 
 ### `get_paper_details`
 
-Accepts exactly one internal paper ID, DOI, arXiv ID, or OpenAlex ID. Returns canonical metadata, identifiers, versions, provenance, and freshness.
+Will accept exactly one internal paper ID, DOI, arXiv ID, or OpenAlex ID and return canonical metadata, identifiers, versions, provenance, and freshness. The internal-paper-ID REST use case is implemented; identifier resolution and the MCP wrapper remain planned.
 
 ### `get_legal_full_text`
 
@@ -146,7 +152,7 @@ Searches cached/saved papers with lexical retrieval initially and hybrid retriev
 
 ### `export_citations`
 
-Accepts a bounded list of paper IDs and returns BibTeX or CSL-JSON.
+Accepts a bounded list of paper IDs and returns BibTeX or CSL-JSON. The single-paper REST use case is implemented; this batch MCP tool remains planned for the MCP milestone.
 
 ### Long-running jobs
 
