@@ -1489,6 +1489,256 @@ button:disabled {
   gap: 8px;
 }
 
+.accessLocationActions {
+  align-items: stretch;
+}
+
+.readerPage {
+  max-width: 1440px;
+}
+
+.pdfReader {
+  padding-bottom: 52px;
+}
+
+.readerHeader {
+  align-items: end;
+  display: flex;
+  gap: 36px;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.readerHeader h1,
+.readerUnavailable h1,
+.readerFailure h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+
+.readerHeader h1 {
+  font-size: clamp(2.25rem, 5vw, 4.8rem);
+  line-height: 0.98;
+  margin: 10px 0 13px;
+  max-width: 900px;
+}
+
+.readerHeader p {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.readerExternalActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.readerProvenance {
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 0 22px;
+}
+
+.readerProvenance > div {
+  padding: 14px 18px;
+}
+
+.readerProvenance > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.readerProvenance dt {
+  color: var(--ink-faint);
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.readerProvenance dd {
+  font-size: 0.78rem;
+  margin: 4px 0 0;
+}
+
+.readerControls {
+  align-items: center;
+  background: rgb(250 249 246 / 96%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 9px;
+  position: sticky;
+  top: 78px;
+  z-index: 5;
+}
+
+.readerPageStatus,
+.readerZoomStatus {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 82px;
+  text-align: center;
+}
+
+.readerZoomStatus {
+  min-width: 48px;
+}
+
+.readerZoomButton {
+  font-size: 1.1rem;
+  min-width: 43px;
+  padding-inline: 12px;
+}
+
+.readerControlDivider {
+  align-self: stretch;
+  border-left: 1px solid var(--line);
+  margin-inline: 4px;
+}
+
+.readerViewport {
+  align-items: start;
+  background:
+    linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
+    #29312e;
+  background-size: 100% 32px;
+  border-radius: var(--radius-lg);
+  display: grid;
+  justify-items: center;
+  min-height: 68vh;
+  overflow: auto;
+  padding: clamp(20px, 4vw, 52px);
+  position: relative;
+}
+
+.readerCanvas {
+  background: white;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
+  display: block;
+  max-width: none;
+}
+
+.readerCanvas[hidden] {
+  display: none;
+}
+
+.readerLoading,
+.readerFailure {
+  align-self: center;
+  color: white;
+  display: grid;
+  justify-items: center;
+  margin: auto;
+  max-width: 650px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.readerLoading {
+  gap: 8px;
+}
+
+.readerLoading > span:last-child {
+  color: #c7d0cb;
+  font-size: 0.75rem;
+}
+
+.readerSpinner {
+  animation: reader-spin 0.9s linear infinite;
+  border: 3px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  border-top-color: white;
+  height: 34px;
+  margin-bottom: 10px;
+  width: 34px;
+}
+
+.readerFailure .eyebrow {
+  color: #f5ba70;
+}
+
+.readerFailure h2 {
+  font-size: clamp(2rem, 5vw, 3.7rem);
+  line-height: 1;
+  margin: 12px 0 16px;
+}
+
+.readerFailure p {
+  color: #dce2de;
+  line-height: 1.65;
+  margin: 0 0 24px;
+}
+
+.readerFailure .buttonGroup {
+  justify-content: center;
+}
+
+.readerFailure .button--ghost {
+  border-color: rgb(255 255 255 / 40%);
+  color: white;
+}
+
+.readerPolicyNote {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  margin: 13px 2px 0;
+  max-width: 920px;
+}
+
+.readerAccessibleText {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: normal;
+  width: 1px;
+}
+
+.readerUnavailable {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin: 72px auto;
+  max-width: 780px;
+  padding: clamp(30px, 6vw, 64px);
+}
+
+.readerUnavailable h1 {
+  font-size: clamp(2.6rem, 7vw, 5.4rem);
+  line-height: 0.95;
+  margin: 12px 0 22px;
+}
+
+.readerUnavailable p {
+  color: var(--ink-soft);
+  line-height: 1.65;
+  margin: 0 0 28px;
+  max-width: 650px;
+}
+
+@keyframes reader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 900px) {
   .heroInner {
     padding-top: 58px;
@@ -1539,6 +1789,15 @@ button:disabled {
 
   .accessLocationList {
     grid-template-columns: 1fr;
+  }
+
+  .readerHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .readerExternalActions {
+    justify-content: flex-start;
   }
 }
 
@@ -1731,6 +1990,40 @@ button:disabled {
   .buttonGroup .button {
     width: 100%;
   }
+
+  .accessLocationActions,
+  .accessLocationActions .button,
+  .readerExternalActions,
+  .readerExternalActions .button {
+    width: 100%;
+  }
+
+  .readerProvenance {
+    grid-template-columns: 1fr;
+  }
+
+  .readerProvenance > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .readerControls {
+    position: static;
+  }
+
+  .readerControlDivider {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    flex-basis: 100%;
+    height: 0;
+    margin-block: 3px;
+  }
+
+  .readerViewport {
+    border-radius: var(--radius);
+    min-height: 58vh;
+    padding: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1738,6 +2031,7 @@ button:disabled {
   *::before,
   *::after {
     scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
 

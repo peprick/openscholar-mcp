@@ -3,6 +3,21 @@ import "server-only";
 import type { ZodType } from "zod";
 
 import {
+  collectionDetailsResponseSchema,
+  collectionListResponseSchema,
+  collectionSummarySchema,
+  savedLibraryResponseSchema,
+  savedPaperSchema,
+  type CollectionDetailsResponse,
+  type CollectionListResponse,
+  type CreateCollectionRequest,
+  type SavedLibraryQuery,
+  type SavedLibraryResponse,
+  type SavedPaper,
+  type SavedPaperMutation,
+  type UpdateCollectionRequest,
+} from "@/shared/api/library-schemas";
+import {
   apiProblemSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
@@ -125,6 +140,21 @@ async function requestJson<T>(
   };
 }
 
+async function requestEmpty(path: string, init: RequestInit): Promise<void> {
+  const response = await fetchBackend(path, init);
+  if (!response.ok) {
+    throw new BackendApiError(
+      response.status,
+      await problemFrom(response),
+      response.headers.get("retry-after"),
+    );
+  }
+}
+
+function paginationQuery(page: number, size: number): URLSearchParams {
+  return new URLSearchParams({ page: String(page), size: String(size) });
+}
+
 export async function getSystemStatus(): Promise<SystemStatusResponse> {
   return (await requestJson(
     "/api/v1/system/status",
@@ -182,5 +212,118 @@ export async function verifyPaperAccess(
     paperAccessResponseSchema,
     "paper access verification",
     { method: "POST" },
+  )).data;
+}
+
+export async function getCollections(
+  page = 0,
+  size = 20,
+): Promise<CollectionListResponse> {
+  const query = paginationQuery(page, size);
+  return (await requestJson(
+    `/api/v1/collections?${query}`,
+    collectionListResponseSchema,
+    "collection list",
+  )).data;
+}
+
+export async function createCollection(
+  request: CreateCollectionRequest,
+): Promise<{
+  data: CollectionListResponse["items"][number];
+  status: number;
+  location: string | null;
+}> {
+  return requestJson(
+    "/api/v1/collections",
+    collectionSummarySchema,
+    "collection",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+}
+
+export async function getCollection(
+  collectionId: string,
+  page = 0,
+  size = 20,
+): Promise<CollectionDetailsResponse> {
+  const query = paginationQuery(page, size);
+  return (await requestJson(
+    `/api/v1/collections/${encodeURIComponent(collectionId)}?${query}`,
+    collectionDetailsResponseSchema,
+    "collection details",
+  )).data;
+}
+
+export async function updateCollection(
+  collectionId: string,
+  request: UpdateCollectionRequest,
+): Promise<CollectionListResponse["items"][number]> {
+  return (await requestJson(
+    `/api/v1/collections/${encodeURIComponent(collectionId)}`,
+    collectionSummarySchema,
+    "collection",
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  )).data;
+}
+
+export async function deleteCollection(collectionId: string): Promise<void> {
+  await requestEmpty(`/api/v1/collections/${encodeURIComponent(collectionId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function saveCollectionPaper(
+  collectionId: string,
+  paperId: string,
+  request: SavedPaperMutation,
+  method: "PUT" | "PATCH" = "PUT",
+): Promise<SavedPaper> {
+  return (await requestJson(
+    `/api/v1/collections/${encodeURIComponent(collectionId)}/papers/${encodeURIComponent(paperId)}`,
+    savedPaperSchema,
+    "saved paper",
+    {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  )).data;
+}
+
+export async function deleteCollectionPaper(
+  collectionId: string,
+  paperId: string,
+): Promise<void> {
+  await requestEmpty(
+    `/api/v1/collections/${encodeURIComponent(collectionId)}/papers/${encodeURIComponent(paperId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function searchSavedLibrary(
+  request: SavedLibraryQuery,
+): Promise<SavedLibraryResponse> {
+  const query = paginationQuery(request.page, request.size);
+  if (request.q !== undefined) query.set("q", request.q);
+  if (request.collectionId !== undefined) {
+    query.set("collectionId", request.collectionId);
+  }
+  if (request.readingStatus !== undefined) {
+    query.set("readingStatus", request.readingStatus);
+  }
+  if (request.tag !== undefined) query.set("tag", request.tag);
+  return (await requestJson(
+    `/api/v1/library/papers?${query}`,
+    savedLibraryResponseSchema,
+    "saved library",
   )).data;
 }

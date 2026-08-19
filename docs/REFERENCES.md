@@ -1,6 +1,6 @@
 # Official References
 
-These links support version and architecture decisions reviewed through 2026-08-17. Re-check them when application scaffolding or a dependency upgrade begins.
+These links support version and architecture decisions reviewed through 2026-08-18. Re-check them when application scaffolding or a dependency upgrade begins.
 
 ## Java and Spring
 
@@ -53,6 +53,13 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [DOI Handbook](https://www.doi.org/doi-handbook/html/)
 - [arXiv identifier rules](https://info.arxiv.org/help/arxiv_identifier.html)
 - [arXiv citation guidance](https://info.arxiv.org/help/faq/references.html)
+
+## Browser PDF rendering
+
+- [PDF.js 6.2.108 release](https://github.com/mozilla/pdf.js/releases/tag/v6.2.108)
+- [PDF.js getting started](https://mozilla.github.io/pdf.js/getting_started/)
+- [PDF.js examples](https://mozilla.github.io/pdf.js/examples/)
+- [PDF.js cross-origin FAQ](https://github.com/mozilla/pdf.js/wiki/frequently-asked-questions)
 
 ## Version caveat
 

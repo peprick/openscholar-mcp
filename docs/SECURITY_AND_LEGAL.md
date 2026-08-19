@@ -53,12 +53,14 @@ Inbound MCP tokens are never forwarded to OpenAlex, Unpaywall, CORE, or other pr
 - Disable automatic redirects and revalidate the URL and DNS answers for every manually followed redirect. Redirect count, connection time, response time, and probe bytes are bounded.
 - Do not forward inbound authorization, cookies, or provider credentials to candidate hosts; automatic authentication, cookies, retries, decompression, and connection reuse are disabled for link probes.
 - Probe PDF candidates with a bounded range `GET` and require either `application/pdf` or a `%PDF-` prefix. Probe landing pages with `HEAD`, using a bounded range `GET` only when `HEAD` is unsupported.
-- Close a probe immediately after the bounded prefix. The current access slice never downloads, buffers, proxies, or persists a complete PDF.
+- Close a probe immediately after the bounded prefix. Backend access verification never downloads, buffers, proxies, or persists a complete PDF.
 - Bound Unpaywall JSON and arXiv Atom responses while reading them from HTTP, before deserialization or XML parsing.
-- Scan retained files and render in a sandboxed browser context.
-- Do not execute embedded scripts, attachments, or external PDF actions.
+- The web reader accepts only a user-selected, freshly verified `OPEN_PDF` HTTPS location matched by paper and location UUID. Its isolated PDF.js worker requests that source directly without application credentials; neither Next.js nor Spring Boot proxies or retains the document bytes.
+- A source must permit browser cross-origin reading. Load or render failure exposes a generic error and the original verified external link; it never triggers an unrestricted server-side URL fetch.
+- Enforce document-byte, load-time, render-time, canvas, image, and extracted-page-text ceilings. Render only PDF pages to a bounded canvas; the custom reader exposes no embedded scripts, attachments, form actions, or PDF-originated external actions.
+- Scan retained files before use if permitted document retention is implemented later.
 
-The final two controls apply when permitted document retention and the reader are implemented; retained files do not exist in the current backend slice.
+Retained files do not exist in the current implementation. The browser reader is a link-only view and does not change the `retention_allowed=false` policy.
 
 ## Prompt-injection boundary
 

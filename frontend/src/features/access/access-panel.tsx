@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import type { Route } from "next";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
+import { selectReaderSource } from "@/features/reader/reader-source";
 import {
   apiProblemSchema,
   paperAccessResponseSchema,
@@ -42,9 +45,11 @@ function verifiedLocationHref(location: PaperAccessLocation): string | null {
 function AccessLocation({
   canonicalBest,
   location,
+  readerHref,
 }: {
   canonicalBest: boolean;
   location: PaperAccessLocation;
+  readerHref: Route | null;
 }): React.JSX.Element {
   const href = verifiedLocationHref(location);
   return (
@@ -79,18 +84,40 @@ function AccessLocation({
         </div>
       </dl>
       {href !== null ? (
-        <ExternalLink className="button button--primary" href={href}>
-          {location.pdfUrl !== null
-            ? "Open verified PDF externally"
-            : "Open verified repository page"}
-        </ExternalLink>
+        <div className="buttonGroup accessLocationActions">
+          {readerHref !== null ? (
+            <Link className="button button--primary" href={readerHref}>
+              Read in OpenScholar
+            </Link>
+          ) : null}
+          <ExternalLink
+            className={
+              readerHref === null
+                ? "button button--primary"
+                : "button button--ghost"
+            }
+            href={href}
+          >
+            {location.pdfUrl !== null
+              ? "Open verified PDF externally"
+              : "Open verified repository page"}
+          </ExternalLink>
+        </div>
       ) : (
         <p className="inlineNotice">
           No independently verified external link is available for this record.
         </p>
       )}
+      {location.verificationStatus === "VERIFIED" &&
+      location.accessStatus === "OPEN_PDF" &&
+      location.pdfUrl !== null &&
+      readerHref === null ? (
+        <p className="inlineNotice">
+          In-app reading requires a fresh, verified HTTPS PDF source.
+        </p>
+      ) : null}
       <p className="linkOnlyNote">
-        Link only · OpenScholar does not proxy or retain this document.
+        Direct source access · OpenScholar does not proxy or retain this document.
       </p>
     </article>
   );
@@ -98,16 +125,36 @@ function AccessLocation({
 
 export function AccessPanel({
   initialAccess,
+  initialNow,
   paperId,
 }: {
   initialAccess: PaperAccessResponse;
+  initialNow: string;
   paperId: string;
 }): React.JSX.Element {
   const [access, setAccess] = useState(initialAccess);
+  const [readerSelectionTime, setReaderSelectionTime] = useState(
+    () => new Date(initialNow),
+  );
+  const logicalClockRef = useRef({
+    baselineTick: null as number | null,
+    baselineTime: Date.parse(initialNow),
+  });
   const [pendingAction, setPendingAction] = useState<"check" | "refresh" | null>(
     null,
   );
   const [message, setMessage] = useState<string | null>(null);
+
+  function logicalNow(): number {
+    const clock = logicalClockRef.current;
+    if (clock.baselineTick === null) {
+      clock.baselineTick = window.performance.now();
+    }
+    return (
+      clock.baselineTime +
+      Math.max(0, window.performance.now() - clock.baselineTick)
+    );
+  }
 
   async function verify(forceRefresh: boolean): Promise<void> {
     setPendingAction(forceRefresh ? "refresh" : "check");
@@ -138,10 +185,11 @@ export function AccessPanel({
       }
 
       const parsed = paperAccessResponseSchema.safeParse(body);
-      if (!parsed.success) {
+      if (!parsed.success || parsed.data.paperId !== paperId) {
         setMessage("The backend returned an unexpected access response.");
         return;
       }
+      setReaderSelectionTime(new Date(logicalNow()));
       setAccess(parsed.data);
       setMessage(
         parsed.data.locations.length > 0
@@ -154,6 +202,34 @@ export function AccessPanel({
       setPendingAction(null);
     }
   }
+
+  useEffect(() => {
+    const freshUntil = Date.parse(access.freshUntil ?? "");
+    const authoritativeNow = Math.max(
+      readerSelectionTime.getTime(),
+      logicalNow(),
+    );
+    if (
+      access.cacheDisposition === "STALE_FALLBACK" ||
+      !Number.isFinite(freshUntil) ||
+      freshUntil <= authoritativeNow
+    ) {
+      return;
+    }
+    const maximumTimerDelay = 2_147_483_647;
+    const remaining = freshUntil - authoritativeNow + 1;
+    const delay = Math.min(
+      maximumTimerDelay,
+      Math.max(0, remaining),
+    );
+    const nextLogicalTime =
+      delay >= remaining ? freshUntil + 1 : authoritativeNow + delay;
+    const timeout = window.setTimeout(
+      () => setReaderSelectionTime(new Date(nextLogicalTime)),
+      delay,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [access.cacheDisposition, access.freshUntil, readerSelectionTime]);
 
   const hasResolved = access.cacheDisposition !== "NOT_YET_RESOLVED";
 
@@ -247,6 +323,16 @@ export function AccessPanel({
               canonicalBest={location.id === access.bestLocationId}
               key={location.id}
               location={location}
+              readerHref={
+                selectReaderSource(
+                  access,
+                  paperId,
+                  location.id,
+                  readerSelectionTime,
+                ) === null
+                  ? null
+                  : (`/papers/${paperId}/read/${location.id}` as Route)
+              }
             />
           ))}
         </div>

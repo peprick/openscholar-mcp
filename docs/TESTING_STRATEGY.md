@@ -47,7 +47,7 @@ If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 Playwright covers search/filter/provenance, repeat-query caching, legal PDF or external fallback, collections, reading status, citation export, keyboard navigation, provider warnings, and restricted-paper handling.
 
-The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, RFC 9457 errors, and verified-versus-unverified access links. Manual browser smoke verification covers desktop/mobile layout and the live search → paper → arXiv access path. Automating that smoke path with Playwright remains a CI follow-up.
+The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, RFC 9457 errors, verified-versus-unverified access links, reader-source policy selection, PDF.js loading/render lifecycle, controls, cleanup, and generic external fallback. Manual browser smoke verification covers desktop/mobile layout, the live search → paper → arXiv access path, and a controlled CORS-allowed render versus CORS-blocked fallback. Automating those reader cases and the full smoke path with Playwright remains a CI follow-up.
 
 ## Evaluation fixtures
 

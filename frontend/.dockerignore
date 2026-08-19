@@ -2,6 +2,7 @@
 .env*
 !.env.example
 coverage
+public/pdfjs
 node_modules
 npm-debug.log*
 pnpm-debug.log*

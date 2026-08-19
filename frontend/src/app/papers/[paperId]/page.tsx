@@ -51,7 +51,11 @@ export default async function PaperPage({
         <code className="recordId">Paper {paper.paperId.slice(0, 8)}</code>
       </div>
       <PaperDetails paper={paper} />
-      <AccessPanel initialAccess={access} paperId={paperId} />
+      <AccessPanel
+        initialAccess={access}
+        initialNow={new Date().toISOString()}
+        paperId={paperId}
+      />
       <CitationActions paperId={paperId} />
     </main>
   );

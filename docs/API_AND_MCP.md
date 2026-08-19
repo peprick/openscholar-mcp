@@ -71,6 +71,8 @@ Access resolution uses exact identifiers already attached to the canonical paper
 
 Results contain overall access status, freshness, provider coverage, warnings, a best-location ID, and verified version records with source, host/version classification, licence when reported, landing/PDF link, and verification timestamps. All current locations use `LINK_ONLY`: the API returns links but never PDF bytes.
 
+The web reader can load a fresh, verified `OPEN_PDF` HTTPS location directly from the source into PDF.js in the user's browser. This is not an API byte endpoint: Next.js and Spring Boot do not fetch or relay the document, and a source without compatible browser CORS headers falls back to its external link.
+
 Access results remain fresh for 24 hours by default. The cache carries a fingerprint of the paper's DOI, arXiv ID, and abstract availability, so later catalog enrichment invalidates an incompatible negative result. Provider failures are isolated. If no provider can complete a refresh—or reported candidates cannot be safely re-verified—and a compatible older resolution exists, the API returns it unchanged as `STALE_FALLBACK` with machine-readable warnings rather than renewing stale links as fresh.
 
 The implemented access-status vocabulary is `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, and `UNAVAILABLE`. Link verification accepts only provider candidates and validates every redirect before a location can become active.

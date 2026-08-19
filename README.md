@@ -2,7 +2,7 @@
 
 OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. The same use cases are designed to be exposed to AI agents through the Model Context Protocol (MCP) in a later milestone.
 
-> Status: the first end-to-end web flow is implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, and downloads BibTeX or CSL-JSON citations. PostgreSQL caches reusable metadata and access results. The API never returns PDF bytes, and the application retains no PDF documents.
+> Status: the first end-to-end web flow is implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, reads fresh CORS-compatible PDF sources through a direct PDF.js browser session, and downloads BibTeX or CSL-JSON citations. PostgreSQL caches reusable metadata and access results. The API never returns PDF bytes, and the application retains no PDF documents.
 
 ## Product goals
 
@@ -23,10 +23,11 @@ OpenScholar MCP is an open-access research discovery and reading workspace. A us
 - PostgreSQL with pgvector
 - Flyway migrations
 - Next.js 16.2 and strict TypeScript for the web client
+- PDF.js 6.2 for direct, supported-source browser reading
 - Docker Compose for local development
 - Testcontainers, JUnit, Vitest, and Testing Library for verification
 
-Planned additions include Spring AI 2.0 with the official MCP Java SDK, stateless Streamable HTTP MCP, PDF.js, and Playwright.
+Planned additions include Spring AI 2.0 with the official MCP Java SDK, stateless Streamable HTTP MCP, and Playwright.
 
 ## Repository layout
 
@@ -98,7 +99,7 @@ Run `./mvnw verify` from `backend` and `pnpm check` from `frontend`. See the [ba
 
 ## Remaining MVP work
 
-Collections/library persistence, a supported in-app PDF.js reader, richer typed citation metadata, automated Playwright smoke coverage, and the Spring MCP adapter remain on the roadmap.
+Collections/library persistence, richer typed citation metadata, automated Playwright smoke coverage, reader accessibility enhancements, and the Spring MCP adapter remain on the roadmap.
 
 ## License
 

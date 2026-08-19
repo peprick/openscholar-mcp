@@ -36,14 +36,14 @@ Exit: persisted results, repeated-query reuse, and useful partial/failure respon
 
 Estimated effort: 1–2 weeks.
 
-Status: backend legal-access resolution, verified-version UI, external link fallback, and single-paper citation downloads are complete. The in-app PDF.js reader, richer citation metadata, and final hardening remain.
+Status: backend legal-access resolution, verified-version UI, supported-source PDF.js reader, external link fallback, and single-paper citation downloads are complete. Richer citation metadata, reader accessibility enhancements, and final hardening remain.
 
 - Implemented: exact DOI resolution through Unpaywall with optional backend-email configuration.
 - Implemented: exact arXiv-ID lookup with canonical response matching and provider-compliant request pacing.
 - Implemented: paper-version/access persistence, 24-hour cache, cooldown-protected forced refresh, stale fallback, and provider isolation.
 - Implemented: safe link-only verification for landing pages and PDF candidates without retaining PDF bytes.
 - Implemented: deterministic single-paper BibTeX and CSL-JSON downloads without provider calls.
-- Implemented: verified external PDF/repository actions with explicit link-only handling; in-app PDF.js reading remains.
+- Implemented: direct PDF.js reading for fresh, verified, CORS-compatible HTTPS PDF locations, with no byte proxy or retention and an external fallback.
 - Implemented: browser citation actions for BibTeX and CSL-JSON through a same-origin proxy.
 - Citation metadata hardening: credited-name snapshots, typed publication fields, identifier preference, and schema fixtures.
 - Restricted/unavailable/repository-copy tests.

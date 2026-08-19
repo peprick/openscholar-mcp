@@ -42,6 +42,12 @@ pnpm dev
 
 Run `pnpm check` for ESLint, strict TypeScript, Vitest, and a production Next.js build. Next.js reads the backend origin only on the server. Do not replace it with a `NEXT_PUBLIC_` variable or call Spring Boot directly from browser components.
 
+Node.js 22.13 or newer is required, with Node.js 24 LTS recommended. The
+`predev` and `prebuild` hooks copy the pinned PDF.js worker and support assets
+from `node_modules` into `public/pdfjs/<version>`. That generated directory is
+ignored locally and rebuilt inside the frontend container; do not edit or
+commit it.
+
 ## Environment variables
 
 ```text
@@ -80,6 +86,7 @@ Optional embedding, OAuth, storage, and monitoring variables arrive only with th
 - Dedicated server-data query/cache layer.
 - No credentials/private backend configuration in browser bundles.
 - Explicit PDF failure and external-link fallback.
+- Only fresh, verified HTTPS PDF locations may enter the in-app reader; PDF.js fetches them directly without credentials, proxying, or retention.
 - Runtime-validated API responses until an OpenAPI document is available.
 - Only independently verified `/versions` links may be rendered as legal-access actions.
 

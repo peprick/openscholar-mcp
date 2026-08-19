@@ -5,10 +5,13 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
+    "pdfjs:assets": "node scripts/copy-pdfjs-assets.mjs",
+    "predev": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-pdfjs-assets.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
@@ -19,6 +22,7 @@
   },
   "dependencies": {
     "next": "16.2.11",
+    "pdfjs-dist": "6.2.108",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "server-only": "0.0.1",
