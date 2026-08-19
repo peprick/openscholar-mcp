@@ -22,12 +22,14 @@ import {
   apiProblemSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
+  relatedPapersResponseSchema,
   searchResponseSchema,
   systemStatusResponseSchema,
   type ApiProblem,
   type CreateSearchRequest,
   type PaperAccessResponse,
   type PaperDetailsResponse,
+  type RelatedPapersResponse,
   type SearchResponse,
   type SystemStatusResponse,
 } from "@/shared/api/schemas";
@@ -191,6 +193,22 @@ export async function getPaperDetails(
     paperDetailsResponseSchema,
     "paper details",
   )).data;
+}
+
+export async function getRelatedPapers(
+  paperId: string,
+  limit = 10,
+): Promise<RelatedPapersResponse> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  const related = (await requestJson(
+    `/api/v1/papers/${encodeURIComponent(paperId)}/related?${query}`,
+    relatedPapersResponseSchema,
+    "related papers",
+  )).data;
+  if (related.sourcePaperId.toLowerCase() !== paperId.toLowerCase()) {
+    throw new BackendContractError("related papers");
+  }
+  return related;
 }
 
 export async function getPaperAccess(

@@ -115,12 +115,12 @@ Current canonical data retains record-level provenance and identifies the provid
 
 ## Ranking
 
-The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. The planned deterministic ranker adds lexical/filter match, open-full-text availability, age-normalized citation impact, requested recency, metadata completeness, and source/version confidence with feature-level reasons. Semantic similarity follows only after an evaluation set exists.
+The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path now provides the first local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, deterministic metadata tie-breakers stabilize the order, and the API reports `POSTGRES_FULL_TEXT`. It remains separate from immutable provider snapshots. The planned hybrid ranker adds measured semantic similarity and any additional feature weights only after comparison against the versioned relevance fixture.
 
 ## Persistence
 
 - Spring Data JPA for transactional aggregate persistence.
-- Planned JDBC/native queries for PostgreSQL full-text and pgvector operations.
+- Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval; pgvector operations remain planned.
 - Flyway as the only production schema-change mechanism.
 - Planned PostgreSQL job leases/advisory locks for scheduled work.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.

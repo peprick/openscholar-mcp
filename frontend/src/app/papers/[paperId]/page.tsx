@@ -11,7 +11,9 @@ import {
   BackendApiError,
   getPaperAccess,
   getPaperDetails,
+  getRelatedPapers,
 } from "@/shared/api/server";
+import type { RelatedPapersResponse } from "@/shared/api/schemas";
 
 export const metadata: Metadata = {
   title: "Paper details",
@@ -31,11 +33,28 @@ export default async function PaperPage({
 
   let paper;
   let access;
+  let related;
+  let relatedUnavailable;
   try {
-    [paper, access] = await Promise.all([
+    const relatedRequest = getRelatedPapers(paperId, 5).then(
+      (response) => ({ response, unavailable: false }),
+      () => ({
+        response: {
+          sourcePaperId: paperId,
+          results: [],
+        } satisfies RelatedPapersResponse,
+        unavailable: true,
+      }),
+    );
+    const [paperResponse, accessResponse, relatedState] = await Promise.all([
       getPaperDetails(paperId),
       getPaperAccess(paperId),
+      relatedRequest,
     ]);
+    paper = paperResponse;
+    access = accessResponse;
+    related = relatedState.response;
+    relatedUnavailable = relatedState.unavailable;
   } catch (error) {
     if (error instanceof BackendApiError && error.status === 404) {
       notFound();
@@ -51,7 +70,11 @@ export default async function PaperPage({
         </Link>
         <code className="recordId">Paper {paper.paperId.slice(0, 8)}</code>
       </div>
-      <PaperDetails paper={paper} />
+      <PaperDetails
+        paper={paper}
+        related={related}
+        relatedUnavailable={relatedUnavailable}
+      />
       <SavePaperPanel paperId={paperId} />
       <AccessPanel
         initialAccess={access}

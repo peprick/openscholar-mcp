@@ -25,7 +25,7 @@
 
 ## Integration tests
 
-Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty and V7-to-V8 upgrade, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, and owner-scoped access. Broader concurrent reconciliation and job-leasing tests follow when those features are implemented.
+Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, and deterministic repeat reads. Broader concurrent reconciliation and job-leasing tests follow when those features are implemented.
 
 ## Provider contract tests
 
@@ -69,6 +69,8 @@ Version small metadata-only cases for:
 - restricted canonical work with an open repository copy.
 
 Expected canonical clusters and top-result ranges are preferred over brittle total ordering.
+
+The versioned `related-metadata-baseline-v1.json` corpus contains only synthetic metadata and graded `0..3` relevance judgments. Its related-paper evaluation records Recall@K, nDCG@K, Precision@1, and mean-reciprocal-rank floors; it retains recent uncited work, a DOI-less thesis, Spanish metadata, incomplete metadata, and deliberately difficult cross-domain negatives. Exact `ts_rank_cd` decimals and exact total ordering are not test contracts.
 
 ## Performance tests
 

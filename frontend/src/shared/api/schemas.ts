@@ -215,6 +215,46 @@ export const paperDetailsResponseSchema = z.object({
   access: accessSummarySchema,
 });
 
+const relatedPaperAuthorSchema = authorSchema.strict();
+const relatedPaperRankingReasonSchema = z
+  .object({
+    feature: z.string(),
+    value: z.number().nullable(),
+  })
+  .strict();
+
+export const relatedPapersResponseSchema = z
+  .object({
+    sourcePaperId: z.string().uuid(),
+    results: z.array(
+      z
+        .object({
+          rank: z.number().int().positive(),
+          paperId: z.string().uuid(),
+          title: z.string(),
+          abstractText: z.string().nullable(),
+          authors: z.array(relatedPaperAuthorSchema),
+          publicationDate: localDateSchema.nullable(),
+          publicationYear: z.number().int().nullable(),
+          documentType: documentTypeSchema,
+          language: z.string().nullable(),
+          venue: z.string().nullable(),
+          citationCount: z.number().int().nonnegative().nullable(),
+          identifiers: z
+            .object({
+              doi: z.string().nullable(),
+              arxiv: z.string().nullable(),
+              openAlex: z.string().nullable(),
+            })
+            .strict(),
+          score: z.number().finite().nonnegative(),
+          rankingReasons: z.array(relatedPaperRankingReasonSchema),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 export const paperAccessResponseSchema = z.object({
   paperId: z.string().uuid(),
   status: accessStatusSchema,
@@ -298,6 +338,8 @@ export type CreateSearchRequest = z.infer<typeof createSearchRequestSchema>;
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 export type SearchResult = SearchResponse["results"][number];
 export type PaperDetailsResponse = z.infer<typeof paperDetailsResponseSchema>;
+export type RelatedPapersResponse = z.infer<typeof relatedPapersResponseSchema>;
+export type RelatedPaperResult = RelatedPapersResponse["results"][number];
 export type PaperAccessResponse = z.infer<typeof paperAccessResponseSchema>;
 export type PaperAccessLocation = PaperAccessResponse["locations"][number];
 export type ApiProblem = z.infer<typeof apiProblemSchema>;

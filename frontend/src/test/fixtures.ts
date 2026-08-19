@@ -2,6 +2,7 @@ import type {
   PaperAccessLocation,
   PaperAccessResponse,
   PaperDetailsResponse,
+  RelatedPapersResponse,
   SearchResponse,
 } from "@/shared/api/schemas";
 import type {
@@ -17,6 +18,7 @@ export const testIds = {
   paper: "22c1800e-77f4-4aa9-98d7-5f79fa9a8a1c",
   location: "ac3fb646-3b77-4d36-bb44-2c46c66a7202",
   collection: "76fb2843-407a-4499-b3ac-59935440e928",
+  relatedPaper: "4a0f4958-e2a2-48a2-926d-43e8cb163810",
 } as const;
 
 export function collectionSummaryFixture(
@@ -205,6 +207,49 @@ export function paperDetailsResponseFixture(): PaperDetailsResponse {
       locationCount: 1,
       warnings: [],
     },
+  };
+}
+
+export function relatedPapersResponseFixture(
+  overrides: Partial<RelatedPapersResponse> = {},
+): RelatedPapersResponse {
+  return {
+    sourcePaperId: testIds.paper,
+    results: [
+      {
+        rank: 1,
+        paperId: testIds.relatedPaper,
+        title: "Message passing networks for molecular discovery",
+        abstractText:
+          "A local full-text match on graph representations and molecular learning.",
+        authors: [
+          {
+            name: "Grace Scholar",
+            orcid: null,
+            openAlexId: "A5098765432",
+          },
+        ],
+        publicationDate: "2024-02-20",
+        publicationYear: 2024,
+        documentType: "CONFERENCE_PAPER",
+        language: "en",
+        venue: "Molecular Learning Conference",
+        citationCount: 18,
+        identifiers: {
+          doi: "10.5555/openscholar.2024.17",
+          arxiv: null,
+          openAlex: "W4400765432",
+        },
+        score: 0.42,
+        rankingReasons: [
+          {
+            feature: "POSTGRES_FULL_TEXT",
+            value: 0.42,
+          },
+        ],
+      },
+    ],
+    ...overrides,
   };
 }
 

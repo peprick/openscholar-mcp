@@ -1,4 +1,7 @@
-import type { PaperDetailsResponse } from "@/shared/api/schemas";
+import type {
+  PaperDetailsResponse,
+  RelatedPapersResponse,
+} from "@/shared/api/schemas";
 import {
   formatInstant,
   formatInteger,
@@ -10,10 +13,16 @@ import {
 import { Badge } from "@/shared/ui/badge";
 import { ExternalLink } from "@/shared/ui/external-link";
 
+import { RelatedPapers } from "./related-papers";
+
 export function PaperDetails({
   paper,
+  related,
+  relatedUnavailable = false,
 }: {
   paper: PaperDetailsResponse;
+  related: RelatedPapersResponse;
+  relatedUnavailable?: boolean;
 }): React.JSX.Element {
   return (
     <article>
@@ -73,6 +82,8 @@ export function PaperDetails({
               <p className="inlineNotice">No credited authors are stored.</p>
             )}
           </section>
+
+          <RelatedPapers related={related} unavailable={relatedUnavailable} />
 
           <section className="paperSection" aria-labelledby="provenance-heading">
             <span className="eyebrow">Record-level evidence</span>

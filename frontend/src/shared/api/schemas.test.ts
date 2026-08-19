@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
+  relatedPapersResponseSchema,
   searchResponseSchema,
 } from "@/shared/api/schemas";
 import {
   paperAccessResponseFixture,
   paperDetailsResponseFixture,
+  relatedPapersResponseFixture,
   searchResponseFixture,
 } from "@/test/fixtures";
 
@@ -22,6 +24,28 @@ describe("backend response schemas", () => {
     expect(
       paperAccessResponseSchema.safeParse(paperAccessResponseFixture()).success,
     ).toBe(true);
+    expect(
+      relatedPapersResponseSchema.safeParse(relatedPapersResponseFixture()).success,
+    ).toBe(true);
+  });
+
+  it("strictly rejects unexpected related-paper response fields", () => {
+    const extraEnvelopeField = {
+      ...relatedPapersResponseFixture(),
+      cacheDisposition: "EXACT_HIT",
+    };
+    const extraResultField = relatedPapersResponseFixture();
+    extraResultField.results[0] = {
+      ...extraResultField.results[0]!,
+      reportedOpenAccess: true,
+    } as (typeof extraResultField.results)[number];
+
+    expect(relatedPapersResponseSchema.safeParse(extraEnvelopeField).success).toBe(
+      false,
+    );
+    expect(relatedPapersResponseSchema.safeParse(extraResultField).success).toBe(
+      false,
+    );
   });
 
   it("accepts both HTTP and HTTPS external URLs", () => {

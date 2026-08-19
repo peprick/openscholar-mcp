@@ -51,9 +51,10 @@ The diagram includes planned topic, note, and embedding relationships alongside 
 | `citation_count` | INTEGER nullable | Time-varying/source-qualified |
 | `citation_count_as_of` | TIMESTAMPTZ nullable | Freshness marker |
 | `metadata_quality` | NUMERIC | Explainable confidence/completeness |
+| `search_vector` | TSVECTOR generated | Weighted English title (A), abstract (B), and venue (C) lexemes |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Audit timestamps |
 
-Current migrations index normalized title, publication year, unique external identifiers, search fingerprint/freshness, and owner-scoped library lookup paths. Document-type and PostgreSQL full-text indexes remain planned.
+Current migrations index normalized title, publication year, the generated full-text vector with GIN, unique external identifiers, search fingerprint/freshness, and owner-scoped library lookup paths. A document-type index remains planned when measured filter traffic justifies it.
 
 ### `paper_external_id`
 

@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "rankingMethod": "POSTGRES_FULL_TEXT",
+  "papers": [
+    {
+      "key": "clinical-source",
+      "title": "Multi-Agent Reinforcement Learning for Hospital Resource Allocation",
+      "abstractText": "Cooperative policies improve healthcare scheduling and clinical resource planning.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "clinical-safety",
+      "title": "Safe Multi-Agent Reinforcement Learning for Healthcare Scheduling",
+      "abstractText": "Safety constraints guide cooperative hospital scheduling policies.",
+      "year": 2024,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 4
+    },
+    {
+      "key": "clinical-planning",
+      "title": "Cooperative Reinforcement Learning in Clinical Resource Planning",
+      "abstractText": "Agents allocate beds and staff across a hospital network.",
+      "year": 2023,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 11
+    },
+    {
+      "key": "warehouse-marl",
+      "title": "Multi-Agent Reinforcement Learning for Warehouse Resource Allocation",
+      "abstractText": "Robots coordinate inventory movement in distribution centers.",
+      "year": 2019,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 900
+    },
+    {
+      "key": "rare-disease-source",
+      "title": "Graph Neural Networks for Rare Disease Diagnosis",
+      "abstractText": "Patient graphs support diagnosis of uncommon genetic disorders.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 2
+    },
+    {
+      "key": "rare-disease-thesis",
+      "title": "Graph Neural Methods for Diagnosing Rare Genetic Diseases",
+      "abstractText": "A doctoral thesis on representation learning for patient similarity graphs.",
+      "year": 2024,
+      "type": "THESIS",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "rare-disease-article",
+      "title": "Rare Disease Classification with Graph Representation Learning",
+      "abstractText": "Graph models classify low-prevalence disorders from clinical records.",
+      "year": 2022,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 19
+    },
+    {
+      "key": "social-graph-negative",
+      "title": "Graph Neural Networks for Social Network Advertising",
+      "abstractText": "A highly cited method for selecting advertisements in online communities.",
+      "year": 2018,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 1400
+    },
+    {
+      "key": "maternal-source",
+      "title": "Causal Inference for Maternal Health Outcomes",
+      "abstractText": "Observational estimators study outcomes in pregnancy care.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 1
+    },
+    {
+      "key": "maternal-effects",
+      "title": "Estimating Maternal Health Effects with Causal Inference",
+      "abstractText": "Doubly robust estimators measure the effects of prenatal interventions.",
+      "year": 2024,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 8
+    },
+    {
+      "key": "pregnancy-causal",
+      "title": "Causal Models of Pregnancy Care Outcomes",
+      "abstractText": "The study estimates intervention effects for maternal care pathways.",
+      "year": 2023,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 13
+    },
+    {
+      "key": "forest-causal-negative",
+      "title": "Causal Inference for Forest Health Outcomes",
+      "abstractText": "Remote sensing estimates intervention effects in woodland ecology.",
+      "year": 2017,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 700
+    },
+    {
+      "key": "spanish-source",
+      "title": "Aprendizaje automático para diagnóstico clínico",
+      "abstractText": "Modelos predictivos para apoyar decisiones médicas.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "es",
+      "citationCount": 0
+    },
+    {
+      "key": "spanish-clinical",
+      "title": "Diagnóstico clínico mediante aprendizaje automático",
+      "abstractText": "Evaluación de modelos en hospitales públicos.",
+      "year": 2024,
+      "type": "ARTICLE",
+      "language": "es",
+      "citationCount": 3
+    },
+    {
+      "key": "spanish-agriculture-negative",
+      "title": "Aprendizaje automático para agricultura sostenible",
+      "abstractText": "Predicción de cultivos mediante imágenes satelitales.",
+      "year": 2020,
+      "type": "ARTICLE",
+      "language": "es",
+      "citationCount": 80
+    },
+    {
+      "key": "trial-source",
+      "title": "Adaptive Trial Matching for Rare Cancer",
+      "abstractText": "A clinical decision system links oncology patients to suitable studies.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "trial-title-only",
+      "title": "Adaptive Trial Matching in Oncology",
+      "abstractText": null,
+      "year": 2024,
+      "type": "THESIS",
+      "language": "en",
+      "citationCount": null
+    },
+    {
+      "key": "trial-abstract-only",
+      "title": "Clinical Decision Systems",
+      "abstractText": "Adaptive trial matching for oncology and rare cancer cohorts.",
+      "year": 2023,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 5
+    }
+  ],
+  "queries": [
+    {
+      "key": "clinical-marl",
+      "sourceKey": "clinical-source",
+      "cutoff": 5,
+      "judgments": {
+        "clinical-safety": 3,
+        "clinical-planning": 2,
+        "warehouse-marl": 0
+      }
+    },
+    {
+      "key": "rare-disease-gnn",
+      "sourceKey": "rare-disease-source",
+      "cutoff": 5,
+      "judgments": {
+        "rare-disease-thesis": 3,
+        "rare-disease-article": 2,
+        "social-graph-negative": 0
+      }
+    },
+    {
+      "key": "maternal-causal",
+      "sourceKey": "maternal-source",
+      "cutoff": 5,
+      "judgments": {
+        "maternal-effects": 3,
+        "pregnancy-causal": 2,
+        "forest-causal-negative": 0
+      }
+    },
+    {
+      "key": "spanish-clinical-ml",
+      "sourceKey": "spanish-source",
+      "cutoff": 3,
+      "judgments": {
+        "spanish-clinical": 3,
+        "spanish-agriculture-negative": 0
+      }
+    },
+    {
+      "key": "incomplete-metadata",
+      "sourceKey": "trial-source",
+      "cutoff": 3,
+      "judgments": {
+        "trial-title-only": 3,
+        "trial-abstract-only": 2
+      }
+    }
+  ]
+}

@@ -82,11 +82,13 @@ Exit: an MCP client discovers/calls tools with the same policies as REST.
 
 Estimated effort: 1–2 weeks.
 
-- Relevance/deduplication evaluation sets.
-- PostgreSQL full-text search baseline.
+Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. Embedding selection and measured hybrid comparison remain.
+
+- Implemented: first related-paper relevance evaluation set; dedicated provider/deduplication cases remain.
+- Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
 - Embedding-provider decision and versioned abstract embeddings.
 - HNSW plus hybrid ranking and related-topic reuse.
-- Measured comparison against lexical baseline.
+- Implemented: measured lexical baseline (macro Recall 1.000 and macro nDCG 0.857 on the synthetic v1 fixture); vector/hybrid comparison remains.
 
 Exit: measured retrieval improvement without hiding ranking rationale.
 
