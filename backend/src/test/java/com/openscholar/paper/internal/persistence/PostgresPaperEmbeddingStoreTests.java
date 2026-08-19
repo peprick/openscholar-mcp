@@ -19,6 +19,7 @@ import com.openscholar.paper.PaperEmbeddingMatch;
 import com.openscholar.paper.PaperEmbeddingNotFoundException;
 import com.openscholar.paper.PaperEmbeddingSource;
 import com.openscholar.paper.PaperEmbeddingStore;
+import com.openscholar.paper.PaperEmbeddingWorkPage;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.StalePaperEmbeddingException;
 import com.openscholar.paper.StoreEmbeddingOutcome;
@@ -184,6 +185,82 @@ class PostgresPaperEmbeddingStoreTests {
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("must not be the zero vector");
 		assertThat(embeddingCount(paperId)).isZero();
+	}
+
+	@Test
+	void pagesMissingEmbeddingWorkInUuidOrderWithAnExclusiveCursor() {
+		UUID firstId = uuid(401);
+		UUID secondId = uuid(402);
+		UUID thirdId = uuid(403);
+		insertPaper(thirdId, "Third work item", "Third abstract");
+		insertPaper(firstId, "First work item", "First abstract");
+		insertPaper(secondId, "Second work item", "Second abstract");
+		embeddingStore.registerProfile(profile(PROFILE_KEY, "fixture-model", "revision-1", 3));
+
+		PaperEmbeddingWorkPage firstPage = embeddingStore.findMissing(PROFILE_KEY, null, 2);
+
+		assertThat(firstPage.paperIds()).containsExactly(firstId, secondId);
+		assertThat(firstPage.hasMore()).isTrue();
+		assertThat(firstPage.nextCursor()).isEqualTo(secondId);
+
+		PaperEmbeddingWorkPage lastPage = embeddingStore.findMissing(
+				PROFILE_KEY, firstPage.nextCursor(), 2);
+
+		assertThat(lastPage.paperIds()).containsExactly(thirdId);
+		assertThat(lastPage.hasMore()).isFalse();
+		assertThat(lastPage.nextCursor()).isNull();
+		assertThat(embeddingStore.findMissing(PROFILE_KEY, thirdId, 2).paperIds()).isEmpty();
+	}
+
+	@Test
+	void excludesOnlyEmbeddingsStoredForTheRequestedProfile() {
+		String profileA = "fixture-work-space-a-v1";
+		String profileB = "fixture-work-space-b-v1";
+		UUID embeddedInA = uuid(410);
+		UUID missingInBoth = uuid(411);
+		insertPaper(embeddedInA, "Stored work item", "Stored abstract");
+		insertPaper(missingInBoth, "Missing work item", "Missing abstract");
+		embeddingStore.registerProfile(profile(profileA, "fixture-model-a", "revision-a", 3));
+		embeddingStore.registerProfile(profile(profileB, "fixture-model-b", "revision-b", 3));
+		storeCurrent(embeddedInA, profileA, List.of(1.0f, 0.0f, 0.0f), NOW);
+
+		assertThat(embeddingStore.findMissing(profileA, null, 10).paperIds())
+				.containsExactly(missingInBoth);
+		assertThat(embeddingStore.findMissing(profileB, null, 10).paperIds())
+				.containsExactly(embeddedInA, missingInBoth);
+	}
+
+	@Test
+	void invalidatedEmbeddingBecomesEligibleForWorkAgain() {
+		UUID paperId = uuid(420);
+		insertPaper(paperId, "Initially embedded", "Original abstract");
+		embeddingStore.registerProfile(profile(PROFILE_KEY, "fixture-model", "revision-1", 3));
+		storeCurrent(paperId, PROFILE_KEY, List.of(1.0f, 0.0f, 0.0f), NOW);
+		assertThat(embeddingStore.findMissing(PROFILE_KEY, null, 10).paperIds()).isEmpty();
+
+		jdbcTemplate.update(
+				"update paper set abstract_text = ?, updated_at = ? where id = ?",
+				"Changed abstract",
+				Timestamp.from(NOW.plusSeconds(1)),
+				paperId);
+
+		assertThat(embeddingStore.findMissing(PROFILE_KEY, null, 10).paperIds())
+				.containsExactly(paperId);
+	}
+
+	@Test
+	void missingWorkRejectsUnknownProfilesAndOutOfRangeLimits() {
+		assertThatThrownBy(() -> embeddingStore.findMissing("unknown-profile-v1", null, 10))
+				.isInstanceOf(EmbeddingProfileNotFoundException.class)
+				.hasMessageContaining("unknown-profile-v1");
+
+		embeddingStore.registerProfile(profile(PROFILE_KEY, "fixture-model", "revision-1", 3));
+		assertThatThrownBy(() -> embeddingStore.findMissing(PROFILE_KEY, null, 0))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("between 1 and 500");
+		assertThatThrownBy(() -> embeddingStore.findMissing(PROFILE_KEY, null, 501))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("between 1 and 500");
 	}
 
 	@Test

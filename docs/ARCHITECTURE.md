@@ -15,6 +15,7 @@ flowchart LR
     S --> UW["Unpaywall"]
     S --> AX["arXiv"]
     S --> MO["Additional open repositories"]
+    C --> E["Optional local Ollama (offline backfill only)"]
     C --> O["Permitted document storage"]
 ```
 
@@ -37,12 +38,14 @@ com.openscholar
 ├── access                 # legal-access resolution, URL verification, Unpaywall/arXiv clients
 ├── citation               # BibTeX and CSL-JSON rendering/export
 ├── library                # collections, reading status, tags, saved-paper lookup
+├── embedding              # provider-neutral generation SPI plus pinned local Ollama adapter
+├── jobs                   # explicit bounded embedding backfill and per-profile lease
 ├── mcp                    # five tool handlers and HTTP security boundary
 ├── api                    # Spring MVC controllers and request/response DTOs
 └── persistence            # shared persistence configuration
 ```
 
-`jobs` and `security` currently contain boundary placeholders. The `paper` module now owns provider-neutral embedding-profile and vector-store primitives, but inference adapters and semantic product ranking remain planned. MCP resources, generated OpenAPI models, background jobs, and hosted authentication are also planned rather than current modules. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
+`security` currently contains a boundary placeholder. The `paper` module owns provider-neutral embedding-profile and vector-store primitives; `embedding` supplies a disabled-by-default local generator; and `jobs` supplies the explicit maintenance backfill. Semantic product ranking, recurring job scheduling, MCP resources, generated OpenAPI models, and hosted authentication remain planned. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
 
 ## Search request flow
 
@@ -119,11 +122,13 @@ The current OpenAlex slice persists the provider relevance score and returns an 
 
 ## Embedding boundary
 
-`PaperEmbeddingStore` is an application-facing persistence boundary inside the `paper` module. It registers immutable vector-space profiles, renders versioned source input, rejects a save when canonical content changed during generation, performs idempotent vector upserts, and returns exact cosine neighbors only within one profile. PostgreSQL owns the vector-dimension and profile-integrity constraints.
+`PaperEmbeddingStore` is an application-facing persistence boundary inside the `paper` module. It registers immutable vector-space profiles, renders versioned source input, rejects a save when canonical content changed during generation, performs idempotent vector upserts, pages papers missing a profile, and returns exact cosine neighbors only within one profile. PostgreSQL owns the vector-dimension and profile-integrity constraints.
 
 Title/abstract input-policy v1 is deterministic: `Title: <title>\nAbstract: <abstract or empty>`, stripped fields, LF line endings, Unicode NFC, a 24 KiB UTF-8 rejection bound, and a SHA-256 checksum over the exact bytes. A title or abstract update invalidates the derived vectors at the database boundary.
 
-The selected first inference implementation is a future Spring AI/Ollama adapter for a full-digest-pinned `qwen3-embedding:0.6b` artifact at 1024 dimensions. OpenAI `text-embedding-3-large` shortened to 1024 is a separate opt-in evaluation adapter. Neither adapter, a production profile, backfill, HNSW index, nor hybrid ranking is implemented today. Equal dimensions do not make two model profiles interoperable.
+The first inference implementation is a direct Spring AI/Ollama adapter for the exact `qwen3-embedding:0.6b` tag at 1024 dimensions and Ollama `0.31.1`. It is absent unless explicitly enabled, accepts only a numeric loopback HTTP endpoint, bypasses system proxies, refuses redirects, caps responses at 2 MiB, and requires an operator confirmation that cloud features were disabled on the server. It verifies the runtime, full artifact digest, installed tag/capability/context/dimensions, disables truncation, and rejects output if either the runtime or digest changes during inference. It never pulls a model. The immutable key and revision both include the full digest and runtime version so different artifacts or runtimes cannot share a vector space. OpenAI `text-embedding-3-large` shortened to 1024 remains a separate future opt-in evaluation adapter. Equal dimensions do not make two model profiles interoperable.
+
+`EmbeddingBackfillUseCase` is the only executable generation path. One invocation takes an exclusive cursor and a `1..500` limit, acquires a PostgreSQL session advisory lock scoped to the immutable profile, verifies/registers the generator, and processes one missing-vector page. The advisory lease consumes one pooled connection, so at least two are required. Source preparation and checksum-guarded storage use their own short transactions; model inference occurs without a database transaction. Retryable verification/generation failures and source-change races have a shared `1..3` attempt bound. Systemic provider or profile failures abort the run; deleted or oversized papers and permanent input-specific failures are reported per paper. The opt-in `ApplicationRunner` exists only in a non-web application, and a web-startup guard rejects an enabled backfill before generation. Lock contention or any reported paper failure makes the maintenance process exit nonzero after safe summary logs.
 
 The related-paper endpoint remains database-only. Future vector/hybrid reads may consume precomputed source and candidate vectors, but may not invoke an inference provider. Missing or invalidated vectors fall back to the current full-text result. This keeps local-provider availability and hosted credentials outside interactive-read correctness.
 
@@ -131,9 +136,9 @@ The related-paper endpoint remains database-only. Future vector/hybrid reads may
 
 - Spring Data JPA for transactional aggregate persistence.
 - Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval.
-- Implemented provider-neutral pgvector profile/storage and exact same-profile cosine operations; inference, vector population, HNSW, and product ranking remain planned.
+- Implemented provider-neutral pgvector profile/storage, missing-work paging, exact same-profile cosine operations, and an explicit offline population job; HNSW and product ranking remain planned.
 - Flyway as the only production schema-change mechanism.
-- Planned PostgreSQL job leases/advisory locks for scheduled work.
+- PostgreSQL session advisory lock for same-profile embedding backfill; durable/scheduled job leases remain planned.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.
 
 ## MCP architecture
@@ -151,7 +156,7 @@ Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions th
 - `frontend` container
 - `backend` container
 - `postgres` container with pgvector
-- no Ollama container/profile or hosted embedding credential is configured today; local inference remains an optional follow-up
+- no Ollama container or hosted embedding credential in Compose; optional local generation is a direct backend maintenance workflow against a separately installed loopback Ollama process
 - planned optional object-storage profile for legally permitted documents; no MinIO service is defined today
 
 ### Hosted portfolio deployment

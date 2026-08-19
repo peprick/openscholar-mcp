@@ -64,8 +64,9 @@ The first inference adapter and backfill should use the Apache-2.0
 model locally through Ollama. It provides native 1024-dimensional output, a 32K
 context window, and multilingual coverage suitable for the current English and
 Spanish fixture. The Ollama deployment must select the explicit
-`qwen3-embedding:0.6b` tag, verify and record its full artifact digest, disable
-silent truncation, and run with cloud features disabled. It must not use the bare
+`qwen3-embedding:0.6b` tag on the pinned Ollama `0.31.1` runtime, verify and
+record its full artifact digest and runtime version, disable silent truncation,
+and run with cloud features disabled. It must not use the bare
 or `latest` tag: the current Ollama library maps that alias to the materially
 larger 8B model. The published model benchmarks do not establish the quality of
 the quantized Ollama artifact; OpenScholar's fixture remains the acceptance gate.
@@ -105,16 +106,38 @@ storage and generation work.
 
 - The schema and store can be tested deterministically without downloading a
   model, holding an API key, or making CI network-dependent.
-- A model, digest, dimension, distance, or input-policy change creates a new
+- A model, digest, inference-runtime, dimension, distance, or input-policy change creates a new
   profile and requires a measured backfill; it cannot silently rewrite an old
   vector space.
 - Exact cosine lookup is available as a persistence primitive, but it is not yet
   a product ranking claim.
-- Ollama/OpenAI Spring AI adapters, digest verification, backfill scheduling,
-  HNSW, vector/hybrid evaluation, ranking explanations, and REST/MCP integration
-  remain separate follow-up work.
+- The local Ollama adapter, full-digest verification, and explicit bounded backfill
+  are now implemented follow-ups. Hosted comparison, recurring scheduling, HNSW,
+  vector/hybrid evaluation, ranking explanations, and REST/MCP integration remain
+  separate work.
 - Full-paper, PDF-chunk, note, and private user-content embeddings require new
   content kinds plus an explicit retention/privacy review.
+
+## Implementation status
+
+The first implementation preserves the decision's separation of concerns. The
+direct Spring AI/Ollama adapter is absent by default, accepts only a numeric
+loopback HTTP root, bypasses system proxies, refuses redirects, and limits each
+response to 2 MiB. It requires an operator confirmation that cloud features are
+disabled, verifies Ollama `0.31.1`, the exact tag and full configured digest,
+validates model capability/context/dimensions, sends `truncate=false`, and
+rechecks both the runtime and digest after inference. The digest/runtime-derived profile key and
+model revision prevent a changed artifact or runtime from sharing vectors. It
+has no model-pull lifecycle.
+
+An explicit non-web `ApplicationRunner` invokes one cursor-paged backfill of at
+most 500 papers. A web-startup guard rejects an enabled backfill. A PostgreSQL
+session advisory lock excludes another run for the same profile, inference
+occurs outside database transactions, and source preparation plus
+checksum-guarded save retain their own short transactions. Verification and
+generation retries are bounded; systemic profile/provider failures abort, while
+isolated input failures are reported before the process exits nonzero. No REST,
+MCP, scheduled, or related-paper request path can trigger generation.
 
 ## Primary references
 

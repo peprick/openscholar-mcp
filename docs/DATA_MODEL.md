@@ -32,7 +32,7 @@ erDiagram
     EMBEDDING_PROFILE ||--o{ PAPER_EMBEDDING : defines
 ```
 
-The diagram includes planned topic and note relationships alongside the implemented embedding-profile foundation. Planned highlights are described in the library section but are not drawn.
+The diagram includes planned topic and note relationships alongside the implemented embedding-profile and offline-population foundation. Planned highlights are described in the library section but are not drawn.
 
 ## Core tables
 
@@ -135,19 +135,19 @@ The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Applicatio
 
 ## Embedding foundation
 
-`V10` creates storage and exact-query primitives without generating embeddings or changing product ranking.
+`V10` creates storage and exact-query primitives without seeding a profile, generating embeddings, or changing product ranking. A separately enabled maintenance job may populate the same schema after the configured local model passes verification.
 
 ### `embedding_profile`
 
 An immutable profile names one vector space and records provider, model, immutable model revision, `TITLE_ABSTRACT` content kind, input-policy version, dimensions, cosine distance, and creation time. Profile keys and definitions are unique. Dimensions are bounded to `1..2000`, which keeps a future FP32 HNSW index within pgvector's current limit. Database triggers reject profile updates and deletes: a model, artifact, dimension, distance, or input-policy change requires a new profile and a measured backfill.
 
-No production profile is seeded yet. The selected first adapter is a future local, digest-pinned Qwen3-Embedding-0.6B profile with 1024 dimensions. An OpenAI `text-embedding-3-large` profile shortened to 1024 dimensions is reserved for opt-in evaluation, not automatic failover.
+No production profile is seeded. The implemented local adapter registers a key of the form `paper-semantic-v1-<full-digest>-ollama-0-31-1` only after the exact configured Qwen3-Embedding-0.6B artifact and Ollama `0.31.1` runtime pass verification. The profile records 1024 dimensions and the immutable revision `sha256:<full-digest>;ollama:0.31.1`; a different artifact or runtime therefore creates a different vector space. An OpenAI `text-embedding-3-large` profile shortened to 1024 dimensions remains reserved for future opt-in evaluation, not automatic failover.
 
 ### `paper_embedding`
 
 One row per paper/profile stores the profile dimension, lowercase SHA-256 checksum of the exact rendered input, variable-dimension pgvector value, and generation time. A composite foreign key carries the registered dimension into each row, while database checks verify `vector_dims(embedding)` and reject the zero vector. Deleting a paper cascades to its derived vectors; changing its canonical title or abstract invalidates all current embeddings for that paper.
 
-`PaperEmbeddingStore` currently supports immutable profile registration, deterministic source preparation, checksum-guarded idempotent upsert, and exact same-profile cosine neighbors. It re-locks and re-renders the paper before saving so work generated from stale metadata is rejected. There is deliberately no provider adapter, vector backfill, HNSW index, hybrid ranker, or REST/MCP integration yet.
+`PaperEmbeddingStore` supports immutable profile registration, deterministic source preparation, missing-vector cursor paging, checksum-guarded idempotent upsert, and exact same-profile cosine neighbors. It re-locks and re-renders the paper before saving so work generated from stale metadata is rejected. The disabled-by-default local adapter and explicit bounded backfill can populate rows, but there is deliberately no HNSW index, hybrid ranker, scheduler, or REST/MCP generation integration yet.
 
 `TITLE_ABSTRACT` input-policy v1 renders `Title: <title>\nAbstract: <abstract or empty>`. Fields are stripped, line endings become LF, and Unicode is normalized to NFC. Inputs above 24 KiB of rendered UTF-8 are rejected instead of truncated; the checksum covers those exact rendered bytes. Changing any of these rules creates a new input-policy version.
 

@@ -30,6 +30,8 @@ SPRING_DOCKER_COMPOSE_ENABLED=false ./mvnw spring-boot:run
 
 Run `./mvnw verify` for the unit, web, architecture, and PostgreSQL Testcontainers tests.
 
+The optional embedding workflow uses a separately installed, local-only Ollama `0.31.1` process and an explicit one-page non-web maintenance runner. It is disabled during normal startup and CI, is not part of the root Compose stack, and never pulls a model automatically. See [the backend embedding instructions](../backend/README.md#generate-local-paper-embeddings).
+
 ## Frontend workflow
 
 Start the backend, then from `frontend`:
@@ -71,10 +73,22 @@ MCP_RATE_LIMIT_ENABLED
 MCP_RATE_LIMIT_REQUESTS
 MCP_RATE_LIMIT_WINDOW
 MCP_RATE_LIMIT_MAX_CLIENTS
+OLLAMA_EMBEDDING_ENABLED
+OLLAMA_BASE_URL
+OLLAMA_QWEN3_EMBEDDING_DIGEST
+OLLAMA_LOCAL_ONLY_CONFIRMED
+OLLAMA_CONNECT_TIMEOUT
+OLLAMA_READ_TIMEOUT
+OLLAMA_KEEP_ALIVE
+EMBEDDING_BACKFILL_ENABLED
+EMBEDDING_BACKFILL_PROFILE_KEY
+EMBEDDING_BACKFILL_AFTER_EXCLUSIVE
+EMBEDDING_BACKFILL_LIMIT
+EMBEDDING_BACKFILL_MAX_ATTEMPTS
 OPENSCHOLAR_API_BASE_URL
 ```
 
-Optional embedding, OAuth, storage, and monitoring variables arrive only with those features. `.env.example` contains placeholders; `.env` is ignored.
+The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. OAuth, storage, and monitoring variables arrive only with those features. `.env.example` contains placeholders; `.env` is ignored.
 
 ## Backend conventions
 

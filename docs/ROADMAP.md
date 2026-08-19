@@ -82,14 +82,15 @@ Exit: an MCP client discovers/calls tools with the same policies as REST.
 
 Estimated effort: 1–2 weeks.
 
-Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision plus immutable `V10` embedding-profile and exact-store foundation are also implemented. No vectors are generated yet; inference adapters, backfill, HNSW, and measured vector/hybrid comparison remain.
+Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, and bounded offline backfill are implemented. Generation remains opt-in and no model is downloaded by the project; HNSW and measured vector/hybrid comparison remain.
 
 - Implemented: first related-paper relevance evaluation set; dedicated provider/deduplication cases remain.
 - Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
-- Implemented: local-first provider decision—future digest-pinned Qwen3-Embedding-0.6B at 1024 dimensions, with OpenAI `text-embedding-3-large` shortened to 1024 only as an opt-in evaluation profile.
+- Implemented: local-first provider decision—full-digest-pinned Qwen3-Embedding-0.6B at 1024 dimensions on pinned Ollama `0.31.1`, with OpenAI `text-embedding-3-large` shortened to 1024 only as a future opt-in evaluation profile.
 - Implemented: provider-neutral immutable profile registry, deterministic title/abstract v1 input, checksum-guarded vector store, source invalidation, and exact same-profile cosine lookup.
-- Next: local Ollama inference adapter, artifact-digest verification, and idempotent offline backfill; the current related endpoint must remain database-only and fall back to lexical results when vectors are absent.
-- Next: vector-only fixture measurement, HNSW recall/performance gate, calibrated hybrid ranking, and related-topic reuse.
+- Implemented: disabled-by-default local Ollama inference with exact runtime/tag/full-digest verification, digest/runtime-derived profile identity, fixed non-truncating request parameters, no-proxy bounded transport, output validation, and no model-pull lifecycle.
+- Implemented: explicit non-web cursor-paged offline backfill with same-profile advisory locking, short database transactions around source/save operations, bounded retries, systemic-failure aborts, per-paper failure accounting, and nonzero incomplete-run exits.
+- Next: populate the synthetic fixture, measure vector-only results, add an HNSW recall/performance gate, calibrate hybrid ranking, and evaluate related-topic reuse. The current related endpoint remains database-only and lexical until those gates pass.
 - Implemented: measured lexical baseline (macro Recall 1.000 and macro nDCG 0.857 on the synthetic v1 fixture); vector/hybrid comparison remains.
 
 Exit: measured retrieval improvement without hiding ranking rationale.

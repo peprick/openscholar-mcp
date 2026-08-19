@@ -10,6 +10,7 @@
 | Node.js | 24 LTS recommended; `>=22.19` required | Next.js, PDF.js, MCP Inspector 2, and conformance tooling |
 | pnpm | 11.19.x | Frontend package management and reproducible lockfile |
 | GitHub CLI | Current stable | Repository/release workflow |
+| Ollama | Optional, exactly 0.31.1 for the implemented profile | Explicit local embedding backfill only; not required for normal development or CI |
 
 Maven does not need to be globally installed; the backend uses the committed `./mvnw` wrapper with Maven 3.9.x.
 
@@ -32,6 +33,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - Spring AI `@McpTool`, `@McpResource`, and `@McpPrompt` annotations.
 - Stateless Streamable HTTP MCP configuration and protocol negotiation.
 - PostgreSQL full-text search and pgvector similarity queries.
+- Spring AI's low-level Ollama API, immutable model-artifact pinning, and offline backfill safety.
 - Resilience4j circuit breakers, retries, and bulkheads.
 - Flyway migration discipline.
 - OAuth 2.0 resource-server security and local API-key authentication.
@@ -71,9 +73,15 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - CORE key only when that provider is enabled.
 - No LLM/embedding key for the first lexical-search milestone.
 
+### Optional local embedding evaluation
+
+- A separately installed Ollama `0.31.1` process bound to a numeric loopback address, with `OLLAMA_NO_CLOUD=1` configured on that server process.
+- The explicit `qwen3-embedding:0.6b` model tag and its reviewed full SHA-256 digest.
+- No hosted embedding credential is required for the implemented local profile.
+
 ### Optional later
 
-- Embedding provider or local embedding model.
+- Hosted embedding provider credentials for a separately versioned comparison profile.
 - S3-compatible object storage.
 - OAuth identity provider.
 - Error monitoring.

@@ -11,5 +11,7 @@ public interface PaperEmbeddingStore {
 
 	StoreEmbeddingOutcome saveIfSourceCurrent(PaperEmbeddingCandidate candidate);
 
+	PaperEmbeddingWorkPage findMissing(String profileKey, UUID afterExclusive, int limit);
+
 	List<PaperEmbeddingMatch> findNearest(UUID sourcePaperId, String profileKey, int limit);
 }

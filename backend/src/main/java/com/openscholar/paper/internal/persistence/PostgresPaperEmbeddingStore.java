@@ -19,6 +19,7 @@ import com.openscholar.paper.PaperEmbeddingMatch;
 import com.openscholar.paper.PaperEmbeddingNotFoundException;
 import com.openscholar.paper.PaperEmbeddingSource;
 import com.openscholar.paper.PaperEmbeddingStore;
+import com.openscholar.paper.PaperEmbeddingWorkPage;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.StalePaperEmbeddingException;
 import com.openscholar.paper.StoreEmbeddingOutcome;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 
 	private static final int MAX_NEAREST_RESULTS = 100;
+	private static final int MAX_MISSING_RESULTS = 500;
 
 	private static final String INSERT_PROFILE_SQL = """
 			insert into embedding_profile (
@@ -78,6 +80,33 @@ class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 			    embedding = excluded.embedding,
 			    embedded_at = excluded.embedded_at
 			where paper_embedding.content_checksum <> excluded.content_checksum
+			""";
+
+	private static final String FIND_MISSING_FROM_START_SQL = """
+			select paper.id
+			from paper
+			where not exists (
+			    select 1
+			    from paper_embedding embedding
+			    where embedding.paper_id = paper.id
+			      and embedding.profile_key = ?
+			)
+			order by paper.id
+			limit ?
+			""";
+
+	private static final String FIND_MISSING_AFTER_SQL = """
+			select paper.id
+			from paper
+			where paper.id > ?
+			  and not exists (
+			      select 1
+			      from paper_embedding embedding
+			      where embedding.paper_id = paper.id
+			        and embedding.profile_key = ?
+			  )
+			order by paper.id
+			limit ?
 			""";
 
 	private static final String FIND_NEAREST_SQL = """
@@ -177,6 +206,41 @@ class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 				toVectorLiteral(candidate.vector()),
 				Timestamp.from(candidate.generatedAt()));
 		return changedRows == 0 ? StoreEmbeddingOutcome.UNCHANGED : StoreEmbeddingOutcome.STORED;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public PaperEmbeddingWorkPage findMissing(
+			String profileKey, UUID afterExclusive, int limit) {
+		if (limit < 1 || limit > MAX_MISSING_RESULTS) {
+			throw new IllegalArgumentException(
+					"Missing-embedding limit must be between 1 and " + MAX_MISSING_RESULTS);
+		}
+		EmbeddingProfile profile = findProfile(profileKey);
+		int fetchLimit = limit + 1;
+		List<UUID> fetchedPaperIds;
+		if (afterExclusive == null) {
+			fetchedPaperIds = jdbcTemplate.query(
+					FIND_MISSING_FROM_START_SQL,
+					(resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+					profile.profileKey(),
+					fetchLimit);
+		}
+		else {
+			fetchedPaperIds = jdbcTemplate.query(
+					FIND_MISSING_AFTER_SQL,
+					(resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+					afterExclusive,
+					profile.profileKey(),
+					fetchLimit);
+		}
+
+		boolean hasMore = fetchedPaperIds.size() > limit;
+		List<UUID> paperIds = hasMore
+				? List.copyOf(fetchedPaperIds.subList(0, limit))
+				: List.copyOf(fetchedPaperIds);
+		UUID nextCursor = hasMore ? paperIds.get(paperIds.size() - 1) : null;
+		return new PaperEmbeddingWorkPage(paperIds, nextCursor, hasMore);
 	}
 
 	@Override

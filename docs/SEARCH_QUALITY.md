@@ -62,7 +62,8 @@ The next retrieval version should improve those two nDCG values without reducing
 |---|---|
 | Profile and vector schema | Implemented in `V10`; immutable model/input provenance, dimensions, checksum, and cosine distance |
 | Provider-neutral store | Implemented; prepare deterministic input, reject stale saves, idempotently store vectors, and run exact same-profile cosine lookup |
-| Local inference | Deferred; no Ollama dependency, service, model download, or adapter is configured |
+| Local inference | Implemented but disabled by default; direct Spring AI/Ollama adapter with exact runtime/tag/full-digest verification, digest/runtime-derived identity, fixed 1024 dimensions, and `truncate=false` |
+| Offline population | Implemented; explicit non-web cursor-paged run, same-profile advisory lock, bounded retry/stale handling, fail-fast systemic errors, and no REST/MCP/scheduler trigger |
 | Hosted comparison | Deferred; no OpenAI dependency, key, call, or production fallback is configured |
 | Product ranking | The endpoint remains the measured PostgreSQL full-text implementation; vector, HNSW, and hybrid ranking are not active |
 
@@ -75,7 +76,7 @@ Abstract: <abstract or empty>
 
 Each field is stripped, CRLF/CR becomes LF, and text is normalized to Unicode NFC. The lowercase SHA-256 checksum covers the exact rendered UTF-8. Inputs above 24 KiB are rejected rather than truncated, and title/abstract updates delete the paper's stored embeddings. This makes source changes observable and prevents a silently truncated input from masquerading as the same embedding version.
 
-The first planned runtime profile uses a full-digest-pinned [`Qwen3-Embedding-0.6B`](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) artifact through local Ollama, with native 1024-dimensional output and cosine distance. The explicit Ollama `qwen3-embedding:0.6b` tag currently identifies a 639 MB Q8_0 artifact; the bare/`latest` alias currently selects the 8B model and is not acceptable provenance. The Qwen technical report and model card show promising multilingual retrieval, but those published results do not establish the quality of the quantized Ollama artifact on this fixture. Local inference avoids a per-token bill and can keep title/abstract text on the deployment host when Ollama cloud features are disabled, while still consuming local compute, memory, download, and maintenance resources.
+The implemented runtime profile uses a full-digest-pinned [`Qwen3-Embedding-0.6B`](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) artifact through exactly Ollama `0.31.1`, with native 1024-dimensional output and cosine distance. Its profile key and model revision include both the complete digest and runtime version. As verified on 2026-08-19, the explicit Ollama `qwen3-embedding:0.6b` tag identified a 639 MB Q8_0 artifact, while the bare/`latest` alias selected the 8B model and was not acceptable provenance. OpenScholar does not pull the model, accept a short digest, or contact Ollama unless the adapter and one bounded backfill invocation are explicitly enabled. Requests are restricted to a numeric loopback address, bypass system proxies, reject redirects, and cap responses; the operator must also confirm that `OLLAMA_NO_CLOUD=1` is active on the Ollama server. The Qwen technical report and model card show promising multilingual retrieval, but those published results do not establish the quality of the quantized Ollama artifact on this fixture. Local inference avoids a per-token bill while still consuming local compute, memory, download, and maintenance resources.
 
 OpenAI [`text-embedding-3-large`](https://developers.openai.com/api/docs/models/text-embedding-3-large), explicitly shortened to 1024 dimensions, is reserved for opt-in evaluation. It is not a runtime default or automatic failover, and its vectors are a separate space even though the dimension matches. As checked on 2026-08-19, OpenAI lists USD 0.13 per million input tokens. API data is not used for training by default, but standard abuse-monitoring logs may retain content for up to 30 days unless an eligible account has modified or zero data retention. Hosted aliases also require canary/drift evidence before their output is treated as an immutable profile.
 
@@ -90,7 +91,7 @@ The selected Qwen model supports instructed query embeddings, but related-paper 
 Candidate work includes:
 
 - compare `english`, `simple`, and language-aware lexical configurations;
-- implement the digest-verifying local adapter and idempotent offline backfill without making ordinary CI download a model;
+- run the opt-in backfill over the synthetic corpus and record a reproducible exact-vector baseline without making ordinary CI download a model;
 - measure exact vector-only results through the implemented store before adding approximate indexing;
 - compare HNSW against exact neighbors with an explicit ANN-recall and latency gate;
 - calibrate lexical and cosine scores before hybrid fusion;

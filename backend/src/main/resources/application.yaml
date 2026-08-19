@@ -55,6 +55,21 @@ spring:
       fail-on-unknown-properties: true
 
 openscholar:
+  embedding:
+    backfill:
+      enabled: ${EMBEDDING_BACKFILL_ENABLED:false}
+      profile-key: ${EMBEDDING_BACKFILL_PROFILE_KEY:}
+      after-exclusive: ${EMBEDDING_BACKFILL_AFTER_EXCLUSIVE:}
+      limit: ${EMBEDDING_BACKFILL_LIMIT:100}
+      max-attempts: ${EMBEDDING_BACKFILL_MAX_ATTEMPTS:2}
+    ollama:
+      enabled: ${OLLAMA_EMBEDDING_ENABLED:false}
+      base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+      expected-digest: ${OLLAMA_QWEN3_EMBEDDING_DIGEST:}
+      local-only-confirmed: ${OLLAMA_LOCAL_ONLY_CONFIRMED:false}
+      connect-timeout: ${OLLAMA_CONNECT_TIMEOUT:2s}
+      read-timeout: ${OLLAMA_READ_TIMEOUT:60s}
+      keep-alive: ${OLLAMA_KEEP_ALIVE:5m}
   mcp:
     security:
       local-api-key: ${MCP_LOCAL_API_KEY:}

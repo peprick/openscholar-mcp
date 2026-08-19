@@ -28,9 +28,12 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Spring Modulith boundary verification
 - Testcontainers integration tests
 - Docker Compose PostgreSQL/pgvector service
+- Provider-neutral, checksum-guarded paper embedding profiles and vector storage
+- Disabled-by-default, artifact-and-runtime-pinned local Ollama embedding adapter
+- Explicit, resumable offline embedding backfill with per-profile PostgreSQL locking
 - Java 21 virtual threads
 
-The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Richer typed publication metadata, MCP conformance automation, and additional scholarly providers remain to be built.
+The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Semantic generation is an offline maintenance capability; the related-paper API remains database-only and still uses its measured lexical implementation until vector and hybrid quality pass the evaluation gates.
 
 ## Run locally
 
@@ -144,6 +147,45 @@ The arXiv adapter needs no credential. It uses an exact `id_list` lookup with on
 The root `.env.example` documents the full-stack variables; `backend/.env.example` documents direct backend development variables. Never commit `.env` or credentials. OpenAlex authorization and the Unpaywall contact email remain server-side and are never exposed through REST responses.
 
 The MCP endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set. See the [MCP quickstart](../docs/MCP_QUICKSTART.md) for discovery, tool calls, Origin policy, and client configuration.
+
+## Generate local paper embeddings
+
+Embedding generation is optional and disabled by default. Ordinary application startup, REST/MCP reads, and CI do not contact Ollama or download a model. This profile requires the separately installed [Ollama server version `0.31.1`](https://github.com/ollama/ollama/releases/tag/v0.31.1); a runtime upgrade is a new vector space and requires a code/profile change. Configure `OLLAMA_NO_CLOUD=1` on the **Ollama server process**, restart that process, and confirm its startup log contains `Ollama cloud disabled: true` before installing the fixed model tag:
+
+```bash
+ollama pull qwen3-embedding:0.6b
+```
+
+OpenScholar never calls Ollama's pull endpoint. Verify the runtime, then inspect the local tags response and copy the full lowercase 64-character digest for the exact `qwen3-embedding:0.6b` entry:
+
+```bash
+OLLAMA_BASE_URL='http://127.0.0.1:11434'
+curl --noproxy '*' --fail-with-body --silent --show-error "${OLLAMA_BASE_URL}/api/version"
+curl --noproxy '*' --fail-with-body --silent --show-error "${OLLAMA_BASE_URL}/api/tags"
+```
+
+Use the same numeric-loopback `OLLAMA_BASE_URL` for preflight and backfill. The version response's JSON `version` field must equal `0.31.1`. Setting `OLLAMA_NO_CLOUD=1` only on the Maven command does not reconfigure an already-running Ollama server. `OLLAMA_LOCAL_ONLY_CONFIRMED=true` below is an operator attestation; set it only after checking the server log. See the [Ollama local-only configuration](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features).
+
+Run one bounded maintenance page from the `backend` directory. If the root stack or another PostgreSQL instance is already running, prevent Spring from starting `backend/compose.yaml` as well:
+
+```bash
+SPRING_MAIN_WEB_APPLICATION_TYPE=none \
+SPRING_DOCKER_COMPOSE_ENABLED=false \
+OLLAMA_EMBEDDING_ENABLED=true \
+OLLAMA_LOCAL_ONLY_CONFIRMED=true \
+OLLAMA_QWEN3_EMBEDDING_DIGEST='replace-with-the-full-64-character-digest' \
+EMBEDDING_BACKFILL_ENABLED=true \
+EMBEDDING_BACKFILL_LIMIT=100 \
+./mvnw spring-boot:run
+```
+
+If no PostgreSQL service is already running, omit `SPRING_DOCKER_COMPOSE_ENABLED=false` and Spring will start the backend Compose database. Do not run the root and backend Compose stacks together because both publish PostgreSQL on the same port. Maven launched from `backend` does not load the root `.env`; if the running database uses non-default ports or credentials, also pass an explicit `SPRING_DATASOURCE_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The datasource pool must permit at least two connections; the default Hikari pool does.
+
+The adapter accepts only a numeric loopback HTTP root URL, bypasses system proxies, refuses redirects, and caps every response at 2 MiB. It verifies Ollama `0.31.1`, the exact `qwen3-embedding:0.6b` tag and full digest, embedding capability, context/output dimensions, and both the runtime and digest again after inference; requests use `truncate=false`. Verification retries are bounded, and systemic runtime/model drift aborts the page instead of being recorded as an isolated paper failure. After verification, it registers a digest/runtime-derived profile key of the form `paper-semantic-v1-<full-digest>-ollama-0-31-1`; its immutable model revision is `sha256:<full-digest>;ollama:0.31.1`.
+
+Leave `EMBEDDING_BACKFILL_PROFILE_KEY` empty when Ollama is the sole enabled generator; the runner selects it and logs the exact derived key. An exact key is required only if multiple generators are enabled. Each cursor belongs to that exact profile identity. Each invocation scans at most 500 canonical papers and logs a `nextCursor` when another page exists. Resume with `EMBEDDING_BACKFILL_AFTER_EXCLUSIVE=<nextCursor>`. A PostgreSQL session advisory lock prevents two runs for the same profile; lock identities for different profiles remain independent. Run only one maintenance invocation per backend process so its leased lock connection cannot compete with another local job for the pool. Retryable provider failures and source changes share a bounded `EMBEDDING_BACKFILL_MAX_ATTEMPTS` budget (`1..3`). The runner logs all isolated failures and then exits nonzero; lock contention and systemic provider/profile failures also exit nonzero. A cursor advances past per-paper failures, deletions, and newly invalidated work below it, so complete the paged run and then start a fresh sweep with an empty cursor to catch any still-missing vectors.
+
+Maintenance mode requires `spring.main.web-application-type=none`; startup fails if backfill is enabled in a web application. This command performs generation only. `GET /api/v1/papers/{paperId}/related` never invokes Ollama and continues to return lexical results while semantic ranking remains under evaluation.
 
 ## Legal-access behavior
 
