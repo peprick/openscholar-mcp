@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Route } from "next";
 import Link from "next/link";
 
 import { Brand } from "@/shared/ui/brand";
@@ -28,6 +29,7 @@ export default function RootLayout({
             <Brand />
             <nav aria-label="Primary navigation">
               <Link href="/">Search research</Link>
+              <Link href={"/library" as Route}>My library</Link>
               <a
                 href="https://modelcontextprotocol.io"
                 rel="noopener noreferrer"
@@ -45,7 +47,10 @@ export default function RootLayout({
               OpenScholar surfaces legal links and provenance. It never bypasses
               publisher access controls.
             </p>
-            <p>Built with Spring Boot, PostgreSQL, and Next.js. MCP is next.</p>
+            <p>
+              Built with Spring Boot, PostgreSQL, and Next.js. Collections,
+              citation exports, and the legal-link reader are available.
+            </p>
           </div>
         </footer>
       </body>

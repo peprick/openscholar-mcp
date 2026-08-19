@@ -54,9 +54,11 @@ Exit: users identify and open legal versions in the UI, and export citations, wi
 
 Estimated effort: 1 week.
 
-- Collections, reading status, and tags.
-- Saved-library search and citation batch export.
-- Optional local-user bootstrap.
+Status: complete. The local-user bootstrap, owner-scoped collection management, saved-paper status/tags, lexical library search, and ordered batch citation downloads are implemented through REST and the Next.js UI.
+
+- Implemented: collections, reading status, and normalized tags.
+- Implemented: saved-library search and citation batch export.
+- Implemented: fixed local-user bootstrap, with principal-scoped boundaries ready for later authentication.
 
 Exit: saved research survives restarts and is manageable through the UI.
 
@@ -64,12 +66,15 @@ Exit: saved research survives restarts and is manageable through the UI.
 
 Estimated effort: 1–2 weeks.
 
-- Spring AI WebMVC MCP server starter.
-- Stateless Streamable HTTP and read-only tools.
-- Job-handle tools for long searches.
-- Local API-key security, Origin validation, and audit context.
-- Official MCP conformance suite for revision `2025-11-25`.
-- Connection example for at least one compatible host.
+Status: complete for the current five-tool local MVP. The Spring AI 2.0 stateless WebMVC transport, five read-oriented tool adapters, local bearer/Origin boundary, bounded per-address rate limiting, request IDs, response safety headers, Micrometer request metrics, raw JSON-RPC calls for every database-only tool, an MCP Inspector smoke run, and the applicable official conformance scenarios are implemented and verified locally.
+
+- Implemented: Spring AI WebMVC MCP server starter.
+- Implemented: stateless Streamable HTTP and five bounded, non-destructive, read-oriented tools. Search is correctly marked non-read-only/non-idempotent because it may fetch and persist cache/catalog data; the other four tools are database-only reads.
+- Deferred post-MVP: job-handle tools if provider breadth creates genuinely long-running searches.
+- Implemented: local API-key security, Origin validation, bounded inbound rate limiting, metrics, and request logging context.
+- Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios run with `--spec-version 2025-11-25` through a loopback bearer-injection proxy; both pass without warnings and discover exactly five tools.
+- The fixture-only full conformance suite is intentionally not a production target because it requires synthetic tools/resources/prompts and capabilities OpenScholar does not advertise.
+- Implemented: documented MCP Inspector connection plus live `tools/list` and `search_saved_library` smoke calls.
 
 Exit: an MCP client discovers/calls tools with the same policies as REST.
 

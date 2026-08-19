@@ -4,12 +4,86 @@ import type {
   PaperDetailsResponse,
   SearchResponse,
 } from "@/shared/api/schemas";
+import type {
+  CollectionDetailsResponse,
+  CollectionListResponse,
+  CollectionSummary,
+  SavedLibraryResponse,
+  SavedPaper,
+} from "@/shared/api/library-schemas";
 
 export const testIds = {
   search: "550e8400-e29b-41d4-a716-446655440000",
   paper: "22c1800e-77f4-4aa9-98d7-5f79fa9a8a1c",
   location: "ac3fb646-3b77-4d36-bb44-2c46c66a7202",
+  collection: "76fb2843-407a-4499-b3ac-59935440e928",
 } as const;
+
+export function collectionSummaryFixture(
+  overrides: Partial<CollectionSummary> = {},
+): CollectionSummary {
+  return {
+    collectionId: testIds.collection,
+    name: "Thesis foundations",
+    description: "Core papers for the literature review.",
+    paperCount: 1,
+    createdAt: "2026-08-18T09:00:00Z",
+    updatedAt: "2026-08-18T09:30:00Z",
+    ...overrides,
+  };
+}
+
+export function savedPaperFixture(
+  overrides: Partial<SavedPaper> = {},
+): SavedPaper {
+  return {
+    collectionId: testIds.collection,
+    collectionName: "Thesis foundations",
+    paperId: testIds.paper,
+    title: "Graph neural networks for molecular property prediction",
+    authors: ["Ada Researcher"],
+    publicationYear: 2025,
+    documentType: "ARTICLE",
+    readingStatus: "UNREAD",
+    tags: ["methods"],
+    savedAt: "2026-08-18T09:15:00Z",
+    updatedAt: "2026-08-18T09:15:00Z",
+    ...overrides,
+  };
+}
+
+export function collectionListFixture(
+  items: CollectionSummary[] = [collectionSummaryFixture()],
+  overrides: Partial<Omit<CollectionListResponse, "items">> = {},
+): CollectionListResponse {
+  return {
+    items,
+    page: 0,
+    size: 100,
+    totalElements: items.length,
+    totalPages: items.length === 0 ? 0 : 1,
+    ...overrides,
+  };
+}
+
+export function savedLibraryFixture(
+  items: SavedPaper[] = [savedPaperFixture()],
+): SavedLibraryResponse {
+  return {
+    items,
+    page: 0,
+    size: 20,
+    totalElements: items.length,
+    totalPages: items.length === 0 ? 0 : 1,
+  };
+}
+
+export function collectionDetailsFixture(): CollectionDetailsResponse {
+  return {
+    ...collectionSummaryFixture(),
+    papers: savedLibraryFixture(),
+  };
+}
 
 export function searchResponseFixture(): SearchResponse {
   return {

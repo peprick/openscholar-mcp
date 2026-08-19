@@ -16,6 +16,21 @@ final class CslJsonCitationRenderer {
 	}
 
 	String render(CitationItem item) {
+		return render(List.of(item));
+	}
+
+	String render(List<CitationItem> items) {
+		try {
+			return objectMapper.writeValueAsString(items.stream()
+					.map(this::renderItem)
+					.toList()) + "\n";
+		}
+		catch (JacksonException exception) {
+			throw new IllegalStateException("Citation metadata could not be serialized", exception);
+		}
+	}
+
+	private Map<String, Object> renderItem(CitationItem item) {
 		Map<String, Object> output = new LinkedHashMap<>();
 		output.put("id", item.paperId().toString());
 		output.put("type", itemType(item));
@@ -50,12 +65,7 @@ final class CslJsonCitationRenderer {
 		put(output, "PMID", item.pmid());
 		put(output, "PMCID", item.pmcid());
 
-		try {
-			return objectMapper.writeValueAsString(List.of(output)) + "\n";
-		}
-		catch (JacksonException exception) {
-			throw new IllegalStateException("Citation metadata could not be serialized", exception);
-		}
+		return output;
 	}
 
 	private static String itemType(CitationItem item) {

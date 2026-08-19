@@ -1,14 +1,14 @@
 # OpenScholar MCP
 
-OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. The same use cases are designed to be exposed to AI agents through the Model Context Protocol (MCP) in a later milestone.
+OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. Its core read use cases are also exposed to AI agents through the Model Context Protocol (MCP).
 
-> Status: the first end-to-end web flow is implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, reads fresh CORS-compatible PDF sources through a direct PDF.js browser session, and downloads BibTeX or CSL-JSON citations. PostgreSQL caches reusable metadata and access results. The API never returns PDF bytes, and the application retains no PDF documents.
+> Status: the first end-to-end web flow, persistent local research library, and read-oriented MCP adapter are implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, reads fresh CORS-compatible PDF sources through a direct PDF.js browser session, and saves papers into collections with reading status and tags. PostgreSQL preserves reusable metadata, access results, and the library across restarts. Users and MCP clients can search, inspect stored metadata/access, query saved research, and export citations. The API never returns PDF bytes, and the application retains no PDF documents.
 
 ## Product goals
 
 - Find papers, preprints, theses, and dissertations by topic.
 - Prefer legal open-access versions and clearly label restricted material.
-- Cache normalized results so repeated and related searches are faster.
+- Cache normalized results so exact repeated searches avoid unnecessary provider calls.
 - Provide an in-app research library, PDF reader, collections, notes, and citation exports.
 - Support semantic search across saved research using PostgreSQL and pgvector.
 - Expose safe, typed tools through an MCP server implemented in Spring Boot.
@@ -19,6 +19,8 @@ OpenScholar MCP is an open-access research discovery and reading workspace. A us
 - Java 21 LTS
 - Spring Boot 4.1.x
 - Spring MVC REST API
+- Spring AI 2.0 and the official MCP Java SDK 2.0
+- Stateless Streamable HTTP MCP at `/mcp`
 - Maven Wrapper
 - PostgreSQL with pgvector
 - Flyway migrations
@@ -27,13 +29,13 @@ OpenScholar MCP is an open-access research discovery and reading workspace. A us
 - Docker Compose for local development
 - Testcontainers, JUnit, Vitest, and Testing Library for verification
 
-Planned additions include Spring AI 2.0 with the official MCP Java SDK, stateless Streamable HTTP MCP, and Playwright.
+Planned additions include automated Playwright coverage, MCP conformance automation, richer scholarly metadata, and more providers.
 
 ## Repository layout
 
 ```text
 openscholar-mcp/
-├── backend/                    # Spring Boot API, providers, persistence, future MCP adapter
+├── backend/                    # Spring Boot REST/MCP adapters, providers, and persistence
 ├── frontend/                   # Next.js web application
 ├── docs/                       # Product, architecture, security and delivery plans
 ├── .github/workflows/          # CI pipelines
@@ -41,7 +43,7 @@ openscholar-mcp/
 └── README.md
 ```
 
-The backend is a modular monolith. REST, future MCP adapters, provider integrations, persistence, and scheduled work share one deployable application while remaining separated by package boundaries.
+The backend is a modular monolith. REST, MCP, provider integrations, persistence, and scheduled work share one deployable application while remaining separated by package boundaries.
 
 ## Planned research sources
 
@@ -57,6 +59,7 @@ The platform will use supported APIs and legal repository links. It will not byp
 - [Technical prerequisites](docs/TECHNICAL_PREREQUISITES.md)
 - [Data model](docs/DATA_MODEL.md)
 - [REST and MCP contracts](docs/API_AND_MCP.md)
+- [MCP quickstart](docs/MCP_QUICKSTART.md)
 - [Security, privacy, and legal boundaries](docs/SECURITY_AND_LEGAL.md)
 - [Testing strategy](docs/TESTING_STRATEGY.md)
 - [Delivery roadmap](docs/ROADMAP.md)
@@ -74,6 +77,7 @@ With Docker running:
 
 ```bash
 cp .env.example .env
+# Set MCP_LOCAL_API_KEY in .env to a long random value before using /mcp.
 docker compose up --build
 ```
 
@@ -99,7 +103,7 @@ Run `./mvnw verify` from `backend` and `pnpm check` from `frontend`. See the [ba
 
 ## Remaining MVP work
 
-Collections/library persistence, richer typed citation metadata, automated Playwright smoke coverage, reader accessibility enhancements, and the Spring MCP adapter remain on the roadmap.
+CI automation for the applicable MCP conformance subset, richer typed citation metadata, automated Playwright coverage, and reader accessibility enhancements remain on the roadmap. Job-handle tools are deferred until a genuinely long-running workflow needs them. The local MCP boundary already enforces bearer authentication, exact Origin checks, bounded per-address request rates, request IDs, and safe response headers; raw integration coverage invokes every database-only tool, the official MCP Inspector discovers all five tools and invokes the stored-library tool, and the pinned official conformance initialize/tool-list scenarios pass without warnings.
 
 ## License
 

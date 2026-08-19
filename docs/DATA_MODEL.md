@@ -21,7 +21,7 @@ erDiagram
     AUTHOR ||--o{ PAPER_AUTHOR : writes
     PAPER ||--o{ PAPER_TOPIC : classified_as
     TOPIC ||--o{ PAPER_TOPIC : labels
-    SEARCH ||--o{ SEARCH_RESULT : contains
+    SEARCH_SNAPSHOT ||--o{ SEARCH_RESULT : contains
     PAPER ||--o{ SEARCH_RESULT : appears_in
     USER ||--o{ COLLECTION : owns
     COLLECTION ||--o{ COLLECTION_PAPER : contains
@@ -30,6 +30,8 @@ erDiagram
     PAPER ||--o{ NOTE : annotates
     PAPER ||--o{ PAPER_EMBEDDING : represented_by
 ```
+
+The diagram includes planned topic, note, and embedding relationships alongside implemented tables. Planned highlights are described in the library section but are not drawn.
 
 ## Core tables
 
@@ -42,7 +44,7 @@ erDiagram
 | `normalized_title` | TEXT | Deduplication/search value |
 | `abstract_text` | TEXT nullable | Canonical abstract |
 | `publication_date` | DATE nullable | Full date when known |
-| `publication_year` | SMALLINT nullable | Indexed filter |
+| `publication_year` | INTEGER nullable | Indexed filter |
 | `document_type` | VARCHAR | Article, preprint, thesis, dissertation, etc. |
 | `language` | VARCHAR nullable | Standard code when known |
 | `venue_name` | TEXT nullable | Venue display name |
@@ -51,7 +53,7 @@ erDiagram
 | `metadata_quality` | NUMERIC | Explainable confidence/completeness |
 | `created_at`, `updated_at` | TIMESTAMPTZ | Audit timestamps |
 
-Indexes cover normalized title, year, type, PostgreSQL full text, and external identifiers.
+Current migrations index normalized title, publication year, unique external identifiers, search fingerprint/freshness, and owner-scoped library lookup paths. Document-type and PostgreSQL full-text indexes remain planned.
 
 ### `paper_external_id`
 
@@ -93,11 +95,11 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 - `provider_record`: provider, external ID, bounded raw metadata, retrieval time, mapping version.
 - `author`: current profile display name plus normalized ORCID/OpenAlex identity.
 - `paper_author`: provider-record authorship, immutable credited-name snapshot, ordering, and corresponding flag. The association-level name prevents a later author alias from rewriting earlier paper credits.
-- `topic` and `paper_topic`: provider/user/system topics with provenance and confidence.
+- Planned: `topic` and `paper_topic` for provider/user/system topics with provenance and confidence.
 
 ## Search cache
 
-### `search`
+### `search_snapshot`
 
 - Original and normalized query.
 - SHA-256 fingerprint over query plus sorted filters.
@@ -120,19 +122,20 @@ The current implementation keeps successful snapshots immutable, retains canonic
 
 ## Library
 
-- `app_user`: local identity initially; external subject/tenant later.
-- `collection`: owner, name, description, visibility, timestamps.
-- `collection_paper`: collection, paper, reading status, position, timestamp.
-- `note`: owner, paper, optional page/selection, Markdown text.
-- `highlight`: owner, paper version, page, rectangles/text quote, color.
+- `app_user`: the implemented local identity; external subject/tenant arrives with authentication.
+- `library_collection`: owner, bounded name/description, optimistic-lock version, and timestamps.
+- `collection_paper`: unique collection/paper membership, `UNREAD`/`READING`/`COMPLETED` status, optimistic-lock version, and timestamps.
+- `collection_paper_tag`: zero to ten canonical lowercase tags per membership, with database constraints for shape, uniqueness, and count.
+- `note`: planned owner, paper, optional page/selection, and Markdown text.
+- `highlight`: planned owner, paper version, page, rectangles/text quote, and color.
 
-All user-owned tables include owner-aware constraints and authorization tests.
+The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Application queries scope collection access through that owner even though authentication is not yet enabled. Deleting a collection cascades only its memberships/tags; deleting a referenced canonical paper is restricted.
 
-## Embeddings
+## Planned embeddings
 
 `paper_embedding` stores paper ID, content kind, model/provider and revision, dimension, content checksum, vector, and timestamp. New models create new rows rather than mixing vector spaces. The MVP launches without embeddings; lexical search establishes an evaluation baseline first.
 
-## Jobs and operations
+## Planned jobs and operations
 
 - `job_run`: type, state, attempt, lease owner, schedule, timestamps, error code.
 - `provider_request`: provider, operation, outcome, latency, result count, rate-limit metadata, correlation ID.
@@ -151,7 +154,7 @@ All user-owned tables include owner-aware constraints and authorization tests.
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

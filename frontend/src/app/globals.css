@@ -1733,6 +1733,438 @@ button:disabled {
   max-width: 650px;
 }
 
+.button--danger {
+  background: var(--surface);
+  border-color: rgb(156 46 40 / 42%);
+  color: var(--danger);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.fieldGroup textarea {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  padding: 10px 11px;
+  resize: vertical;
+  width: 100%;
+}
+
+.fieldGroup small {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+}
+
+.libraryPage,
+.collectionPage {
+  max-width: 1260px;
+}
+
+.libraryIntro,
+.collectionHeader {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0 48px;
+}
+
+.libraryIntro h1,
+.collectionHeader h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3rem, 7vw, 6.2rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+  margin: 12px 0 20px;
+}
+
+.libraryIntro p,
+.collectionHeader p {
+  color: var(--ink-soft);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.06rem;
+  line-height: 1.7;
+  margin: 0 0 20px;
+  max-width: 780px;
+}
+
+.libraryGrid {
+  display: grid;
+  gap: 82px;
+  padding-top: 58px;
+}
+
+.librarySectionHeader {
+  align-items: end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.librarySectionHeader h2,
+.collectionSettings h2,
+.savePaperPanel h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 7px 0 0;
+}
+
+.collectionCreateForm {
+  align-items: end;
+  background: rgb(255 253 248 / 68%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(260px, 1.4fr) auto;
+  padding: 18px;
+}
+
+.libraryMessage {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  margin: 9px 2px 0;
+  min-height: 1.2em;
+}
+
+.collectionCardGrid {
+  display: grid;
+  gap: 15px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.collectionCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 230px;
+  padding: 22px;
+}
+
+.collectionCard:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.collectionCard h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: 1.15;
+  margin: 15px 0 9px;
+}
+
+.collectionCard h3 a,
+.savedPaperCard h3 a,
+.collectionPaperSummary h2 a {
+  text-decoration: none;
+}
+
+.collectionCard h3 a:hover,
+.savedPaperCard h3 a:hover,
+.collectionPaperSummary h2 a:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+.collectionCard p,
+.savedPaperCard p,
+.collectionPaperSummary p {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.libraryFilterForm {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 13px;
+  grid-template-columns: minmax(190px, 1.4fr) repeat(3, minmax(135px, 0.8fr)) auto auto;
+  padding: 20px 0;
+}
+
+.batchExportBar {
+  align-items: center;
+  background: var(--green-soft);
+  border: 1px solid rgb(21 92 71 / 22%);
+  border-radius: var(--radius);
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding: 14px 16px;
+}
+
+.batchExportBar p {
+  color: var(--green-dark);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.savedPaperList,
+.collectionPaperList {
+  border-top: 1px solid var(--line);
+  margin-top: 22px;
+}
+
+.savedPaperCard {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 25px 4px;
+}
+
+.paperSelectControl {
+  padding-top: 4px;
+}
+
+.paperSelectControl input {
+  accent-color: var(--green);
+  height: 17px;
+  width: 17px;
+}
+
+.savedPaperCard h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  font-weight: 400;
+  line-height: 1.2;
+  margin: 11px 0 7px;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 13px 0 0;
+  padding: 0;
+}
+
+.tagList li {
+  background: var(--paper-deep);
+  border-radius: 99px;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  padding: 4px 8px;
+}
+
+.libraryEmptyState {
+  background: rgb(255 253 248 / 58%);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 36px;
+  text-align: center;
+}
+
+.libraryEmptyState h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+  font-weight: 400;
+  margin: 0 0 8px;
+}
+
+.libraryEmptyState p {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  margin: 0 auto 18px;
+  max-width: 520px;
+}
+
+.libraryEmptyState--compact {
+  grid-column: 1 / -1;
+  padding: 20px;
+}
+
+.pagination {
+  align-items: center;
+  display: flex;
+  font-size: 0.8rem;
+  gap: 22px;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.pagination a {
+  color: var(--green);
+  font-weight: 750;
+}
+
+.pagination span[aria-disabled="true"] {
+  color: var(--ink-faint);
+}
+
+.collectionHeader .badge {
+  margin-top: 5px;
+}
+
+.collectionSettings {
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 48px;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(320px, 1.4fr);
+  padding: 48px 0;
+}
+
+.collectionSettingsForm {
+  display: grid;
+  gap: 15px;
+}
+
+.collectionSettingsActions,
+.collectionPaperButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.collectionPapers {
+  padding-top: 54px;
+}
+
+.collectionPaperCard {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 42px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  padding: 28px 0;
+}
+
+.collectionPaperSummary h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+  line-height: 1.2;
+  margin: 12px 0 8px;
+}
+
+.collectionPaperControls {
+  display: grid;
+  gap: 12px;
+}
+
+.savePaperPanel {
+  align-items: start;
+  background: var(--green-soft);
+  border: 1px solid rgb(21 92 71 / 22%);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 46px;
+  padding: clamp(24px, 5vw, 42px);
+}
+
+.savePaperPanel > div:first-child > p {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  margin: 10px 0 0;
+  max-width: 680px;
+}
+
+.savePaperForm {
+  align-items: end;
+  border-top: 1px solid rgb(21 92 71 / 20%);
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.6fr) minmax(220px, 1.2fr) auto;
+  padding-top: 22px;
+}
+
+.savePaperPanel > .libraryMessage {
+  grid-column: 1 / -1;
+}
+
+.savePaperForm > .libraryMessage,
+.libraryLoadError {
+  grid-column: 1 / -1;
+}
+
+.libraryLoadError p {
+  margin: 0 0 12px;
+}
+
+@media (max-width: 1000px) {
+  .collectionCardGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .libraryFilterForm {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .collectionPaperCard {
+    gap: 26px;
+    grid-template-columns: 1fr;
+  }
+
+  .savePaperForm {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .collectionCreateForm,
+  .libraryFilterForm,
+  .collectionSettings,
+  .savePaperForm,
+  .savePaperPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .collectionCardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .collectionCreateForm .button,
+  .libraryFilterForm .button,
+  .collectionSettingsActions .button,
+  .collectionPaperButtons .button,
+  .savePaperPanel > .button,
+  .savePaperForm > .button {
+    width: 100%;
+  }
+
+  .batchExportBar,
+  .librarySectionHeader,
+  .savePaperPanel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batchExportBar {
+    display: flex;
+  }
+
+  .batchExportBar .buttonGroup,
+  .batchExportBar .button {
+    width: 100%;
+  }
+
+  .savePaperPanel > .button,
+  .savePaperForm,
+  .savePaperPanel > .libraryMessage,
+  .libraryEmptyState--compact {
+    grid-column: 1;
+  }
+}
+
 @keyframes reader-spin {
   to {
     transform: rotate(360deg);

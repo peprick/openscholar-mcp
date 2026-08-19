@@ -16,7 +16,6 @@
 ```http
 POST /api/v1/searches
 GET  /api/v1/searches/{searchId}
-POST /api/v1/searches/{searchId}/refresh
 ```
 
 Example:
@@ -42,7 +41,7 @@ Responses include search ID, query fingerprint, cache disposition, freshness, pr
 
 The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the stored snapshot without contacting OpenAlex. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
 
-Open-access flags and PDF URLs in this search response are explicitly provider-reported, not independently verified legal-access claims. Verification arrives with the access-resolution milestone.
+Open-access flags and PDF URLs in this search response are explicitly provider-reported, not independently verified legal-access claims. Use the implemented `POST /api/v1/papers/{paperId}/access/verify` flow to resolve and independently verify stored legal-access locations.
 
 ### Papers and access
 
@@ -90,7 +89,15 @@ DELETE /api/v1/collections/{collectionId}
 PUT    /api/v1/collections/{collectionId}/papers/{paperId}
 DELETE /api/v1/collections/{collectionId}/papers/{paperId}
 PATCH  /api/v1/collections/{collectionId}/papers/{paperId}
+GET    /api/v1/library/papers
+POST   /api/v1/citations/export
 ```
+
+These endpoints are implemented for the fixed local development user, and every collection read/write is owner-scoped. Collection names contain 1–120 characters; descriptions are optional and bounded to 1,000 characters. `PUT` creates or replaces a paper membership, while `PATCH` requires an existing membership. A membership records `UNREAD`, `READING`, or `COMPLETED` and zero to ten canonical tags. Tags are trimmed, internal whitespace is collapsed, values are lowercased with locale-independent rules, and each tag is limited to 40 characters. Deleting a paper membership is idempotent; an unknown or unauthorized collection returns `404 COLLECTION_NOT_FOUND`.
+
+`GET /api/v1/library/papers` supports bounded `q`, `collectionId`, `readingStatus`, `tag`, `page`, and `size` parameters. Lexical matching covers collection name, paper title, abstract, venue, and credited author name. `%`, `_`, and `\` in `q` are treated literally rather than as SQL wildcards. Results are deterministic and retain one row per collection membership; a canonical paper saved in two collections therefore appears twice.
+
+`POST /api/v1/citations/export` accepts one to 100 distinct canonical paper UUIDs plus `bibtex` or `csl-json`. It preserves caller order, fails the whole request if any paper is unknown, and returns a raw UTF-8 attachment with the same media types and stored-metadata policy as the single-paper endpoint. Duplicate IDs, empty/oversized lists, and malformed inputs are rejected rather than silently normalized.
 
 Notes/highlights follow after the core library.
 
@@ -101,19 +108,21 @@ GET /actuator/health
 GET /actuator/info
 ```
 
-Metrics and detailed health components require administrative authentication.
+Only `health` and `info` are exposed. Health details are never shown, and the Micrometer MCP metrics are recorded internally without exposing an Actuator metrics endpoint. Administrative authentication is required before broader diagnostics can be exposed in a hosted deployment.
 
 ## Error model
 
-REST uses RFC 9457 Problem Details with a stable error code, safe detail, correlation ID, validation violations, retryability, and optional retry-after. Stack traces and credentials never appear.
+REST uses RFC 9457 Problem Details with a stable error code, safe detail, validation violations, retryability, and optional retry-after. Stack traces and credentials never appear.
 
 The current search slice implements stable validation, not-found, and provider-unavailable codes. Correlation IDs are added with the observability milestone.
 
 ## MCP transport
 
-The primary transport is stateless Streamable HTTP through `spring-ai-starter-mcp-server-webmvc`, expected at `/mcp`. Legacy SSE is not a design target. STDIO is an optional local profile after HTTP conformance passes.
+The implemented transport is stateless Streamable HTTP through `spring-ai-starter-mcp-server-webmvc` at `/mcp`. It is synchronous, advertises tools only, and does not expose legacy SSE, resources, prompts, completions, sampling, elicitation, or STDIO.
 
-The initial server advertises MCP revision `2025-11-25`, which is the revision supported by Spring AI 2.0/MCP Java SDK 2.0. Newer Tasks and MCP Apps capabilities stay deferred until official Java/Spring support is available.
+Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Every request requires the configured local bearer key; present `Origin` headers must exactly match the configured allow-list.
+
+The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
@@ -129,36 +138,38 @@ Finds cached and provider-backed research.
   "documentTypes": ["ARTICLE", "PREPRINT", "THESIS"],
   "openAccessOnly": true,
   "minimumCitations": 0,
+  "languages": ["en"],
   "limit": 20,
+  "cursor": "opaque cursor from an earlier response, or omit",
   "forceRefresh": false
 }
 ```
 
-Output includes canonical paper IDs, bibliographic metadata, best access status, ranking reasons, provider provenance, and warnings.
+Output includes canonical paper IDs, bibliographic metadata, provider-reported access hints, ranking reasons, provider provenance, cache disposition, freshness, warnings, and the next cursor. Provider-reported PDF links are not verified legal-access claims; use stored access output from `get_legal_full_text` after verification through REST/UI.
 
 ### `get_paper_details`
 
-Will accept exactly one internal paper ID, DOI, arXiv ID, or OpenAlex ID and return canonical metadata, identifiers, versions, provenance, and freshness. The internal-paper-ID REST use case is implemented; identifier resolution and the MCP wrapper remain planned.
+Accepts one canonical OpenScholar UUID and returns canonical metadata, identifiers, ordered authorship, record-level provenance, freshness, and the full stored access resolution, including coverage, warnings, and locations. It never contacts a provider. DOI, arXiv, and OpenAlex identifier resolution remains planned.
 
 ### `get_legal_full_text`
 
-Returns known legal locations and classifications. It never returns restricted file bytes or attempts publisher authentication.
-
-### `build_reading_list`
-
-Accepts topic, user goal, experience level, year/type filters, and maximum items. The initial deterministic selection balances relevance, recency, citation impact, access, and diversity and explains each choice.
+Accepts one canonical OpenScholar UUID and returns the stored access classification, provider coverage, warnings, and verified locations. It is database-only and may return `NOT_YET_RESOLVED`; legal verification remains an explicit REST/UI operation because the bounded synchronous provider pipeline can exceed the MCP interactive timeout. It never returns file bytes or attempts publisher authentication.
 
 ### `search_saved_library`
 
-Searches cached/saved papers with lexical retrieval initially and hybrid retrieval later. It is principal-scoped in multi-user mode.
+Searches the fixed local owner's saved collection memberships using optional lexical text, collection UUID, reading status, normalized tag, page, and size. Results preserve one row per collection membership. The application-service lookup is owner-scoped; authenticated principal propagation replaces the fixed local owner in multi-user mode.
 
 ### `export_citations`
 
-Accepts a bounded list of paper IDs and returns BibTeX or CSL-JSON. The single-paper REST use case is implemented; this batch MCP tool remains planned for the MCP milestone.
+Accepts one to 25 distinct canonical paper UUIDs plus `bibtex` or `csl-json`. It preserves caller order, fails atomically for an unknown paper, and returns format, filename, media type, count, and citation content as structured MCP output. It never contacts a provider.
+
+## Deferred MCP tools
+
+`build_reading_list`, provider-backed access verification, collection/note mutations, and job handles are not advertised until their application services, confirmation model, ownership, and timeout behavior are implemented and tested.
 
 ### Long-running jobs
 
-Stateless tools that exceed interactive deadlines use:
+Long-running operations will use owned job handles when implemented:
 
 ```text
 start_research_job
@@ -166,7 +177,7 @@ get_research_job
 cancel_research_job
 ```
 
-Job ownership is authorization-enforced, and result retention is bounded.
+Owned job handles and their retention/authorization policy remain planned; no job tools are currently advertised.
 
 ## Deferred write tools
 
@@ -185,13 +196,15 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 - JSON Schema validation and strict bounds.
 - Tool descriptions state side effects/access constraints.
 - External document text is never interpreted as tool instructions.
-- Per-principal and per-provider rate limits.
-- Correlation/audit IDs for every call.
-- Deadlines and cancellation propagate where supported.
-- Structured errors distinguish invalid input, not found, restricted, provider unavailable, and deadline exceeded.
+- Implemented local MCP limits per server-observed remote address; hosted mode adds aggregate and authenticated-principal limits.
+- arXiv has an implemented three-second outbound request gate. OpenAlex and Unpaywall use bounded timeouts and propagate upstream rate-limit information; broader per-provider budgets remain planned.
+- Every protected MCP response carries a request ID that is also placed in logging context.
+- Transport-level deadlines and cancellation propagation remain a compatibility follow-up.
+- Tool failures use safe text with stable prefixes such as `INVALID_REQUEST`, `PAPER_NOT_FOUND`, and provider-unavailable codes. Restricted access is a successful access status; dedicated structured tool-error and deadline-exceeded contracts remain planned.
 
 ## Compatibility testing
 
-- Official MCP conformance suite pinned to the supported revision.
+- The pinned official runner's production-applicable `server-initialize` and `tools-list` scenarios pass with `--spec-version 2025-11-25`; its remaining scenarios require a synthetic fixture surface and are not run against the domain server.
+- Track the canonical frozen `2025-11-25` requirements set as the official conformance runner evolves.
 - Tool discovery, calls, invalid schemas, cancellation, authentication, timeouts, partial results, and shutdown.
 - Supported protocol revision recorded in `/actuator/info` and release notes.

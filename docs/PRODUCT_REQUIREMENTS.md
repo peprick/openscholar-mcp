@@ -19,7 +19,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 ### Search
 
 - Accept a free-text topic between 3 and 500 characters.
-- Support publication-year range, document type, open-access-only, source, language, minimum-citation, and maximum-result filters.
+- Support publication-year range, document type, open-access-only, language, minimum-citation, and maximum-result filters. A source/provider filter remains planned.
 - Return local results immediately when cache coverage and freshness meet policy.
 - Query enabled providers when local coverage is insufficient.
 - Return partial results with provider warnings rather than failing the entire request.
@@ -27,7 +27,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ### Paper records
 
-- Display title, abstract when available, authors, year, venue, type, citation count, identifiers, topics, and source provenance.
+- Display title, abstract when available, authors, year, venue, type, citation count, identifiers, and source provenance. Canonical topic fields remain planned.
 - Reconcile multiple provider records into one canonical paper.
 - Preserve all known versions and provider-specific identifiers.
 - Mark metadata as missing rather than fabricating it.
@@ -56,10 +56,10 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ### MCP
 
-- Expose search, paper details, full-text availability, and reading-list tools.
+- Expose search, paper details, stored full-text availability, saved-library lookup, and citation-export tools.
 - Return stable internal paper IDs plus DOI/arXiv identifiers when present.
 - Return JSON-compatible structured results.
-- Make collection mutations a separate, disabled-by-default capability.
+- Keep collection mutations outside the current tool set; any future write tools require a separate capability, authentication, and host confirmation.
 
 ## Non-functional requirements
 
@@ -73,7 +73,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 ### Reliability
 
 - One provider failure must not discard successful results from other providers.
-- Every outbound request has a timeout, bounded retry policy, and rate-limit budget.
+- Every outbound request has a timeout. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; bounded retries and general per-provider budgets remain planned.
 - Failed jobs are retryable and visible to maintainers.
 - Search persistence is idempotent.
 
@@ -87,9 +87,9 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ## Acceptance scenarios
 
-### Cached related search
+### Cached exact search
 
-Given papers stored for “multi-agent reinforcement learning in healthcare,” when the user searches “clinical multi-agent RL,” the system returns relevant local results and only contacts external providers if freshness or coverage is inadequate.
+Given a fresh stored snapshot for “multi-agent reinforcement learning in healthcare,” when the user repeats the same normalized query and filters, the system returns the exact snapshot without contacting an external provider. Semantic reuse for related wording remains planned.
 
 ### Paywalled canonical version with open repository copy
 
@@ -101,11 +101,11 @@ Given a discoverable but restricted paper, the system displays metadata and the 
 
 ### Provider outage
 
-Given an OpenAlex timeout while arXiv succeeds, the search returns arXiv results and a machine-readable provider warning.
+Given a paper with both DOI and arXiv identifiers, when Unpaywall times out while the exact arXiv access lookup succeeds, access resolution returns the verified arXiv result with a machine-readable provider warning.
 
 ### MCP search
 
-Given a valid `search_research` tool call, the server returns structured results with identifiers, access status, ranking reasons, and source provenance.
+Given a valid `search_research` tool call, the server returns structured results with identifiers, provider-reported access hints, ranking reasons, and source provenance.
 
 ## Deferred decisions
 

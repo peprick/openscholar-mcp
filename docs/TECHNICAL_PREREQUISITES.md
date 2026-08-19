@@ -7,7 +7,7 @@
 | Git | Current supported release | Version control |
 | Java | JDK 21 LTS | Backend compilation/runtime baseline |
 | Docker Desktop/Engine | Current release with Compose v2 | PostgreSQL, pgvector, reproducible services |
-| Node.js | 24 LTS recommended; `>=22.13` required | Next.js, PDF.js, and MCP conformance tooling |
+| Node.js | 24 LTS recommended; `>=22.19` required | Next.js, PDF.js, MCP Inspector 2, and conformance tooling |
 | pnpm | 11.19.x | Frontend package management and reproducible lockfile |
 | GitHub CLI | Current stable | Repository/release workflow |
 

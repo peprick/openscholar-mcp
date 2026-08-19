@@ -10,6 +10,8 @@
 - Cache freshness/coverage.
 - Access classification.
 - Citation type mapping, identifier normalization, deterministic keys, Unicode, literal authors, and hostile BibTeX escaping.
+- Ordered citation batches, strict size/distinct-ID bounds, and all-or-nothing missing-paper behavior.
+- Locale-independent collection/tag normalization and literal-safe saved-library queries.
 - Authorization decisions.
 
 ## Slice tests
@@ -17,37 +19,41 @@
 - Spring MVC validation and Problem Details.
 - JPA mappings and JSON contracts.
 - Raw BibTeX/CSL-JSON response media types, attachment headers, sparse records, and stable citation errors.
+- Collection CRUD, saved-paper mutations, owner-scoped not-found behavior, library filters/pagination, and citation-batch attachment contracts.
 - Canonical paper details, record-level provenance, immutable credited names, date/year integrity, and stored-access summaries without provider calls.
 - MCP annotation discovery and tool validation.
 
 ## Integration tests
 
-Testcontainers supplies real PostgreSQL/pgvector. Verify Flyway from empty, constraints/indexes, transactions, idempotent upserts, full-text/vector queries, concurrent deduplication, job leasing, and owner-scoped access.
+Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty and V7-to-V8 upgrade, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, and owner-scoped access. Broader concurrent reconciliation and job-leasing tests follow when those features are implemented.
 
 ## Provider contract tests
 
-WireMock fixtures use synthetic or permitted sample responses. Every adapter covers success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema evolution.
+Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases.
 
 Live-provider tests run manually or on a scheduled, strictly budgeted workflow—not normal pull requests.
 
 ## MCP tests
 
-- Tool listing and valid calls.
-- Invalid/oversized input.
-- Access-restricted results.
-- Provider partial failure.
-- Deadlines, cancellation, and duplicate requests.
-- Authentication, Origin, audience, scope, and ownership.
-- Response-size limits.
-- Official conformance suite pinned to MCP `2025-11-25` until the Java stack advances.
+- Implemented: direct adapter tests for defaults, bounds, result mapping, database-only behavior, stable errors, and safe unexpected failures.
+- Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, input/output schemas, annotations, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
+- Implemented: successful raw structured calls for all four database-only tools, using a canonical paper created through the search tool where required.
+- Implemented: API-key, duplicate-header, exact-Origin, response-header, and disabled-until-configured security-filter coverage.
+- Implemented: official MCP Inspector CLI discovery and an empty-library `search_saved_library` call against the Compose image.
+- Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios with `--spec-version 2025-11-25`; both pass without warnings through the loopback bearer-injection proxy.
+- Remaining: additional invalid/oversized input and response-size cases.
+- Remaining: access-restricted results and provider partial failure at the MCP wire boundary.
+- Remaining: deadlines, cancellation, and duplicate requests.
+- Hosted follow-up: token audience/scope/principal ownership; local API-key and Origin behavior are already covered.
+- Track the canonical frozen `2025-11-25` requirements set as the official runner advances beyond its current fixture-oriented release.
 
 If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 ## End-to-end tests
 
-Playwright covers search/filter/provenance, repeat-query caching, legal PDF or external fallback, collections, reading status, citation export, keyboard navigation, provider warnings, and restricted-paper handling.
+Planned Playwright coverage includes search/filter/provenance, repeat-query caching, legal PDF or external fallback, collections, reading status, citation export, keyboard navigation, provider warnings, and restricted-paper handling.
 
-The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, RFC 9457 errors, verified-versus-unverified access links, reader-source policy selection, PDF.js loading/render lifecycle, controls, cleanup, and generic external fallback. Manual browser smoke verification covers desktop/mobile layout, the live search → paper → arXiv access path, and a controlled CORS-allowed render versus CORS-blocked fallback. Automating those reader cases and the full smoke path with Playwright remains a CI follow-up.
+The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, RFC 9457 errors, verified-versus-unverified access links, reader-source policy selection, PDF.js loading/render lifecycle, controls, cleanup, generic external fallback, normalized library tags, collection mutations, and bounded citation-batch downloads. Manual browser smoke verification covers desktop/mobile layout, the live search → paper → arXiv access path, the persistent collection flow, and a controlled CORS-allowed render versus CORS-blocked fallback. Automating those reader and library cases with Playwright remains a CI follow-up.
 
 ## Evaluation fixtures
 

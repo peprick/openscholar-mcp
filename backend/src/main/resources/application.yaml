@@ -1,6 +1,31 @@
 spring:
   application:
     name: openscholar-backend
+  ai:
+    mcp:
+      server:
+        protocol: STATELESS
+        type: SYNC
+        name: openscholar-mcp
+        version: 0.0.1
+        instructions: >-
+          Search scholarly metadata, inspect canonical papers and verified legal-access
+          locations, query the local saved library, and export citations. The server never
+          bypasses publisher authentication or returns restricted document bytes.
+        request-timeout: 20s
+        capabilities:
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+        tool-change-notification: false
+        resource-change-notification: false
+        prompt-change-notification: false
+        annotation-scanner:
+          enabled: true
+        streamable-http:
+          mcp-endpoint: /mcp
+          disallow-delete: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/openscholar}
     username: ${POSTGRES_USER:openscholar}
@@ -30,6 +55,15 @@ spring:
       fail-on-unknown-properties: true
 
 openscholar:
+  mcp:
+    security:
+      local-api-key: ${MCP_LOCAL_API_KEY:}
+      allowed-origins: ${MCP_ALLOWED_ORIGINS:}
+    rate-limit:
+      enabled: ${MCP_RATE_LIMIT_ENABLED:true}
+      requests-per-window: ${MCP_RATE_LIMIT_REQUESTS:120}
+      window: ${MCP_RATE_LIMIT_WINDOW:1m}
+      maximum-tracked-clients: ${MCP_RATE_LIMIT_MAX_CLIENTS:10000}
   access:
     cache-ttl: 24h
     force-refresh-cooldown: 5m
@@ -83,3 +117,8 @@ info:
     name: ${spring.application.name}
     description: Open-access research discovery and MCP backend
     java-version: ${java.version}
+  mcp:
+    transport: stateless-streamable-http
+    endpoint: /mcp
+    maximum-tested-protocol-version: 2025-11-25
+    tool-count: 5

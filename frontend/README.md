@@ -38,5 +38,8 @@ This runs ESLint, strict TypeScript, Vitest, and a production Next.js build.
 - Resolve and open independently verified legal versions.
 - Read fresh, verified HTTPS PDF locations directly in the PDF.js canvas reader.
 - Download BibTeX or CSL-JSON citations.
+- Create, rename, and delete persistent research collections.
+- Save canonical papers with reading status and normalized tags.
+- Filter the saved library and export selected papers as BibTeX or CSL-JSON.
 
 Provider-reported PDF URLs from search results are never rendered as verified downloads. Legal-access actions use only the backend `/versions` contract. The reader does not proxy or retain document bytes: the browser requests a selected, fresh verified source directly. Sources that do not permit cross-origin reading fail closed to the external-link fallback.

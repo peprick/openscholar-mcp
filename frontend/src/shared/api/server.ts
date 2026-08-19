@@ -10,6 +10,7 @@ import {
   savedPaperSchema,
   type CollectionDetailsResponse,
   type CollectionListResponse,
+  type CollectionSummary,
   type CreateCollectionRequest,
   type SavedLibraryQuery,
   type SavedLibraryResponse,
@@ -225,6 +226,22 @@ export async function getCollections(
     collectionListResponseSchema,
     "collection list",
   )).data;
+}
+
+export async function getAllCollectionOptions(): Promise<CollectionSummary[]> {
+  const first = await getCollections(0, 100);
+  const collections = new Map(
+    first.items.map((collection) => [collection.collectionId, collection]),
+  );
+  let totalPages = first.totalPages;
+  for (let page = 1; page < totalPages; page += 1) {
+    const result = await getCollections(page, 100);
+    for (const collection of result.items) {
+      collections.set(collection.collectionId, collection);
+    }
+    totalPages = Math.max(totalPages, result.totalPages);
+  }
+  return [...collections.values()];
 }
 
 export async function createCollection(

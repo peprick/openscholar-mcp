@@ -42,7 +42,7 @@ pnpm dev
 
 Run `pnpm check` for ESLint, strict TypeScript, Vitest, and a production Next.js build. Next.js reads the backend origin only on the server. Do not replace it with a `NEXT_PUBLIC_` variable or call Spring Boot directly from browser components.
 
-Node.js 22.13 or newer is required, with Node.js 24 LTS recommended. The
+The frontend itself supports Node.js 22.13 or newer, while the full project development baseline is Node.js 22.19 or newer because MCP Inspector 2 requires it. Node.js 24 LTS is recommended. The
 `predev` and `prebuild` hooks copy the pinned PDF.js worker and support assets
 from `node_modules` into `public/pdfjs/<version>`. That generated directory is
 ignored locally and rebuilt inside the frontend container; do not edit or
@@ -54,11 +54,23 @@ commit it.
 POSTGRES_DB
 POSTGRES_USER
 POSTGRES_PASSWORD
+POSTGRES_PORT
+BACKEND_PORT
+FRONTEND_PORT
 SPRING_DATASOURCE_URL
+SPRING_DOCKER_COMPOSE_ENABLED
+SERVER_ADDRESS
 OPENALEX_API_KEY
+OPENALEX_BASE_URL
 UNPAYWALL_EMAIL
-CORE_API_KEY
+UNPAYWALL_BASE_URL
+ARXIV_BASE_URL
 MCP_LOCAL_API_KEY
+MCP_ALLOWED_ORIGINS
+MCP_RATE_LIMIT_ENABLED
+MCP_RATE_LIMIT_REQUESTS
+MCP_RATE_LIMIT_WINDOW
+MCP_RATE_LIMIT_MAX_CLIENTS
 OPENSCHOLAR_API_BASE_URL
 ```
 
@@ -67,9 +79,9 @@ Optional embedding, OAuth, storage, and monitoring variables arrive only with th
 ## Backend conventions
 
 - Java 21 and Maven Wrapper.
-- Spring Boot 4.1 today; add the Spring AI 2.0 BOM and official MCP Java SDK with the MCP milestone.
+- Spring Boot 4.1 with the Spring AI 2.0 BOM and official MCP Java SDK 2.0.
 - Constructor injection and immutable boundary records.
-- Bean Validation on REST/MCP inputs.
+- Bean Validation on REST inputs; generated MCP JSON Schema plus adapter/application validation on MCP inputs.
 - Injected `Clock` for freshness logic.
 - Typed domain errors mapped at adapters.
 - Transactions at application-service boundaries.

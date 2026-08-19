@@ -11,6 +11,7 @@ record McpSecurityProperties(String localApiKey, List<String> allowedOrigins) {
 	McpSecurityProperties {
 		localApiKey = localApiKey == null ? "" : localApiKey.strip();
 		allowedOrigins = allowedOrigins == null ? List.of() : allowedOrigins.stream()
+				.filter(value -> value != null && !value.isBlank())
 				.map(McpSecurityProperties::normalizeOrigin)
 				.distinct()
 				.toList();

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { AccessPanel } from "@/features/access/access-panel";
 import { CitationActions } from "@/features/citations/citation-actions";
+import { SavePaperPanel } from "@/features/library/save-paper-panel";
 import { PaperDetails } from "@/features/papers/paper-details";
 import {
   BackendApiError,
@@ -51,6 +52,7 @@ export default async function PaperPage({
         <code className="recordId">Paper {paper.paperId.slice(0, 8)}</code>
       </div>
       <PaperDetails paper={paper} />
+      <SavePaperPanel paperId={paperId} />
       <AccessPanel
         initialAccess={access}
         initialNow={new Date().toISOString()}

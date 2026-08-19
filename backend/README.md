@@ -18,6 +18,11 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - SSRF-resistant PDF/landing-link verification with bounded requests and manually checked redirects
 - Link-only paper-version persistence; the backend never proxies or stores complete PDF documents
 - Deterministic single-paper BibTeX and CSL-JSON citation downloads from canonical metadata
+- Owner-scoped local collections with persisted reading status and normalized tags
+- Literal-safe saved-library search across papers, authors, venues, and collection names
+- Ordered, bounded multi-paper BibTeX and CSL-JSON citation downloads
+- Five typed, non-destructive, read-oriented MCP tools over stateless Streamable HTTP
+- Local MCP bearer-key authentication, exact Origin validation, per-address rate limiting, request IDs, and Micrometer request metrics
 - RFC 9457 validation, not-found, and provider-failure responses
 - Spring Boot Actuator
 - Spring Modulith boundary verification
@@ -25,7 +30,7 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Docker Compose PostgreSQL/pgvector service
 - Java 21 virtual threads
 
-The Next.js search, details, verified-version, and citation UI is now available in `../frontend`. An in-app PDF.js reader, richer typed publication metadata, collections, batch citation export, MCP tools, and additional scholarly providers remain to be built.
+The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Richer typed publication metadata, MCP conformance automation, and additional scholarly providers remain to be built.
 
 ## Run locally
 
@@ -44,6 +49,11 @@ Spring Boot detects `compose.yaml`, starts PostgreSQL when required, runs Flyway
 - Read stored access versions: `GET http://localhost:8080/api/v1/papers/{paperId}/versions`
 - Resolve or refresh legal access: `POST http://localhost:8080/api/v1/papers/{paperId}/access/verify`
 - Download a citation: `GET http://localhost:8080/api/v1/papers/{paperId}/citation?format=bibtex`
+- List/create collections: `GET|POST http://localhost:8080/api/v1/collections`
+- Manage one collection: `GET|PATCH|DELETE http://localhost:8080/api/v1/collections/{collectionId}`
+- Search saved papers: `GET http://localhost:8080/api/v1/library/papers`
+- Export a citation batch: `POST http://localhost:8080/api/v1/citations/export`
+- MCP endpoint: `POST http://localhost:8080/mcp`
 - Actuator health: `http://localhost:8080/actuator/health`
 - Actuator info: `http://localhost:8080/actuator/info`
 
@@ -105,6 +115,8 @@ curl --remote-header-name --remote-name \
 
 BibTeX is the default format. Both responses are raw importable documents with deterministic UUID-based citation keys and attachment filenames. Exports omit unavailable fields; author names remain literal display names because the current catalog does not safely distinguish given, family, particle, suffix, and organization names.
 
+The local library seeds one fixed development user. Every collection lookup and mutation is owner-scoped so the storage boundary can later be replaced by an authenticated principal without changing the public use case. A saved paper stores only its canonical paper reference, collection membership, reading status, and up to ten normalized tags; it does not copy or retain the PDF.
+
 ## Verify
 
 ```bash
@@ -127,9 +139,11 @@ Unpaywall's exact DOI endpoint requires a contact email. The application can sta
 UNPAYWALL_EMAIL=backend-contact@example.org ./mvnw spring-boot:run
 ```
 
-The arXiv adapter needs no credential. It uses an exact `id_list` lookup with one result and enforces at least three seconds between requests. Provider base URLs can be overridden for local tests through the variables documented in `.env.example`.
+The arXiv adapter needs no credential. It uses an exact `id_list` lookup with one result and enforces at least three seconds between requests. Provider base URLs can be overridden for local tests through the variables documented in the [root environment example](../.env.example).
 
-`.env.example` documents supported environment variables. Never commit `.env` or credentials. OpenAlex authorization and the Unpaywall contact email remain server-side and are never exposed through REST responses.
+The root `.env.example` documents the full-stack variables; `backend/.env.example` documents direct backend development variables. Never commit `.env` or credentials. OpenAlex authorization and the Unpaywall contact email remain server-side and are never exposed through REST responses.
+
+The MCP endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set. See the [MCP quickstart](../docs/MCP_QUICKSTART.md) for discovery, tool calls, Origin policy, and client configuration.
 
 ## Legal-access behavior
 

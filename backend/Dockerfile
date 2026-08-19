@@ -3,10 +3,12 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
-RUN ./mvnw --batch-mode --no-transfer-progress dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw --batch-mode --no-transfer-progress dependency:go-offline
 
 COPY src src
-RUN ./mvnw --batch-mode --no-transfer-progress package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
 FROM eclipse-temurin:21-jre
 

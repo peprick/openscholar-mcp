@@ -21,15 +21,15 @@ The complete workflow is:
 
 - Single-user local installation.
 - Topic, title, author, and keyword search.
-- Year, document type, open-access, language, source, and citation filters.
+- Year, document type, open-access, language, and citation filters; provider/source filtering is post-MVP.
 - OpenAlex discovery integration.
 - Unpaywall legal-access resolution.
 - arXiv metadata and PDF integration.
 - PostgreSQL persistence and query-result caching.
-- DOI/arXiv/title-based deduplication.
+- DOI, arXiv, OpenAlex-ID, and provider-record deduplication; conservative title/fuzzy reconciliation is post-MVP.
 - Search results, paper details, collections, and a basic PDF reader.
 - BibTeX and CSL-JSON export.
-- MCP tools for search, details, legal full text, and reading-list creation.
+- MCP tools for search, details, stored legal full text, saved-library lookup, and citation export.
 - Docker Compose development environment.
 
 ### Post-MVP scope
@@ -64,7 +64,7 @@ Builds a structured reading list, exports citations, adds notes, and compares pa
 
 ### AI-agent user
 
-Connects an MCP-compatible host and asks it to find papers, retrieve details, or construct a reading list through narrowly scoped tools.
+Connects an MCP-compatible host and asks it to find papers, retrieve details, inspect saved research, or export citations through narrowly scoped tools.
 
 ### Maintainer
 
@@ -116,7 +116,7 @@ Build a vertical slice before adding provider breadth:
 topic -> local cache -> OpenAlex -> normalize -> PostgreSQL -> REST -> result UI
 ```
 
-The second slice adds legal full-text resolution and reading. The third adds MCP. Semantic search, more providers, authentication, and AI-assisted analysis come afterward.
+The second slice adds legal full-text resolution and reading. The third adds the persistent local library and batch citation export. The fourth exposes the shared read use cases through MCP. Semantic search, more providers, authentication, and AI-assisted analysis come afterward.
 
 ## 6. Quality gates
 

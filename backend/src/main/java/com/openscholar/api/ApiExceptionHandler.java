@@ -7,6 +7,8 @@ import java.util.stream.Stream;
 import com.openscholar.access.AccessUnavailableException;
 import com.openscholar.access.AccessRefreshTooSoonException;
 import com.openscholar.citation.UnsupportedCitationFormatException;
+import com.openscholar.library.CollectionNotFoundException;
+import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchUnavailableException;
@@ -92,6 +94,24 @@ public class ApiExceptionHandler {
 				HttpStatus.NOT_FOUND,
 				"PAPER_NOT_FOUND",
 				"Paper not found",
+				exception.getMessage());
+	}
+
+	@ExceptionHandler(CollectionNotFoundException.class)
+	ProblemDetail handleCollectionNotFound(CollectionNotFoundException exception) {
+		return problem(
+				HttpStatus.NOT_FOUND,
+				"COLLECTION_NOT_FOUND",
+				"Collection not found",
+				exception.getMessage());
+	}
+
+	@ExceptionHandler(SavedPaperNotFoundException.class)
+	ProblemDetail handleSavedPaperNotFound(SavedPaperNotFoundException exception) {
+		return problem(
+				HttpStatus.NOT_FOUND,
+				"SAVED_PAPER_NOT_FOUND",
+				"Saved paper not found",
 				exception.getMessage());
 	}
 

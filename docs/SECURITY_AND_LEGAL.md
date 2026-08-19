@@ -11,7 +11,7 @@ OpenScholar handles untrusted search text, provider responses, metadata, URLs, P
 - Bind services to loopback by default.
 - Use a generated local API key when remote-style MCP is enabled.
 - Validate `Origin` for HTTP MCP connections.
-- Keep write tools disabled unless explicitly configured.
+- Keep write tools absent until authentication and host-confirmation behavior are implemented and verified.
 
 ### Hosted deployment
 
@@ -36,7 +36,7 @@ Inbound MCP tokens are never forwarded to OpenAlex, Unpaywall, CORE, or other pr
 
 ## MCP safety
 
-- Default to read-only tools.
+- Default to non-destructive, read-oriented tools; mark cache-affecting search honestly as non-read-only.
 - Describe side effects in tool metadata.
 - Require confirmation for collection/note mutations.
 - Never expose arbitrary SQL, URL fetch, shell, or unrestricted file tools.

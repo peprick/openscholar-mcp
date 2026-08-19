@@ -16,6 +16,7 @@
 	<url>https://github.com/peprick/openscholar-mcp</url>
 	<properties>
 		<java.version>21</java.version>
+		<spring-ai.version>2.0.0</spring-ai.version>
 		<spring-modulith.version>2.1.0</spring-modulith.version>
 		<maven.compiler.parameters>true</maven.compiler.parameters>
 	</properties>
@@ -39,6 +40,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -116,6 +121,13 @@
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+				<groupId>org.springframework.ai</groupId>
+				<artifactId>spring-ai-bom</artifactId>
+				<version>${spring-ai.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.springframework.modulith</groupId>
 				<artifactId>spring-modulith-bom</artifactId>
