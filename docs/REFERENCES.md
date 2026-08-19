@@ -1,6 +1,6 @@
 # Official References
 
-These links support version and architecture decisions reviewed through 2026-08-18. Re-check them when application scaffolding or a dependency upgrade begins.
+These links support version and architecture decisions reviewed through 2026-08-19. Re-check them when application scaffolding, model selection, or a dependency upgrade begins.
 
 ## Java and Spring
 
@@ -10,6 +10,9 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [Spring AI stateless MCP server](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-stateless-server-boot-starter-docs.html)
 - [Spring AI MCP server annotations](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-annotations-server.html)
 - [Spring AI MCP security](https://docs.spring.io/spring-ai/reference/api/mcp/mcp-security.html)
+- [Spring AI Embedding Model API](https://docs.spring.io/spring-ai/reference/api/embeddings.html)
+- [Spring AI Ollama embeddings](https://docs.spring.io/spring-ai/reference/api/embeddings/ollama-embeddings.html)
+- [Spring AI OpenAI embeddings](https://docs.spring.io/spring-ai/reference/api/embeddings/openai-embeddings.html)
 - [Spring AI pgvector integration](https://docs.spring.io/spring-ai/reference/api/vectordbs/pgvector.html)
 - [Spring Security JWT resource server](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html)
 - [Spring Boot Testcontainers](https://docs.spring.io/spring-boot/reference/testing/testcontainers.html)
@@ -38,6 +41,21 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [Directory of Open Access Journals](https://doaj.org/)
 - [Open Access Theses and Dissertations](https://www.oatd.org/)
 - [NDLTD thesis resources](https://ndltd.org/thesis-resources/find-etds/)
+
+## Embeddings and vector search
+
+- [Qwen3-Embedding-0.6B official model card, dimensions, context, licence, and evaluation](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
+- [Qwen3 Embedding technical report, 2025-06-05](https://arxiv.org/abs/2506.05176)
+- [Official Qwen3 Embedding repository](https://github.com/QwenLM/Qwen3-Embedding)
+- [Ollama Qwen3 embedding model tags and artifact sizes](https://ollama.com/library/qwen3-embedding/tags)
+- [Ollama embeddings API and normalized output](https://docs.ollama.com/capabilities/embeddings)
+- [Ollama local-only/cloud controls](https://docs.ollama.com/faq)
+- [Ollama privacy policy](https://ollama.com/privacy)
+- [OpenAI `text-embedding-3-large` model and current pricing](https://developers.openai.com/api/docs/models/text-embedding-3-large)
+- [OpenAI embedding dimensions and published benchmark context](https://openai.com/index/new-embedding-models-and-api-updates/)
+- [OpenAI API data controls and retention](https://platform.openai.com/docs/models/default-usage-policies-by-endpoint)
+- [OpenAI enterprise privacy, updated 2026-01-08](https://openai.com/enterprise-privacy/)
+- [pgvector exact search, HNSW, dimensions, and storage](https://github.com/pgvector/pgvector)
 
 ## Outbound-link security
 

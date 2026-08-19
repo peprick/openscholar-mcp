@@ -52,13 +52,51 @@ The regression gate requires per-query Recall@K of at least `0.50`, per-query nD
 
 Recall is strong on this small corpus, including Spanish and incomplete records. Early precision is visibly weaker for two adversarial cases: highly cited warehouse and forest papers share many title terms with the seed and win deterministic tie-breaks despite being in the wrong domain. That is a useful measured weakness, not something to hide by tuning the fixture.
 
-The next retrieval version should improve those two nDCG values without reducing recall. Candidate work must be evaluated against this baseline before replacing it:
+The next retrieval version should improve those two nDCG values without reducing recall. Candidate work must be evaluated against this baseline before replacing it.
+
+## Embedding decision and implemented foundation
+
+[ADR 0005](decisions/0005-versioned-embedding-profiles.md) selects a local-first model policy but separates that decision from what is currently executable:
+
+| Layer | Current state |
+|---|---|
+| Profile and vector schema | Implemented in `V10`; immutable model/input provenance, dimensions, checksum, and cosine distance |
+| Provider-neutral store | Implemented; prepare deterministic input, reject stale saves, idempotently store vectors, and run exact same-profile cosine lookup |
+| Local inference | Deferred; no Ollama dependency, service, model download, or adapter is configured |
+| Hosted comparison | Deferred; no OpenAI dependency, key, call, or production fallback is configured |
+| Product ranking | The endpoint remains the measured PostgreSQL full-text implementation; vector, HNSW, and hybrid ranking are not active |
+
+`TITLE_ABSTRACT` input-policy v1 renders exact canonical metadata as:
+
+```text
+Title: <title>
+Abstract: <abstract or empty>
+```
+
+Each field is stripped, CRLF/CR becomes LF, and text is normalized to Unicode NFC. The lowercase SHA-256 checksum covers the exact rendered UTF-8. Inputs above 24 KiB are rejected rather than truncated, and title/abstract updates delete the paper's stored embeddings. This makes source changes observable and prevents a silently truncated input from masquerading as the same embedding version.
+
+The first planned runtime profile uses a full-digest-pinned [`Qwen3-Embedding-0.6B`](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) artifact through local Ollama, with native 1024-dimensional output and cosine distance. The explicit Ollama `qwen3-embedding:0.6b` tag currently identifies a 639 MB Q8_0 artifact; the bare/`latest` alias currently selects the 8B model and is not acceptable provenance. The Qwen technical report and model card show promising multilingual retrieval, but those published results do not establish the quality of the quantized Ollama artifact on this fixture. Local inference avoids a per-token bill and can keep title/abstract text on the deployment host when Ollama cloud features are disabled, while still consuming local compute, memory, download, and maintenance resources.
+
+OpenAI [`text-embedding-3-large`](https://developers.openai.com/api/docs/models/text-embedding-3-large), explicitly shortened to 1024 dimensions, is reserved for opt-in evaluation. It is not a runtime default or automatic failover, and its vectors are a separate space even though the dimension matches. As checked on 2026-08-19, OpenAI lists USD 0.13 per million input tokens. API data is not used for training by default, but standard abuse-monitoring logs may retain content for up to 30 days unless an eligible account has modified or zero data retention. Hosted aliases also require canary/drift evidence before their output is treated as an immutable profile.
+
+## Database-only retrieval rule
+
+Embedding generation and refresh must occur outside `GET /api/v1/papers/{paperId}/related`. A future vector or hybrid implementation may read stored source/candidate vectors only. If the required profile or paper vector is absent or was invalidated by a metadata update, the endpoint returns the existing lexical ranking; it does not contact Ollama/OpenAI and does not fail solely because semantic data is unavailable.
+
+The selected Qwen model supports instructed query embeddings, but related-paper v1 will first measure symmetric stored document vectors. A separate precomputed query content kind is justified only if it materially improves the fixture enough to offset doubled generation/storage. On-demand query inference is not compatible with the database-only endpoint decision.
+
+## Remaining evaluation gates
+
+Candidate work includes:
 
 - compare `english`, `simple`, and language-aware lexical configurations;
-- choose an embedding provider/model, dimension, input policy, and immutable embedding version;
-- add pgvector storage and HNSW only after the version/refresh policy is fixed;
+- implement the digest-verifying local adapter and idempotent offline backfill without making ordinary CI download a model;
+- measure exact vector-only results through the implemented store before adding approximate indexing;
+- compare HNSW against exact neighbors with an explicit ANN-recall and latency gate;
 - calibrate lexical and cosine scores before hybrid fusion;
 - record feature-level reasons and persist them if hybrid results enter immutable search snapshots;
 - bump the search pipeline/fingerprint version before blending local retrieval into provider-backed topic search.
+
+A replacement hybrid should exceed the current macro nDCG of `0.857`, improve both adversarial query groups currently at `0.665`, and preserve the current recall result. If it does not, the lexical implementation remains the product ranker and the vector experiment remains documented evidence rather than an unmeasured feature.
 
 Deduplication quality remains a separate evaluation concern because full-text retrieval operates on already-canonical `paper` rows. DOI duplicates and preprint/published pairs belong in a dedicated reconciliation fixture.

@@ -29,9 +29,10 @@ erDiagram
     USER ||--o{ NOTE : writes
     PAPER ||--o{ NOTE : annotates
     PAPER ||--o{ PAPER_EMBEDDING : represented_by
+    EMBEDDING_PROFILE ||--o{ PAPER_EMBEDDING : defines
 ```
 
-The diagram includes planned topic, note, and embedding relationships alongside implemented tables. Planned highlights are described in the library section but are not drawn.
+The diagram includes planned topic and note relationships alongside the implemented embedding-profile foundation. Planned highlights are described in the library section but are not drawn.
 
 ## Core tables
 
@@ -132,9 +133,23 @@ The current implementation keeps successful snapshots immutable, retains canonic
 
 The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Application queries scope collection access through that owner even though authentication is not yet enabled. Deleting a collection cascades only its memberships/tags; deleting a referenced canonical paper is restricted.
 
-## Planned embeddings
+## Embedding foundation
 
-`paper_embedding` stores paper ID, content kind, model/provider and revision, dimension, content checksum, vector, and timestamp. New models create new rows rather than mixing vector spaces. The MVP launches without embeddings; lexical search establishes an evaluation baseline first.
+`V10` creates storage and exact-query primitives without generating embeddings or changing product ranking.
+
+### `embedding_profile`
+
+An immutable profile names one vector space and records provider, model, immutable model revision, `TITLE_ABSTRACT` content kind, input-policy version, dimensions, cosine distance, and creation time. Profile keys and definitions are unique. Dimensions are bounded to `1..2000`, which keeps a future FP32 HNSW index within pgvector's current limit. Database triggers reject profile updates and deletes: a model, artifact, dimension, distance, or input-policy change requires a new profile and a measured backfill.
+
+No production profile is seeded yet. The selected first adapter is a future local, digest-pinned Qwen3-Embedding-0.6B profile with 1024 dimensions. An OpenAI `text-embedding-3-large` profile shortened to 1024 dimensions is reserved for opt-in evaluation, not automatic failover.
+
+### `paper_embedding`
+
+One row per paper/profile stores the profile dimension, lowercase SHA-256 checksum of the exact rendered input, variable-dimension pgvector value, and generation time. A composite foreign key carries the registered dimension into each row, while database checks verify `vector_dims(embedding)` and reject the zero vector. Deleting a paper cascades to its derived vectors; changing its canonical title or abstract invalidates all current embeddings for that paper.
+
+`PaperEmbeddingStore` currently supports immutable profile registration, deterministic source preparation, checksum-guarded idempotent upsert, and exact same-profile cosine neighbors. It re-locks and re-renders the paper before saving so work generated from stale metadata is rejected. There is deliberately no provider adapter, vector backfill, HNSW index, hybrid ranker, or REST/MCP integration yet.
+
+`TITLE_ABSTRACT` input-policy v1 renders `Title: <title>\nAbstract: <abstract or empty>`. Fields are stripped, line endings become LF, and Unicode is normalized to NFC. Inputs above 24 KiB of rendered UTF-8 are rejected instead of truncated; the checksum covers those exact rendered bytes. Changing any of these rules creates a new input-policy version.
 
 ## Planned jobs and operations
 
@@ -155,7 +170,7 @@ The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Applicatio
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage without a backfill or HNSW index.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

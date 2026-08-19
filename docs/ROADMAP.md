@@ -82,12 +82,14 @@ Exit: an MCP client discovers/calls tools with the same policies as REST.
 
 Estimated effort: 1–2 weeks.
 
-Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. Embedding selection and measured hybrid comparison remain.
+Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision plus immutable `V10` embedding-profile and exact-store foundation are also implemented. No vectors are generated yet; inference adapters, backfill, HNSW, and measured vector/hybrid comparison remain.
 
 - Implemented: first related-paper relevance evaluation set; dedicated provider/deduplication cases remain.
 - Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
-- Embedding-provider decision and versioned abstract embeddings.
-- HNSW plus hybrid ranking and related-topic reuse.
+- Implemented: local-first provider decision—future digest-pinned Qwen3-Embedding-0.6B at 1024 dimensions, with OpenAI `text-embedding-3-large` shortened to 1024 only as an opt-in evaluation profile.
+- Implemented: provider-neutral immutable profile registry, deterministic title/abstract v1 input, checksum-guarded vector store, source invalidation, and exact same-profile cosine lookup.
+- Next: local Ollama inference adapter, artifact-digest verification, and idempotent offline backfill; the current related endpoint must remain database-only and fall back to lexical results when vectors are absent.
+- Next: vector-only fixture measurement, HNSW recall/performance gate, calibrated hybrid ranking, and related-topic reuse.
 - Implemented: measured lexical baseline (macro Recall 1.000 and macro nDCG 0.857 on the synthetic v1 fixture); vector/hybrid comparison remains.
 
 Exit: measured retrieval improvement without hiding ranking rationale.
@@ -125,9 +127,9 @@ Exit: public demo is secure, reproducible, observable, and evidence-backed.
 - Research maps and citation graphs.
 - Collaborative collections.
 - Provider plug-in framework.
-- Offline embeddings.
+- Additional offline embedding profiles for permitted full text or private content, after retention/privacy review.
 - Mobile reader improvements.
 
 ## Recommended order
 
-Do not start with embeddings, LLM summaries, every provider, or multi-user auth. The core portfolio story is query → normalized evidence → legal access → persistent reuse → UI → MCP. Later capabilities should improve a measured weakness in that path.
+The core portfolio story remains query → normalized evidence → legal access → persistent reuse → UI → MCP. Embedding work now follows the measured lexical baseline: establish immutable provenance and deterministic storage first, then adopt vector or hybrid ranking only when the versioned fixture demonstrates an improvement. LLM summaries, broad provider fan-out, and multi-user auth remain later concerns.

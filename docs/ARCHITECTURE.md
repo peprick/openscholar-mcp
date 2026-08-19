@@ -42,7 +42,7 @@ com.openscholar
 └── persistence            # shared persistence configuration
 ```
 
-`jobs` and `security` currently contain boundary placeholders. Semantic retrieval, MCP resources, generated OpenAPI models, background jobs, and hosted authentication are planned rather than current modules. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
+`jobs` and `security` currently contain boundary placeholders. The `paper` module now owns provider-neutral embedding-profile and vector-store primitives, but inference adapters and semantic product ranking remain planned. MCP resources, generated OpenAPI models, background jobs, and hosted authentication are also planned rather than current modules. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
 
 ## Search request flow
 
@@ -115,12 +115,23 @@ Current canonical data retains record-level provenance and identifies the provid
 
 ## Ranking
 
-The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path now provides the first local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, deterministic metadata tie-breakers stabilize the order, and the API reports `POSTGRES_FULL_TEXT`. It remains separate from immutable provider snapshots. The planned hybrid ranker adds measured semantic similarity and any additional feature weights only after comparison against the versioned relevance fixture.
+The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path now provides the first local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, deterministic metadata tie-breakers stabilize the order, and the API reports `POSTGRES_FULL_TEXT`. It remains separate from immutable provider snapshots. The `V10` embedding foundation is not connected to this path. A planned hybrid ranker may add measured semantic similarity and additional feature weights only after comparison against the versioned relevance fixture.
+
+## Embedding boundary
+
+`PaperEmbeddingStore` is an application-facing persistence boundary inside the `paper` module. It registers immutable vector-space profiles, renders versioned source input, rejects a save when canonical content changed during generation, performs idempotent vector upserts, and returns exact cosine neighbors only within one profile. PostgreSQL owns the vector-dimension and profile-integrity constraints.
+
+Title/abstract input-policy v1 is deterministic: `Title: <title>\nAbstract: <abstract or empty>`, stripped fields, LF line endings, Unicode NFC, a 24 KiB UTF-8 rejection bound, and a SHA-256 checksum over the exact bytes. A title or abstract update invalidates the derived vectors at the database boundary.
+
+The selected first inference implementation is a future Spring AI/Ollama adapter for a full-digest-pinned `qwen3-embedding:0.6b` artifact at 1024 dimensions. OpenAI `text-embedding-3-large` shortened to 1024 is a separate opt-in evaluation adapter. Neither adapter, a production profile, backfill, HNSW index, nor hybrid ranking is implemented today. Equal dimensions do not make two model profiles interoperable.
+
+The related-paper endpoint remains database-only. Future vector/hybrid reads may consume precomputed source and candidate vectors, but may not invoke an inference provider. Missing or invalidated vectors fall back to the current full-text result. This keeps local-provider availability and hosted credentials outside interactive-read correctness.
 
 ## Persistence
 
 - Spring Data JPA for transactional aggregate persistence.
-- Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval; pgvector operations remain planned.
+- Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval.
+- Implemented provider-neutral pgvector profile/storage and exact same-profile cosine operations; inference, vector population, HNSW, and product ranking remain planned.
 - Flyway as the only production schema-change mechanism.
 - Planned PostgreSQL job leases/advisory locks for scheduled work.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.
@@ -140,6 +151,7 @@ Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions th
 - `frontend` container
 - `backend` container
 - `postgres` container with pgvector
+- no Ollama container/profile or hosted embedding credential is configured today; local inference remains an optional follow-up
 - planned optional object-storage profile for legally permitted documents; no MinIO service is defined today
 
 ### Hosted portfolio deployment
