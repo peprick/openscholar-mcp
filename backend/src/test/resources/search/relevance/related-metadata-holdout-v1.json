@@ -1,0 +1,312 @@
+{
+  "version": 1,
+  "fixtureId": "related-metadata-holdout-v1",
+  "split": "HOLDOUT",
+  "rankingMethod": "POSTGRES_FULL_TEXT",
+  "papers": [
+    {
+      "key": "reef-source",
+      "title": "Passive Reef Soundscapes as Signals of Ecological Recovery",
+      "abstractText": "Hydrophone recordings track biological activity during the recovery of damaged coral habitats.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 6
+    },
+    {
+      "key": "reef-larval",
+      "title": "Reef Soundscape Recovery and Larval Fish Settlement",
+      "abstractText": "Acoustic diversity after restoration is linked with the return of juvenile reef fish.",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "reef-title-only",
+      "title": "Acoustic Indicators of Coral Reef Recovery",
+      "abstractText": null,
+      "year": 2023,
+      "type": "REPORT",
+      "language": "en",
+      "citationCount": null
+    },
+    {
+      "key": "bridge-acoustic-negative",
+      "title": "Passive Acoustic Monitoring of Bridge Recovery",
+      "abstractText": "Vibration sensors assess structural fatigue after repairs to highway bridges.",
+      "year": 2017,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 1850
+    },
+    {
+      "key": "photonic-source",
+      "title": "Bosonic Error Correction for Integrated Photonic Qubits",
+      "abstractText": "Oscillator encodings protect optical quantum states against photon loss in integrated circuits.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 7
+    },
+    {
+      "key": "photonic-loss",
+      "title": "Loss-Tolerant Bosonic Codes in Photonic Circuits",
+      "abstractText": "A fault-tolerant optical architecture corrects photon-loss errors with encoded oscillator states.",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "photonic-thesis",
+      "title": "Fault-Tolerant Photonic Computing with Oscillator Codes",
+      "abstractText": "A doctoral study of bosonic encodings, loss detection, and logical gates for optical qubits.",
+      "year": 2024,
+      "type": "THESIS",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "fiber-code-negative",
+      "title": "Error Correction for Integrated Photonic Links",
+      "abstractText": "Classical block codes reduce transmission errors in long-distance optical fiber networks.",
+      "year": 2016,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 2200
+    },
+    {
+      "key": "urban-heat-source",
+      "title": "Cartographie des îlots de chaleur urbains par satellite",
+      "abstractText": "Les températures de surface révèlent les quartiers exposés à la chaleur pendant les vagues estivales.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "fr",
+      "citationCount": 5
+    },
+    {
+      "key": "urban-heat-shade",
+      "title": "Télédétection des îlots de chaleur et de l'ombre urbaine",
+      "abstractText": "Des images thermiques évaluent le refroidissement associé aux arbres et aux zones ombragées.",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "fr",
+      "citationCount": 0
+    },
+    {
+      "key": "urban-biodiversity-negative",
+      "title": "Cartographie des îlots de biodiversité par satellite",
+      "abstractText": "Les images multispectrales localisent des refuges pour les pollinisateurs dans les villes.",
+      "year": 2015,
+      "type": "ARTICLE",
+      "language": "fr",
+      "citationCount": 1300
+    },
+    {
+      "key": "sodium-source",
+      "title": "Operando Spectroscopy of Sodium-Metal Interphases",
+      "abstractText": "Spectral measurements follow protective interphase formation while sodium-metal cells are cycling.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 8
+    },
+    {
+      "key": "sodium-cryo",
+      "title": "Cryogenic and Operando Views of Sodium-Metal Interphases",
+      "abstractText": "Complementary imaging reveals how electrolyte products evolve on sodium anodes during cycling.",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "sodium-abstract-only",
+      "title": "Interfacial Dynamics under Cycling",
+      "abstractText": "Time-resolved spectroscopy measures sodium-metal solid electrolyte interphase growth and repair.",
+      "year": 2023,
+      "type": "CONFERENCE_PAPER",
+      "language": "en",
+      "citationCount": 3
+    },
+    {
+      "key": "sodium-catalyst-negative",
+      "title": "Operando Spectroscopy of Sodium-Promoted Catalyst Interfaces",
+      "abstractText": "Surface spectra explain how sodium additives alter industrial ammonia catalyst activity.",
+      "year": 2014,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 2400
+    },
+    {
+      "key": "ukiyoe-source",
+      "title": "浮世絵顔料の非破壊分光分析",
+      "abstractText": "可搬型分光計を用い、版画を傷つけずに藍と紅の顔料を識別する。",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "ja",
+      "citationCount": 2
+    },
+    {
+      "key": "ukiyoe-hyperspectral",
+      "title": "ハイパースペクトル画像による浮世絵顔料の同定",
+      "abstractText": "反射スペクトルから木版画の色材を分類し、退色した領域を推定する。",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "ja",
+      "citationCount": 0
+    },
+    {
+      "key": "ukiyoe-portable",
+      "title": "江戸期版画の色材を調べる可搬型分光法",
+      "abstractText": "非接触測定により浮世絵の鉱物顔料と有機染料を区別する。",
+      "year": 2024,
+      "type": "ARTICLE",
+      "language": "ja",
+      "citationCount": 4
+    },
+    {
+      "key": "ukiyoe-recommendation-negative",
+      "title": "浮世絵の配色を用いた画像推薦",
+      "abstractText": "木版画の色彩特徴を利用して現代のデジタル画像を推薦する。",
+      "year": 2018,
+      "type": "ARTICLE",
+      "language": "ja",
+      "citationCount": 900
+    },
+    {
+      "key": "exoplanet-source",
+      "title": "Cloud-Aware Retrieval of Temperate Exoplanet Atmospheres",
+      "abstractText": "Bayesian spectra models separate cloud opacity from molecular signals on cool rocky planets.",
+      "year": 2025,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 6
+    },
+    {
+      "key": "exoplanet-reflected",
+      "title": "Retrieving Temperate Exoplanet Clouds from Reflected Spectra",
+      "abstractText": "Joint cloud and gas inference is tested for direct observations of habitable-zone planets.",
+      "year": 2026,
+      "type": "PREPRINT",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "earth-cloud-negative",
+      "title": "Cloud-Aware Retrieval of Temperate Earth Atmospheres",
+      "abstractText": "Weather reanalysis reconstructs terrestrial humidity and cloud cover from satellite observations.",
+      "year": 2012,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 3100
+    },
+    {
+      "key": "provenance-source",
+      "title": "Reproducible Attestations for Software Supply Chains",
+      "abstractText": "Signed build evidence links source revisions, dependencies, and released software artifacts.",
+      "year": 2025,
+      "type": "CONFERENCE_PAPER",
+      "language": "en",
+      "citationCount": 5
+    },
+    {
+      "key": "provenance-graphs",
+      "title": "Verifiable Build Provenance for Dependency Graphs",
+      "abstractText": "Reproducible pipelines produce attestations that trace packages through nested software dependencies.",
+      "year": 2026,
+      "type": "CONFERENCE_PAPER",
+      "language": "en",
+      "citationCount": 0
+    },
+    {
+      "key": "provenance-german",
+      "title": "Nachweisbare Software-Lieferketten mit reproduzierbaren Builds",
+      "abstractText": "Die Dissertation untersucht signierte Herkunftsnachweise für Pakete und ihre Abhängigkeiten.",
+      "year": 2023,
+      "type": "DISSERTATION",
+      "language": "de",
+      "citationCount": 0
+    },
+    {
+      "key": "food-attestation-negative",
+      "title": "Reproducible Attestations for Food Supply Chains",
+      "abstractText": "Traceability certificates follow refrigerated ingredients from farms to retail warehouses.",
+      "year": 2016,
+      "type": "ARTICLE",
+      "language": "en",
+      "citationCount": 1700
+    }
+  ],
+  "queries": [
+    {
+      "key": "reef-recovery-soundscapes",
+      "sourceKey": "reef-source",
+      "cutoff": 5,
+      "judgments": {
+        "reef-larval": 3,
+        "reef-title-only": 1,
+        "bridge-acoustic-negative": 0
+      }
+    },
+    {
+      "key": "photonic-bosonic-correction",
+      "sourceKey": "photonic-source",
+      "cutoff": 5,
+      "judgments": {
+        "photonic-loss": 3,
+        "photonic-thesis": 2,
+        "fiber-code-negative": 0
+      }
+    },
+    {
+      "key": "french-urban-heat",
+      "sourceKey": "urban-heat-source",
+      "cutoff": 5,
+      "judgments": {
+        "urban-heat-shade": 3,
+        "urban-biodiversity-negative": 0
+      }
+    },
+    {
+      "key": "sodium-metal-interphases",
+      "sourceKey": "sodium-source",
+      "cutoff": 5,
+      "judgments": {
+        "sodium-cryo": 3,
+        "sodium-abstract-only": 1,
+        "sodium-catalyst-negative": 0
+      }
+    },
+    {
+      "key": "japanese-ukiyoe-pigments",
+      "sourceKey": "ukiyoe-source",
+      "cutoff": 5,
+      "judgments": {
+        "ukiyoe-hyperspectral": 3,
+        "ukiyoe-portable": 2,
+        "ukiyoe-recommendation-negative": 0
+      }
+    },
+    {
+      "key": "temperate-exoplanet-clouds",
+      "sourceKey": "exoplanet-source",
+      "cutoff": 5,
+      "judgments": {
+        "exoplanet-reflected": 3,
+        "earth-cloud-negative": 0
+      }
+    },
+    {
+      "key": "software-build-provenance",
+      "sourceKey": "provenance-source",
+      "cutoff": 5,
+      "judgments": {
+        "provenance-graphs": 3,
+        "provenance-german": 1,
+        "food-attestation-negative": 0
+      }
+    }
+  ]
+}

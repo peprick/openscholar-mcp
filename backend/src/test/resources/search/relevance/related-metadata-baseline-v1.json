@@ -1,4 +1,6 @@
 {
+  "fixtureId": "related-metadata-baseline-v1",
+  "split": "DEVELOPMENT",
   "version": 1,
   "rankingMethod": "POSTGRES_FULL_TEXT",
   "papers": [
