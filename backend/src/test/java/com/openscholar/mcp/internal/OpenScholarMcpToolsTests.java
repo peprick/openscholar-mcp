@@ -377,6 +377,11 @@ class OpenScholarMcpToolsTests {
 		}
 
 		@Override
+		public SearchView next(UUID searchId) {
+			throw new AssertionError("The MCP search tool must call search, not next");
+		}
+
+		@Override
 		public SearchView get(UUID searchId) {
 			throw new AssertionError("The MCP search tool must call search, not get");
 		}

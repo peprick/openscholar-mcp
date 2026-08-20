@@ -15,6 +15,7 @@
 
 ```http
 POST /api/v1/searches
+POST /api/v1/searches/{searchId}/next
 GET  /api/v1/searches/{searchId}
 ```
 
@@ -39,7 +40,7 @@ Example:
 
 Responses include search ID, query fingerprint, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, and pagination.
 
-The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the stored snapshot without contacting OpenAlex. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
+The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the stored snapshot without contacting OpenAlex. `POST /api/v1/searches/{searchId}/next` derives the continuation from that immutable snapshot: it reuses the stored query, filters, and page size, replaces the current cursor with the stored opaque `nextCursor`, and disables forced refresh. A newly fetched continuation returns `201`; replaying a fresh continuation returns `200 EXACT_HIT`; a missing source snapshot returns `404 SEARCH_NOT_FOUND`; and a snapshot without another page returns `409 SEARCH_PAGE_EXHAUSTED`. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
 
 Open-access flags and PDF URLs in this search response are explicitly provider-reported, not independently verified legal-access claims. Use the implemented `POST /api/v1/papers/{paperId}/access/verify` flow to resolve and independently verify stored legal-access locations.
 

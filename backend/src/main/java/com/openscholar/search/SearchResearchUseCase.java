@@ -6,5 +6,7 @@ public interface SearchResearchUseCase {
 
 	SearchView search(SearchCommand command);
 
+	SearchView next(UUID searchId);
+
 	SearchView get(UUID searchId);
 }

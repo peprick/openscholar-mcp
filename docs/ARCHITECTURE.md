@@ -79,7 +79,7 @@ A query fingerprint is calculated from normalized topic text and sorted filters.
 - freshness of the exact search snapshot;
 - explicit user refresh requests.
 
-Otherwise it performs one OpenAlex search, persists a new immutable snapshot, or returns the latest exact stale snapshot when OpenAlex fails. Responses expose `searchedAt`, `freshUntil`, cache disposition, and provider coverage. Related-topic local/full-text/vector reuse and coverage-based provider fan-out remain planned.
+Otherwise it performs one OpenAlex search, persists a new immutable snapshot, or returns the latest exact stale snapshot when OpenAlex fails. A bounded 64-stripe coordinator rechecks the exact cache inside the same-instance critical section before provider access and persistence, so concurrent ordinary misses for the same fingerprint share the leader's new snapshot. Explicit forced refreshes retain their provider-fetch semantics after waiting. This coordination is intentionally JVM-local; multi-instance duplicate suppression would require a distributed lease or database protocol. Responses expose `searchedAt`, `freshUntil`, cache disposition, and provider coverage. A web continuation posts the current snapshot ID; the server reconstructs its persisted criteria and searches with only the stored opaque next cursor changed, producing another independently cacheable immutable snapshot. Related-topic local/full-text/vector reuse and coverage-based provider fan-out remain planned.
 
 ## Provider adapters
 
@@ -100,9 +100,10 @@ Implemented resilience:
 - bounded provider response bodies;
 - upstream `429`/retry metadata translation;
 - exact search caching/stale fallback;
+- bounded same-instance coordination for identical ordinary searches;
 - isolation of Unpaywall and arXiv access-provider outcomes.
 
-Limited retries, exponential backoff with jitter, provider concurrency budgets, circuit breakers, bulkheads, identical-request coalescing, and multi-provider search partial results remain planned.
+Limited retries, exponential backoff with jitter, provider concurrency budgets, circuit breakers, bulkheads, cross-instance request coalescing, and multi-provider search partial results remain planned.
 
 ## Canonicalization and deduplication
 

@@ -146,6 +146,10 @@ class SearchSnapshotEntity {
 		return fingerprint;
 	}
 
+	Map<String, Object> filters() {
+		return filters;
+	}
+
 	Instant searchedAt() {
 		return searchedAt;
 	}

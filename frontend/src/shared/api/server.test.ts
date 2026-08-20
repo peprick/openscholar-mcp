@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BackendContractError,
+  getNextSearchPage,
   getRelatedPapers,
 } from "@/shared/api/server";
-import { relatedPapersResponseFixture, testIds } from "@/test/fixtures";
+import {
+  relatedPapersResponseFixture,
+  searchResponseFixture,
+  testIds,
+} from "@/test/fixtures";
 
 vi.mock("server-only", () => ({}));
 
@@ -69,5 +74,38 @@ describe("getRelatedPapers", () => {
     await expect(
       getRelatedPapers(testIds.paper.toUpperCase()),
     ).resolves.toEqual(relatedPapersResponseFixture());
+  });
+});
+
+describe("getNextSearchPage", () => {
+  it("posts to the current snapshot continuation endpoint", async () => {
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "http://backend.test:8080");
+    const responseBody = {
+      ...searchResponseFixture(),
+      searchId: "14a97a49-9203-4871-9924-d8bf4b08dcb4",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 201,
+        headers: {
+          "content-type": "application/json",
+          location: `/api/v1/searches/${responseBody.searchId}`,
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getNextSearchPage(testIds.search)).resolves.toEqual({
+      data: responseBody,
+      status: 201,
+      location: `/api/v1/searches/${responseBody.searchId}`,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL(
+        `/api/v1/searches/${testIds.search}/next`,
+        "http://backend.test:8080",
+      ),
+      expect.objectContaining({ cache: "no-store", method: "POST" }),
+    );
   });
 });

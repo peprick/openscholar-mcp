@@ -12,6 +12,7 @@ import com.openscholar.provider.ResearchProvider;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchNotFoundException;
+import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchUnavailableException;
 import com.openscholar.search.SearchView;
@@ -25,6 +26,7 @@ class SearchOrchestrator implements SearchResearchUseCase {
 	private final QueryFingerprinter fingerprinter;
 	private final SearchSnapshotStore snapshotStore;
 	private final SearchProperties properties;
+	private final SearchRequestCoordinator requestCoordinator;
 	private final Clock clock;
 
 	SearchOrchestrator(
@@ -32,11 +34,13 @@ class SearchOrchestrator implements SearchResearchUseCase {
 			QueryFingerprinter fingerprinter,
 			SearchSnapshotStore snapshotStore,
 			SearchProperties properties,
+			SearchRequestCoordinator requestCoordinator,
 			Clock clock) {
 		this.provider = provider;
 		this.fingerprinter = fingerprinter;
 		this.snapshotStore = snapshotStore;
 		this.properties = properties;
+		this.requestCoordinator = requestCoordinator;
 		this.clock = clock;
 	}
 
@@ -49,7 +53,20 @@ class SearchOrchestrator implements SearchResearchUseCase {
 		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
 			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
 		}
+		return requestCoordinator.execute(
+				fingerprint,
+				() -> searchCoordinated(command, normalizedQuery, fingerprint));
+	}
 
+	private SearchView searchCoordinated(SearchCommand command, String normalizedQuery, String fingerprint) {
+		Instant now = Instant.now(clock);
+		var latest = snapshotStore.findLatest(fingerprint);
+		// A normal caller that waited for an identical request reuses the snapshot just
+		// written by the leader. forceRefresh is an explicit provider-fetch instruction:
+		// it is serialized for same-key safety but intentionally never becomes a cache hit.
+		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
+			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
+		}
 		try {
 			ProviderSearchResult result = provider.search(new ProviderSearchQuery(
 					command.query(),
@@ -85,6 +102,16 @@ class SearchOrchestrator implements SearchResearchUseCase {
 					exception.retryAfter(),
 					exception);
 		}
+	}
+
+	@Override
+	public SearchView next(UUID searchId) {
+		var continuation = snapshotStore.findContinuation(searchId)
+				.orElseThrow(() -> new SearchNotFoundException(searchId));
+		if (!continuation.hasNextPage()) {
+			throw new SearchPageExhaustedException(searchId);
+		}
+		return search(continuation.nextCommand());
 	}
 
 	@Override

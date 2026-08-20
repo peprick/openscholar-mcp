@@ -3,6 +3,7 @@ import { formatInstant, formatInteger } from "@/shared/formatting/display";
 
 import { CacheBadge } from "./cache-badge";
 import { PaperResultCard } from "./paper-result-card";
+import { SearchPagination } from "./search-pagination";
 
 export function SearchResults({
   search,
@@ -58,7 +59,7 @@ export function SearchResults({
         ))}
         {search.nextCursor !== null ? (
           <p>
-            Additional provider results exist. This view preserves the first
+            Additional provider results exist. Continue below to load the next
             immutable page.
           </p>
         ) : null}
@@ -76,6 +77,10 @@ export function SearchResults({
           <p>Try a broader topic, remove a filter, or search another language.</p>
         </section>
       )}
+
+      {search.nextCursor !== null ? (
+        <SearchPagination searchId={search.searchId} />
+      ) : null}
     </>
   );
 }

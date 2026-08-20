@@ -11,6 +11,7 @@ import com.openscholar.library.CollectionNotFoundException;
 import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchNotFoundException;
+import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchUnavailableException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpHeaders;
@@ -85,6 +86,15 @@ public class ApiExceptionHandler {
 				HttpStatus.NOT_FOUND,
 				"SEARCH_NOT_FOUND",
 				"Search not found",
+				exception.getMessage());
+	}
+
+	@ExceptionHandler(SearchPageExhaustedException.class)
+	ProblemDetail handleSearchPageExhausted(SearchPageExhaustedException exception) {
+		return problem(
+				HttpStatus.CONFLICT,
+				"SEARCH_PAGE_EXHAUSTED",
+				"Search page exhausted",
 				exception.getMessage());
 	}
 

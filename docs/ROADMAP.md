@@ -21,12 +21,14 @@ Exit: clean clone starts through documented commands and CI passes.
 
 Estimated effort: 1–2 weeks.
 
-Status: the end-to-end search, immutable result snapshot, and canonical paper-details UI are complete. Operational request budgets, pagination continuity, richer typed publication metadata, and final hardening remain.
+Status: the end-to-end search, immutable result snapshot, cursor-continuation UI, and canonical paper-details UI are complete. Operational request budgets, richer typed publication metadata, and final hardening remain.
 
 - Canonical paper/search domain models and initial Flyway migrations.
 - OpenAlex adapter with rate limits and resilience.
 - Query normalization, fingerprinting, cache policy, normalization, and exact-ID deduplication.
 - Implemented: `POST /api/v1/searches`, immutable snapshots, and canonical paper details with stored provenance/access summary.
+- Implemented: server-derived cursor continuation that preserves the stored query and filters across immutable result pages, with cached replay and an accessible web control.
+- Implemented: bounded, single-instance coordination of identical normal searches with an in-lock cache recheck, preventing concurrent cache misses from duplicating provider calls and snapshots.
 - Implemented: paper-specific credited-name snapshots and publication date/year integrity.
 - Implemented: accessible search/result-detail UI with provenance, ranking rationale, provider coverage, warnings, and cache status.
 

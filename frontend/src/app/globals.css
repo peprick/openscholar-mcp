@@ -2080,6 +2080,18 @@ button:disabled {
   color: var(--ink-faint);
 }
 
+.searchPagination {
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.searchPaginationStatus {
+  color: var(--ink-soft);
+  flex-basis: 100%;
+  min-height: 1.2em;
+  text-align: center;
+}
+
 .collectionHeader .badge {
   margin-top: 5px;
 }

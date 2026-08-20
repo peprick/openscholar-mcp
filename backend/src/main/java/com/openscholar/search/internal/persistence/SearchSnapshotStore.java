@@ -3,14 +3,18 @@ package com.openscholar.search.internal.persistence;
 import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.openscholar.paper.CanonicalPaperCandidate;
+import com.openscholar.paper.DocumentType;
 import com.openscholar.paper.PaperAuthorCandidate;
 import com.openscholar.paper.PaperCatalog;
 import com.openscholar.paper.PaperIdentifier;
@@ -59,6 +63,14 @@ public class SearchSnapshotStore {
 	public Optional<SearchView> findById(UUID searchId) {
 		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
 				.map(snapshot -> toView(snapshot, CacheDisposition.EXACT_HIT));
+	}
+
+	@Transactional(readOnly = true)
+	public Optional<SearchContinuation> findContinuation(UUID searchId) {
+		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
+				.map(snapshot -> new SearchContinuation(
+						snapshot.nextCursor(),
+						hasNextCursor(snapshot.nextCursor()) ? storedCommand(snapshot) : null));
 	}
 
 	@Transactional
@@ -247,6 +259,84 @@ public class SearchSnapshotStore {
 		return filters;
 	}
 
+	private static SearchCommand storedCommand(SearchSnapshotEntity snapshot) {
+		Map<String, Object> filters = snapshot.filters();
+		return new SearchCommand(
+				snapshot.originalQuery(),
+				nullableInteger(filters, "yearFrom"),
+				nullableInteger(filters, "yearTo"),
+				documentTypes(filters.get("documentTypes")),
+				requiredBoolean(filters, "openAccessOnly"),
+				requiredInteger(filters, "minimumCitations"),
+				strings(filters.get("languages"), "languages"),
+				requiredInteger(filters, "pageSize"),
+				requiredString(filters, "cursor"),
+				false);
+	}
+
+	private static Integer nullableInteger(Map<String, Object> values, String key) {
+		Object value = values.get(key);
+		if (value == null) {
+			return null;
+		}
+		if (value instanceof Number number) {
+			return number.intValue();
+		}
+		throw invalidStoredFilter(key);
+	}
+
+	private static int requiredInteger(Map<String, Object> values, String key) {
+		Integer value = nullableInteger(values, key);
+		if (value == null) {
+			throw invalidStoredFilter(key);
+		}
+		return value;
+	}
+
+	private static boolean requiredBoolean(Map<String, Object> values, String key) {
+		Object value = values.get(key);
+		if (value instanceof Boolean booleanValue) {
+			return booleanValue;
+		}
+		throw invalidStoredFilter(key);
+	}
+
+	private static String requiredString(Map<String, Object> values, String key) {
+		Object value = values.get(key);
+		if (value instanceof String stringValue) {
+			return stringValue;
+		}
+		throw invalidStoredFilter(key);
+	}
+
+	private static Set<DocumentType> documentTypes(Object value) {
+		return strings(value, "documentTypes").stream()
+				.map(DocumentType::valueOf)
+				.collect(Collectors.toUnmodifiableSet());
+	}
+
+	private static Set<String> strings(Object value, String key) {
+		if (!(value instanceof Collection<?> collection)) {
+			throw invalidStoredFilter(key);
+		}
+		return collection.stream()
+				.map(item -> {
+					if (item instanceof String stringValue) {
+						return stringValue;
+					}
+					throw invalidStoredFilter(key);
+				})
+				.collect(Collectors.toUnmodifiableSet());
+	}
+
+	private static IllegalStateException invalidStoredFilter(String key) {
+		return new IllegalStateException("Stored search filter is invalid: " + key);
+	}
+
+	private static boolean hasNextCursor(String cursor) {
+		return cursor != null && !cursor.isBlank();
+	}
+
 	private static List<ProviderCoverageView> coverageViews(List<Map<String, Object>> coverage) {
 		return coverage.stream()
 				.map(item -> new ProviderCoverageView(
@@ -292,6 +382,30 @@ public class SearchSnapshotStore {
 
 		public boolean isFreshAt(Instant now) {
 			return now.isBefore(freshUntil);
+		}
+	}
+
+	public record SearchContinuation(String nextCursor, SearchCommand currentCommand) {
+
+		public boolean hasNextPage() {
+			return hasNextCursor(nextCursor);
+		}
+
+		public SearchCommand nextCommand() {
+			if (!hasNextPage() || currentCommand == null) {
+				throw new IllegalStateException("Search continuation is exhausted");
+			}
+			return new SearchCommand(
+					currentCommand.query(),
+					currentCommand.yearFrom(),
+					currentCommand.yearTo(),
+					currentCommand.documentTypes(),
+					currentCommand.openAccessOnly(),
+					currentCommand.minimumCitations(),
+					currentCommand.languages(),
+					currentCommand.pageSize(),
+					nextCursor,
+					false);
 		}
 	}
 

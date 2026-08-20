@@ -27,17 +27,25 @@ public class SearchController {
 
 	@PostMapping
 	public ResponseEntity<SearchResponse> create(@Valid @RequestBody CreateSearchRequest request) {
-		SearchView view = searchUseCase.search(request.toCommand());
+		return searchResponse(searchUseCase.search(request.toCommand()));
+	}
+
+	@PostMapping("/{searchId}/next")
+	public ResponseEntity<SearchResponse> next(@PathVariable UUID searchId) {
+		return searchResponse(searchUseCase.next(searchId));
+	}
+
+	@GetMapping("/{searchId}")
+	public SearchResponse get(@PathVariable UUID searchId) {
+		return SearchApiMapper.toResponse(searchUseCase.get(searchId));
+	}
+
+	private static ResponseEntity<SearchResponse> searchResponse(SearchView view) {
 		SearchResponse response = SearchApiMapper.toResponse(view);
 		if (view.cacheDisposition() == CacheDisposition.EXACT_HIT
 				|| view.cacheDisposition() == CacheDisposition.STALE_FALLBACK) {
 			return ResponseEntity.ok(response);
 		}
 		return ResponseEntity.created(URI.create("/api/v1/searches/" + view.searchId())).body(response);
-	}
-
-	@GetMapping("/{searchId}")
-	public SearchResponse get(@PathVariable UUID searchId) {
-		return SearchApiMapper.toResponse(searchUseCase.get(searchId));
 	}
 }

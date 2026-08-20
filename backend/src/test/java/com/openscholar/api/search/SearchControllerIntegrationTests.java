@@ -15,7 +15,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -183,6 +185,95 @@ class SearchControllerIntegrationTests {
 				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 	}
 
+	@Test
+	void continuesFromStoredCriteriaAndReusesTheCachedNextPage() throws Exception {
+		String query = "stored continuation " + UUID.randomUUID();
+		provider.returnNextCursor("opaque-cursor-token==");
+		String firstResponse = mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "query": "%s",
+								  "filters": {
+								    "yearFrom": 2019,
+								    "yearTo": 2024,
+								    "documentTypes": ["ARTICLE", "THESIS"],
+								    "openAccessOnly": true,
+								    "minimumCitations": 7,
+								    "languages": ["EN", "fr"]
+								  },
+								  "pageSize": 7,
+								  "forceRefresh": true
+								}
+								""".formatted(query)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.nextCursor").value("opaque-cursor-token=="))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String firstSearchId = JsonPath.read(firstResponse, "$.searchId");
+		String firstFingerprint = JsonPath.read(firstResponse, "$.queryFingerprint");
+
+		provider.returnNextCursor(null);
+		String nextResponse = mockMvc.perform(post("/api/v1/searches/{searchId}/next", firstSearchId))
+				.andExpect(status().isCreated())
+				.andExpect(header().string("Location", org.hamcrest.Matchers.startsWith("/api/v1/searches/")))
+				.andExpect(jsonPath("$.cacheDisposition").value("MISS_FETCHED"))
+				.andExpect(jsonPath("$.nextCursor").value(org.hamcrest.Matchers.nullValue()))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String nextSearchId = JsonPath.read(nextResponse, "$.searchId");
+		String nextFingerprint = JsonPath.read(nextResponse, "$.queryFingerprint");
+
+		org.assertj.core.api.Assertions.assertThat(nextSearchId).isNotEqualTo(firstSearchId);
+		org.assertj.core.api.Assertions.assertThat(nextFingerprint).isNotEqualTo(firstFingerprint);
+		org.assertj.core.api.Assertions.assertThat(provider.queries()).hasSize(2);
+		org.assertj.core.api.Assertions.assertThat(provider.queries().get(0).cursor()).isEqualTo("*");
+		org.assertj.core.api.Assertions.assertThat(provider.queries().get(1)).satisfies(continued -> {
+			org.assertj.core.api.Assertions.assertThat(continued.query()).isEqualTo(query);
+			org.assertj.core.api.Assertions.assertThat(continued.yearFrom()).isEqualTo(2019);
+			org.assertj.core.api.Assertions.assertThat(continued.yearTo()).isEqualTo(2024);
+			org.assertj.core.api.Assertions.assertThat(continued.documentTypes())
+					.containsExactlyInAnyOrder(DocumentType.ARTICLE, DocumentType.THESIS);
+			org.assertj.core.api.Assertions.assertThat(continued.openAccessOnly()).isTrue();
+			org.assertj.core.api.Assertions.assertThat(continued.minimumCitations()).isEqualTo(7);
+			org.assertj.core.api.Assertions.assertThat(continued.languages())
+					.containsExactlyInAnyOrder("en", "fr");
+			org.assertj.core.api.Assertions.assertThat(continued.pageSize()).isEqualTo(7);
+			org.assertj.core.api.Assertions.assertThat(continued.cursor()).isEqualTo("opaque-cursor-token==");
+		});
+
+		mockMvc.perform(post("/api/v1/searches/{searchId}/next", firstSearchId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.searchId").value(nextSearchId))
+				.andExpect(jsonPath("$.cacheDisposition").value("EXACT_HIT"));
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isEqualTo(2);
+	}
+
+	@Test
+	void rejectsMissingAndExhaustedSearchContinuations() throws Exception {
+		provider.returnNextCursor(null);
+		String response = mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request("exhausted continuation " + UUID.randomUUID(), false)))
+				.andExpect(status().isCreated())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String exhaustedSearchId = JsonPath.read(response, "$.searchId");
+
+		mockMvc.perform(post("/api/v1/searches/{searchId}/next", exhaustedSearchId))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("SEARCH_PAGE_EXHAUSTED"))
+				.andExpect(jsonPath("$.title").value("Search page exhausted"));
+
+		mockMvc.perform(post("/api/v1/searches/{searchId}/next", UUID.randomUUID()))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("SEARCH_NOT_FOUND"));
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isEqualTo(1);
+	}
+
 	private static String request(String query, boolean forceRefresh) {
 		return """
 				{
@@ -222,10 +313,12 @@ class SearchControllerIntegrationTests {
 		private final MutableClock clock;
 		private final AtomicInteger calls = new AtomicInteger();
 		private final AtomicBoolean failing = new AtomicBoolean();
+		private final List<ProviderSearchQuery> queries = new CopyOnWriteArrayList<>();
 		private String recordId;
 		private String doi;
 		private String arxivId;
 		private String title;
+		private String nextCursor;
 
 		FakeResearchProvider(MutableClock clock) {
 			this.clock = clock;
@@ -239,6 +332,7 @@ class SearchControllerIntegrationTests {
 		@Override
 		public ProviderSearchResult search(ProviderSearchQuery query) {
 			calls.incrementAndGet();
+			queries.add(query);
 			if (failing.get()) {
 				throw new ProviderException(
 						ProviderId.OPENALEX,
@@ -270,17 +364,19 @@ class SearchControllerIntegrationTests {
 					retrievedAt.minus(Duration.ofDays(1)),
 					Map.of("oaStatus", "gold"));
 			return new ProviderSearchResult(
-					ProviderId.OPENALEX, List.of(record), 42, "next-cursor", retrievedAt);
+					ProviderId.OPENALEX, List.of(record), 42, nextCursor, retrievedAt);
 		}
 
 		void reset() {
 			calls.set(0);
 			failing.set(false);
+			queries.clear();
 			String suffix = UUID.randomUUID().toString().replace("-", "");
 			recordId = "W" + suffix;
 			doi = "10.1000/openscholar." + suffix;
 			arxivId = "2501.%05d".formatted(ARXIV_SEQUENCE.incrementAndGet());
 			title = "A useful OpenAlex paper";
+			nextCursor = "next-cursor";
 		}
 
 		void fail() {
@@ -289,6 +385,14 @@ class SearchControllerIntegrationTests {
 
 		int calls() {
 			return calls.get();
+		}
+
+		List<ProviderSearchQuery> queries() {
+			return List.copyOf(queries);
+		}
+
+		void returnNextCursor(String value) {
+			nextCursor = value;
 		}
 
 		void changeTitle(String value) {

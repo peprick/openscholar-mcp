@@ -185,6 +185,17 @@ export async function getSearch(searchId: string): Promise<SearchResponse> {
   )).data;
 }
 
+export async function getNextSearchPage(
+  searchId: string,
+): Promise<{ data: SearchResponse; status: number; location: string | null }> {
+  return requestJson(
+    `/api/v1/searches/${encodeURIComponent(searchId)}/next`,
+    searchResponseSchema,
+    "next search page",
+    { method: "POST" },
+  );
+}
+
 export async function getPaperDetails(
   paperId: string,
 ): Promise<PaperDetailsResponse> {
