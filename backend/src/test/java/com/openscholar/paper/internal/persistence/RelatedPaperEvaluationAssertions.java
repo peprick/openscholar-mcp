@@ -178,7 +178,7 @@ final class RelatedPaperEvaluationAssertions {
 			String sourceKey,
 			int cutoff,
 			double semanticWeight) {
-		assertThat(ranked).isNotEmpty().hasSizeLessThanOrEqualTo(cutoff);
+		assertThat(ranked).hasSizeLessThanOrEqualTo(cutoff);
 		assertThat(ranked).extracting(RelatedPaperHybridScorer.HybridRankedPaper::paperKey)
 				.doesNotContain(sourceKey)
 				.doesNotHaveDuplicates();

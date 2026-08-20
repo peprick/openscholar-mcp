@@ -1,6 +1,7 @@
 package com.openscholar.paper.internal.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,5 +56,19 @@ class RelatedPaperHybridScorerTests {
 				.containsExactly(0.5d, 0.5d);
 		assertThat(RelatedPaperHybridScorer.boundedCosineScore(-2.0d)).isZero();
 		assertThat(RelatedPaperHybridScorer.boundedCosineScore(2.0d)).isEqualTo(1.0d);
+	}
+
+	@Test
+	void permitsAnEmptyLexicalControlWhenNoCandidateMatchesLexically() {
+		List<RelatedPaperHybridScorer.HybridCandidateFeatures> candidates = List.of(
+				new RelatedPaperHybridScorer.HybridCandidateFeatures(
+						"semantic-only", 0.0d, 0.8d, 0.6d, 2, 1));
+
+		List<RelatedPaperHybridScorer.HybridRankedPaper> lexical =
+				RelatedPaperHybridScorer.rankHybridCandidates(candidates, 0.0d, 1);
+
+		assertThat(lexical).isEmpty();
+		assertThatCode(() -> RelatedPaperEvaluationAssertions.assertHybridRanking(
+				lexical, "source", 1, 0.0d)).doesNotThrowAnyException();
 	}
 }
