@@ -37,6 +37,10 @@ Live-provider tests run manually or on a scheduled, strictly budgeted workflowâ€
 
 The Ollama adapter is exercised through a mock HTTP server with synthetic inputs and vectors. Normal tests do not require an Ollama process, download the 639 MB model, call `/api/pull`, or send scholarly metadata to a hosted provider.
 
+An opt-in Testcontainers evaluation runs the synthetic 18-paper fixture through the real pinned Ollama adapter, performs a complete backfill in an ephemeral PostgreSQL/pgvector database, and measures stable exact cosine neighbors. It is enabled only by `RUN_OLLAMA_VECTOR_EVALUATION=true`; the operator must separately enable the adapter, attest local-only Ollama configuration, and supply the exact full model digest. The gate records Recall@K, nDCG@K, Precision@1, and MRR and is skipped in ordinary CI. It does not enable the application backfill runner, touch a development database, pull a model, or test HNSW.
+
+That manual run also reports an exploratory in-sample hybrid sensitivity sweep over the complete 17-candidate fixture pool. The lexical component is the returned `ts_rank_cd(..., 32)` score, the semantic component is `(cosine + 1) / 2`, and weights `0`, `0.25`, `0.50`, `0.75`, and `1` are all reported. Judgments are applied only after ranking. Endpoint equivalence, repeated component reads, bounded features, deterministic ties, and source/duplicate exclusion are structural gates; no mixed-weight quality floor or product default is selected without independently authored held-out query groups.
+
 ## MCP tests
 
 - Implemented: direct adapter tests for defaults, bounds, result mapping, database-only behavior, stable errors, and safe unexpected failures.
@@ -74,7 +78,7 @@ Version small metadata-only cases for:
 
 Expected canonical clusters and top-result ranges are preferred over brittle total ordering.
 
-The versioned `related-metadata-baseline-v1.json` corpus contains only synthetic metadata and graded `0..3` relevance judgments. Its related-paper evaluation records Recall@K, nDCG@K, Precision@1, and mean-reciprocal-rank floors; it retains recent uncited work, a DOI-less thesis, Spanish metadata, incomplete metadata, and deliberately difficult cross-domain negatives. Exact `ts_rank_cd` decimals and exact total ordering are not test contracts.
+The versioned `related-metadata-baseline-v1.json` corpus contains only synthetic metadata and graded `0..3` relevance judgments. Its related-paper evaluations record lexical and exact-vector Recall@K, nDCG@K, Precision@1, and mean-reciprocal-rank floors plus a non-gating hybrid sensitivity sweep; it retains recent uncited work, a DOI-less thesis, Spanish metadata, incomplete metadata, and deliberately difficult cross-domain negatives. Exact score decimals and exact total ordering are not test contracts.
 
 ## Performance tests
 

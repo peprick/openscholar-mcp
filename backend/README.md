@@ -187,6 +187,21 @@ Leave `EMBEDDING_BACKFILL_PROFILE_KEY` empty when Ollama is the sole enabled gen
 
 Maintenance mode requires `spring.main.web-application-type=none`; startup fails if backfill is enabled in a web application. This command performs generation only. `GET /api/v1/papers/{paperId}/related` never invokes Ollama and continues to return lexical results while semantic ranking remains under evaluation.
 
+### Evaluate exact vector and hybrid quality
+
+After completing the same local-only checks and installing the exact model, run the gated relevance evaluation against an ephemeral Testcontainers database:
+
+```bash
+RUN_OLLAMA_VECTOR_EVALUATION=true \
+SPRING_DOCKER_COMPOSE_ENABLED=false \
+OLLAMA_EMBEDDING_ENABLED=true \
+OLLAMA_LOCAL_ONLY_CONFIRMED=true \
+OLLAMA_QWEN3_EMBEDDING_DIGEST='replace-with-the-full-64-character-digest' \
+./mvnw -Dtest=MetadataFullTextSearchEvaluationTests test
+```
+
+Do not set `EMBEDDING_BACKFILL_ENABLED` for this test. The evaluation creates 18 synthetic papers, invokes the backfill use case programmatically, measures exact vector-only retrieval twice for stability, reports a five-weight exploratory lexical/vector sensitivity sweep, and then discards the Testcontainer. The sweep is evidence only; it neither selects a production hybrid weight nor changes the live lexical endpoint. Without `RUN_OLLAMA_VECTOR_EVALUATION=true`, the real-model method is skipped and the normal lexical evaluation still runs. The pinned baselines, formulas, caveats, and current quality floors are recorded in the [search-quality document](../docs/SEARCH_QUALITY.md).
+
 ## Legal-access behavior
 
 Access candidates are accepted only from configured providers. Each redirect hop must remain on an absolute HTTPS URL with no credentials, fragment, or non-default port, and DNS must resolve exclusively to public addresses. PDF candidates receive only a bounded range probe and must report `application/pdf` or begin with `%PDF-`; landing pages use `HEAD` with a bounded `GET` fallback when `HEAD` is unsupported.

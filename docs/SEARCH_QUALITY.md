@@ -76,7 +76,7 @@ Abstract: <abstract or empty>
 
 Each field is stripped, CRLF/CR becomes LF, and text is normalized to Unicode NFC. The lowercase SHA-256 checksum covers the exact rendered UTF-8. Inputs above 24 KiB are rejected rather than truncated, and title/abstract updates delete the paper's stored embeddings. This makes source changes observable and prevents a silently truncated input from masquerading as the same embedding version.
 
-The implemented runtime profile uses a full-digest-pinned [`Qwen3-Embedding-0.6B`](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) artifact through exactly Ollama `0.31.1`, with native 1024-dimensional output and cosine distance. Its profile key and model revision include both the complete digest and runtime version. As verified on 2026-08-19, the explicit Ollama `qwen3-embedding:0.6b` tag identified a 639 MB Q8_0 artifact, while the bare/`latest` alias selected the 8B model and was not acceptable provenance. OpenScholar does not pull the model, accept a short digest, or contact Ollama unless the adapter and one bounded backfill invocation are explicitly enabled. Requests are restricted to a numeric loopback address, bypass system proxies, reject redirects, and cap responses; the operator must also confirm that `OLLAMA_NO_CLOUD=1` is active on the Ollama server. The Qwen technical report and model card show promising multilingual retrieval, but those published results do not establish the quality of the quantized Ollama artifact on this fixture. Local inference avoids a per-token bill while still consuming local compute, memory, download, and maintenance resources.
+The implemented runtime profile uses a full-digest-pinned [`Qwen3-Embedding-0.6B`](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) artifact through exactly Ollama `0.31.1`, with native 1024-dimensional output and cosine distance. Its profile key and model revision include both the complete digest and runtime version. As verified on 2026-08-20, the explicit Ollama `qwen3-embedding:0.6b` tag identified a 639 MB Q8_0 artifact, while the bare/`latest` alias selected the 8B model and was not acceptable provenance. OpenScholar does not pull the model, accept a short digest, or contact Ollama unless the adapter and one bounded backfill invocation are explicitly enabled. Requests are restricted to a numeric loopback address, bypass system proxies, reject redirects, and cap responses; the operator must also confirm that `OLLAMA_NO_CLOUD=1` is active on the Ollama server. The Qwen technical report and model card show promising multilingual retrieval, but those published results alone do not establish the quality of the quantized Ollama artifact on this fixture. Local inference avoids a per-token bill while still consuming local compute, memory, download, and maintenance resources.
 
 OpenAI [`text-embedding-3-large`](https://developers.openai.com/api/docs/models/text-embedding-3-large), explicitly shortened to 1024 dimensions, is reserved for opt-in evaluation. It is not a runtime default or automatic failover, and its vectors are a separate space even though the dimension matches. As checked on 2026-08-19, OpenAI lists USD 0.13 per million input tokens. API data is not used for training by default, but standard abuse-monitoring logs may retain content for up to 30 days unless an eligible account has modified or zero data retention. Hosted aliases also require canary/drift evidence before their output is treated as an immutable profile.
 
@@ -86,15 +86,45 @@ Embedding generation and refresh must occur outside `GET /api/v1/papers/{paperId
 
 The selected Qwen model supports instructed query embeddings, but related-paper v1 will first measure symmetric stored document vectors. A separate precomputed query content kind is justified only if it materially improves the fixture enough to offset doubled generation/storage. On-demand query inference is not compatible with the database-only endpoint decision.
 
+## Measured exact-vector baseline
+
+Measured on 2026-08-20 with the same 18-paper synthetic fixture, PostgreSQL 17/pgvector exact cosine lookup, Ollama `0.31.1`, and `qwen3-embedding:0.6b` digest `ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d`. The resulting immutable profile is `paper-semantic-v1-ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d-ollama-0-31-1`.
+
+| Query group | Cutoff | Recall@K | nDCG@K | Precision@1 | Reciprocal rank |
+|---|---:|---:|---:|---:|---:|
+| Clinical multi-agent RL | 5 | 1.000 | 0.834 | 1.000 | 1.000 |
+| Rare-disease graph learning | 5 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Maternal-health causal inference | 5 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Spanish clinical ML | 3 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Incomplete metadata | 3 | 1.000 | 0.834 | 1.000 | 1.000 |
+| **Macro exact vector** | — | **1.000** | **0.934** | **1.000** | **1.000** |
+| **Macro lexical baseline** | — | **1.000** | **0.857** | **0.600** | **0.800** |
+
+On this fixture, exact vector-only retrieval preserves macro recall, raises macro nDCG by `0.077`, and raises both Precision@1 and MRR. It improves the two lexical adversarial groups, but lowers incomplete-metadata nDCG from `1.000` to `0.834`; this is evidence for a measured hybrid, not permission to replace the live lexical endpoint.
+
+The opt-in regression gate requires per-query vector Recall@K of at least `0.90`, per-query vector nDCG@K of at least `0.80`, macro Recall of at least `0.95`, macro nDCG of at least `0.90`, macro Precision@1 of at least `0.80`, and MRR of at least `0.90`. It also requires a complete 18-row backfill and stable repeated exact-neighbor results. These numbers describe one small synthetic corpus and one pinned local artifact; they are not a claim about production relevance, approximate-index recall, latency, or a broader scholarly corpus.
+
+## Exploratory hybrid sensitivity sweep
+
+The same opt-in run performs a label-independent score interpolation over all 17 non-seed fixture papers. It uses the PostgreSQL score already returned by `ts_rank_cd(..., 32)` as `L` (or `0` for no lexical match), maps cosine to `V = clamp((cosine + 1) / 2, 0, 1)`, and computes `H = (1 - w)L + wV`. The five weights were fixed before the corrected run; relevance judgments affect metrics only, never candidate selection, scaling, scoring, or tie-breaking.
+
+| Semantic weight `w` | Clinical nDCG | Rare-disease nDCG | Maternal nDCG | Spanish nDCG | Incomplete nDCG | Macro Recall | Macro nDCG | Precision@1 | MRR |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.00 (lexical control) | 0.665 | 0.956 | 0.665 | 1.000 | 1.000 | 1.000 | 0.857 | 0.600 | 0.800 |
+| 0.25 | 0.665 | 1.000 | 0.956 | 1.000 | 1.000 | 1.000 | 0.924 | 0.800 | 0.900 |
+| 0.50 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| 0.75 | 0.834 | 1.000 | 1.000 | 1.000 | 0.834 | 1.000 | 0.934 | 1.000 | 1.000 |
+| 1.00 (vector control) | 0.834 | 1.000 | 1.000 | 1.000 | 0.834 | 1.000 | 0.934 | 1.000 | 1.000 |
+
+Weight `0.50` has the highest observed in-sample metrics on these five synthetic query groups. It is not an optimal, validated, or selected product weight. The same fixture has already informed lexical and vector decisions, there is no held-out query group, unjudged papers are treated as grade zero in this closed corpus, and model-training overlap cannot be established. No hybrid quality floor or runtime default is created. A production candidate needs a larger independently authored fixture, whole query groups held out, and a weight frozen before the holdout is scored.
+
 ## Remaining evaluation gates
 
 Candidate work includes:
 
 - compare `english`, `simple`, and language-aware lexical configurations;
-- run the opt-in backfill over the synthetic corpus and record a reproducible exact-vector baseline without making ordinary CI download a model;
-- measure exact vector-only results through the implemented store before adding approximate indexing;
+- expand the relevance corpus and freeze a hybrid transform/weight before scoring held-out query groups;
 - compare HNSW against exact neighbors with an explicit ANN-recall and latency gate;
-- calibrate lexical and cosine scores before hybrid fusion;
 - record feature-level reasons and persist them if hybrid results enter immutable search snapshots;
 - bump the search pipeline/fingerprint version before blending local retrieval into provider-backed topic search.
 
