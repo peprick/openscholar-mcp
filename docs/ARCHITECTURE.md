@@ -92,18 +92,18 @@ interface ResearchProvider {
 }
 ```
 
-The current OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. Its configurable 8 MiB default limit is enforced while the body is streamed and before JSON deserialization; responses that exceed it fail as non-retryable `OPENALEX_RESPONSE_TOO_LARGE`. It returns provider records and never writes directly to canonical paper tables. Unpaywall and arXiv are separate exact-identifier clients inside access resolution.
+The current OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. Its configurable 10-second default whole-exchange deadline covers request transmission, response headers, and streamed response-body consumption. Its configurable 8 MiB default limit is enforced while the body is streamed and before JSON deserialization; responses that exceed it fail as non-retryable `OPENALEX_RESPONSE_TOO_LARGE`. The deadline is an outbound-provider boundary: it does not include local coordination waits, database or persistence work, final REST/MCP response serialization, or the REST/MCP request as a whole. The adapter returns provider records and never writes directly to canonical paper tables. Unpaywall and arXiv are separate exact-identifier clients inside access resolution.
 
 Implemented resilience:
 
-- connection and response timeouts;
+- a configurable OpenAlex whole-exchange deadline plus bounded access-provider timeouts;
 - bounded provider response bodies;
 - upstream `429`/retry metadata translation;
 - exact search caching/stale fallback;
 - bounded same-instance coordination for identical ordinary searches;
 - isolation of Unpaywall and arXiv access-provider outcomes.
 
-Limited retries, exponential backoff with jitter, provider concurrency budgets, circuit breakers, bulkheads, cross-instance request coalescing, and multi-provider search partial results remain planned.
+Limited retries, exponential backoff with jitter, provider concurrency budgets, circuit breakers, bulkheads, bounded coordination waits, cross-instance request coalescing, global REST/MCP cancellation propagation, and multi-provider search partial results remain planned.
 
 ## Canonicalization and deduplication
 
@@ -146,7 +146,7 @@ The related-paper endpoint remains database-only. Future vector/hybrid reads may
 
 The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spring AI WebMVC starter. Five annotation-registered, read-oriented handlers delegate to the same application services used by REST. WebMVC plus Java 21 virtual threads fits the blocking JPA path.
 
-Stateless mode suits the MVP's bounded request/response tools and horizontal scaling. Search is the only initial MCP tool allowed to contact an external provider; legal-access retrieval is stored-only so it cannot overrun the interactive transport deadline. Longer operations will return owned job handles (`start_research_job`, `get_research_job`) rather than holding sessions. Stateful Streamable HTTP is a later option if progress, elicitation, or server-to-client features become essential. STDIO may be added as a local profile; deprecated HTTP+SSE is not a target.
+Stateless mode suits the MVP's bounded request/response tools and horizontal scaling. Search is the only initial MCP tool allowed to contact an external provider; legal-access retrieval is stored-only. The configured `spring.ai.mcp.server.request-timeout` is 20 seconds, but the stateless MCP Java SDK 2.0 path does not currently enforce it as whole-tool cancellation. OpenAlex's separate 10-second outbound exchange deadline therefore protects only that provider call; whole-tool cancellation propagation and a bounded search-coordination wait remain follow-ups. Longer operations will return owned job handles (`start_research_job`, `get_research_job`) rather than holding sessions. Stateful Streamable HTTP is a later option if progress, elicitation, or server-to-client features become essential. STDIO may be added as a local profile; deprecated HTTP+SSE is not a target.
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions through `2025-11-25`. OpenScholar records `2025-11-25` as its maximum tested revision and does not hand-build newer Tasks/Apps features before official Java/Spring support exists.
 

@@ -67,13 +67,14 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 - Cached search p95: under 500 ms on the local stack.
 - First uncached partial results: under 4 seconds when at least one provider is healthy.
-- Full provider fan-out deadline: 10 seconds by default.
+- OpenAlex outbound HTTP exchange deadline: 10 seconds by default, covering request transmission, response headers, and response-body consumption.
+- Full multi-provider fan-out target: 10 seconds by default; end-to-end REST/MCP deadlines remain planned.
 - Cached paper detail p95: under 300 ms.
 
 ### Reliability
 
 - One provider failure must not discard successful results from other providers.
-- Every outbound request has a timeout. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; bounded retries and general per-provider budgets remain planned.
+- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination waits, database or persistence work, final response serialization, or the REST/MCP operation as a whole. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; bounded coordination, global cancellation propagation, bounded retries, and general per-provider budgets remain planned.
 - Failed jobs are retryable and visible to maintainers.
 - Search persistence is idempotent.
 

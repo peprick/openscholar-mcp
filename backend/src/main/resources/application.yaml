@@ -105,7 +105,7 @@ openscholar:
       base-url: ${OPENALEX_BASE_URL:https://api.openalex.org}
       api-key: ${OPENALEX_API_KEY:}
       connect-timeout: 3s
-      read-timeout: 15s
+      request-timeout: ${OPENALEX_REQUEST_TIMEOUT:${OPENALEX_READ_TIMEOUT:${openscholar.providers.openalex.read-timeout:10s}}}
       max-response-bytes: ${OPENALEX_MAX_RESPONSE_BYTES:8388608}
   search:
     cache-ttl: 24h

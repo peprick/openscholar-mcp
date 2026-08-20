@@ -136,7 +136,7 @@ OpenAlex permits limited keyless trials, but a free API key provides a larger da
 OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
 ```
 
-OpenAlex response bodies are capped at 8 MiB before JSON deserialization. Override that positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the selected fields or bounded page size require it.
+OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
 
 Unpaywall's exact DOI endpoint requires a contact email. The application can start without one, but Unpaywall then reports `NOT_CONFIGURED`; arXiv resolution remains available for papers with an arXiv ID. Configure a backend-owned address, never an end-user address:
 

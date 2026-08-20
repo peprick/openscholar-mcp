@@ -374,6 +374,22 @@ class OpenAlexResearchProviderTests {
 		harness.server().verify();
 	}
 
+	@Test
+	void doesNotClassifyAnArbitraryClosedConnectionAsATimeout() {
+		Harness harness = harness(null);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(request -> {
+					throw new java.io.IOException("closed");
+				});
+
+		assertThatThrownBy(() -> harness.provider().search(minimalQuery()))
+				.isInstanceOfSatisfying(ProviderException.class, exception -> {
+					assertThat(exception.errorCode()).isEqualTo(OpenAlexResearchProvider.UNAVAILABLE);
+					assertThat(exception.retryable()).isTrue();
+				});
+		harness.server().verify();
+	}
+
 	private static Harness harness(String apiKey) {
 		return harness(apiKey, 8 * 1024 * 1024);
 	}

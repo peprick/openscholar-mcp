@@ -125,7 +125,7 @@ The implemented transport is stateless Streamable HTTP through `spring-ai-starte
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Every request requires the configured local bearer key; present `Origin` headers must exactly match the configured allow-list.
 
-The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. Its OpenAlex exchange has a configurable 10-second default deadline covering request transmission, response headers, and streamed response-body consumption. That provider deadline does not include local coordination, database or persistence work, final response serialization, or the full MCP call. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
@@ -200,9 +200,10 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 - Tool descriptions state side effects/access constraints.
 - External document text is never interpreted as tool instructions.
 - Implemented local MCP limits per server-observed remote address; hosted mode adds aggregate and authenticated-principal limits.
-- arXiv has an implemented three-second outbound request gate. OpenAlex and Unpaywall use bounded timeouts and propagate upstream rate-limit information; broader per-provider budgets remain planned.
+- arXiv has an implemented three-second outbound request gate. OpenAlex uses a configurable 10-second whole-exchange deadline, and Unpaywall uses bounded timeouts; both propagate applicable upstream rate-limit information. Broader per-provider budgets remain planned.
 - Every protected MCP response carries a request ID that is also placed in logging context.
-- Transport-level deadlines and cancellation propagation remain a compatibility follow-up.
+- The configured `spring.ai.mcp.server.request-timeout` is 20 seconds, but the stateless MCP Java SDK 2.0 path does not currently enforce it as whole-tool cancellation.
+- End-to-end REST/MCP deadline enforcement, global cancellation propagation, and bounded coordination waits remain follow-ups.
 - Tool failures use safe text with stable prefixes such as `INVALID_REQUEST`, `PAPER_NOT_FOUND`, and provider-unavailable codes. Restricted access is a successful access status; dedicated structured tool-error and deadline-exceeded contracts remain planned.
 
 ## Compatibility testing

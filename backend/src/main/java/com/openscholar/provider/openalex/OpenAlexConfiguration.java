@@ -25,9 +25,10 @@ class OpenAlexConfiguration {
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.build();
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-		requestFactory.setReadTimeout(properties.readTimeout());
+		requestFactory.setReadTimeout(properties.requestTimeout());
 
 		return configure(builder.clone(), properties)
+				.requestInterceptor(new OpenAlexRequestDeadline(properties.requestTimeout()))
 				.requestFactory(requestFactory)
 				.build();
 	}

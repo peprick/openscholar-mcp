@@ -31,7 +31,7 @@ Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyw
 
 ## Provider contract tests
 
-Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases. OpenAlex additionally verifies exact-limit acceptance and non-retryable rejection of oversized bodies with declared or unknown content lengths.
+Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases. OpenAlex additionally verifies exact-limit acceptance and non-retryable rejection of oversized bodies with declared or unknown content lengths. Latch-driven real-transport tests use a loopback JDK HTTP server to stall once before response headers and once after a partial chunked body; both assert stable retryable timeout translation and exactly one upstream request, with no automatic retry.
 
 Live-provider tests run manually or on a scheduled, strictly budgeted workflow—not normal pull requests.
 
@@ -55,7 +55,8 @@ The first real-model invocation stopped before complete metrics because a valid 
 - Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios with `--spec-version 2025-11-25`; both pass without warnings through the loopback bearer-injection proxy.
 - Remaining: additional invalid/oversized input and response-size cases.
 - Remaining: access-restricted results and provider partial failure at the MCP wire boundary.
-- Remaining: deadlines, cancellation, and duplicate requests.
+- Current limitation: the configured 20-second MCP request timeout is not enforced as whole-tool cancellation by the stateless MCP Java SDK 2.0 path.
+- Remaining: whole-tool deadlines, global cancellation propagation, bounded coordination waits, and duplicate-request behavior.
 - Hosted follow-up: token audience/scope/principal ownership; local API-key and Origin behavior are already covered.
 - Track the canonical frozen `2025-11-25` requirements set as the official runner advances beyond its current fixture-oriented release.
 

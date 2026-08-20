@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record OpenAlexProperties(
 		@DefaultValue("https://api.openalex.org") URI baseUrl,
 		@DefaultValue("3s") Duration connectTimeout,
-		@DefaultValue("15s") Duration readTimeout,
+		@DefaultValue("10s") Duration requestTimeout,
 		@DefaultValue("8388608") int maxResponseBytes,
 		String apiKey) {
 
@@ -20,7 +20,7 @@ public record OpenAlexProperties(
 	public OpenAlexProperties {
 		baseUrl = requireHttpBaseUrl(baseUrl);
 		connectTimeout = requirePositive(connectTimeout, "connectTimeout");
-		readTimeout = requirePositive(readTimeout, "readTimeout");
+		requestTimeout = requirePositive(requestTimeout, "requestTimeout");
 		if (maxResponseBytes < 1) {
 			throw new IllegalArgumentException("OpenAlex maxResponseBytes must be positive");
 		}

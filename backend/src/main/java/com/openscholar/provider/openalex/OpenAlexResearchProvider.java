@@ -143,6 +143,9 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 			if (ProviderResponseBodyLimit.wasExceeded(exception)) {
 				throw responseTooLarge(exception);
 			}
+			if (hasTimeoutCause(exception)) {
+				throw requestTimedOut(exception);
+			}
 			throw providerException(
 					RESPONSE_ERROR,
 					"OpenAlex returned a response that could not be processed",
@@ -426,12 +429,13 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 
 	private ProviderException translateAccessFailure(ResourceAccessException exception) {
 		boolean timeout = hasTimeoutCause(exception);
-		return providerException(
-				timeout ? TIMEOUT : UNAVAILABLE,
-				timeout ? "OpenAlex request timed out" : "OpenAlex could not be reached",
-				true,
-				null,
-				exception);
+		return timeout
+				? requestTimedOut(exception)
+				: providerException(UNAVAILABLE, "OpenAlex could not be reached", true, null, exception);
+	}
+
+	private ProviderException requestTimedOut(RestClientException exception) {
+		return providerException(TIMEOUT, "OpenAlex request timed out", true, null, exception);
 	}
 
 	private ProviderException providerException(
@@ -467,6 +471,9 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 	}
 
 	private static boolean hasTimeoutCause(Throwable throwable) {
+		if (OpenAlexRequestDeadline.wasExceeded(throwable)) {
+			return true;
+		}
 		for (Throwable current = throwable; current != null; current = current.getCause()) {
 			if (current instanceof SocketTimeoutException
 					|| current instanceof HttpTimeoutException
