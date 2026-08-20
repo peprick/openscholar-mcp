@@ -66,6 +66,7 @@ OPENALEX_API_KEY
 OPENALEX_BASE_URL
 OPENALEX_REQUEST_TIMEOUT
 OPENALEX_MAX_RESPONSE_BYTES
+SEARCH_COORDINATION_WAIT_TIMEOUT
 UNPAYWALL_EMAIL
 UNPAYWALL_BASE_URL
 ARXIV_BASE_URL
@@ -89,6 +90,8 @@ EMBEDDING_BACKFILL_LIMIT
 EMBEDDING_BACKFILL_MAX_ATTEMPTS
 OPENSCHOLAR_API_BASE_URL
 ```
+
+`SEARCH_COORDINATION_WAIT_TIMEOUT` defaults to `12s` and bounds only acquisition of the JVM-local striped search-coordination lock. It does not bound cache reads, provider work after acquisition, persistence, response serialization, or the complete REST/MCP request, and a caller that stops waiting does not cancel the leader already holding the stripe.
 
 The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. OAuth, storage, and monitoring variables arrive only with those features. `.env.example` contains placeholders; `.env` is ignored.
 

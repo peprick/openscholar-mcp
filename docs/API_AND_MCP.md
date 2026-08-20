@@ -117,7 +117,7 @@ Only `health` and `info` are exposed. Health details are never shown, and the Mi
 
 REST uses RFC 9457 Problem Details with a stable error code, safe detail, validation violations, retryability, and optional retry-after. Stack traces and credentials never appear.
 
-The current search slice implements stable validation, not-found, and provider-unavailable codes. Correlation IDs are added with the observability milestone.
+The current search slice implements stable validation, not-found, provider-unavailable, and coordination-failure codes. A caller that cannot acquire its JVM-local coordination stripe within the configurable 12-second default rechecks the latest exact snapshot. A normal caller can reuse a newly fresh snapshot as `EXACT_HIT`; otherwise an available snapshot is returned as `STALE_FALLBACK` with `SEARCH_COORDINATION_TIMEOUT` in `warnings`. If no snapshot exists, REST returns retryable `503 SEARCH_COORDINATION_TIMEOUT` without `Retry-After`. An interrupted wait restores the thread interruption state and returns retryable `503 SEARCH_COORDINATION_INTERRUPTED`, also without `Retry-After`; interruption does not perform the timeout snapshot fallback.
 
 ## MCP transport
 
@@ -125,7 +125,7 @@ The implemented transport is stateless Streamable HTTP through `spring-ai-starte
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Every request requires the configured local bearer key; present `Origin` headers must exactly match the configured allow-list.
 
-The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. Its OpenAlex exchange has a configurable 10-second default deadline covering request transmission, response headers, and streamed response-body consumption. That provider deadline does not include local coordination, database or persistence work, final response serialization, or the full MCP call. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. Its OpenAlex exchange has a configurable 10-second default deadline covering request transmission, response headers, and streamed response-body consumption. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. Neither limit bounds the full MCP call, and the coordination limit does not cover cache reads, provider work after acquisition, persistence, or final response serialization. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
@@ -201,10 +201,11 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 - External document text is never interpreted as tool instructions.
 - Implemented local MCP limits per server-observed remote address; hosted mode adds aggregate and authenticated-principal limits.
 - arXiv has an implemented three-second outbound request gate. OpenAlex uses a configurable 10-second whole-exchange deadline, and Unpaywall uses bounded timeouts; both propagate applicable upstream rate-limit information. Broader per-provider budgets remain planned.
+- Search coordination uses a configurable 12-second lock-acquisition limit. Timing out prevents that follower from invoking duplicate work and does not cancel the leader; snapshot fallback is used when available.
 - Every protected MCP response carries a request ID that is also placed in logging context.
 - The configured `spring.ai.mcp.server.request-timeout` is 20 seconds, but the stateless MCP Java SDK 2.0 path does not currently enforce it as whole-tool cancellation.
-- End-to-end REST/MCP deadline enforcement, global cancellation propagation, and bounded coordination waits remain follow-ups.
-- Tool failures use safe text with stable prefixes such as `INVALID_REQUEST`, `PAPER_NOT_FOUND`, and provider-unavailable codes. Restricted access is a successful access status; dedicated structured tool-error and deadline-exceeded contracts remain planned.
+- End-to-end REST/MCP deadline enforcement and global cancellation propagation remain follow-ups; the coordination limit is not a whole-request deadline.
+- Tool failures use safe text with stable prefixes such as `INVALID_REQUEST`, `PAPER_NOT_FOUND`, `SEARCH_COORDINATION_TIMEOUT`, `SEARCH_COORDINATION_INTERRUPTED`, and provider-unavailable codes. Coordination failures are retryable and carry no guessed retry-after value. Restricted access is a successful access status; dedicated structured tool-error and deadline-exceeded contracts remain planned.
 
 ## Compatibility testing
 

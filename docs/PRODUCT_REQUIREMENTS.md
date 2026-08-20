@@ -68,13 +68,14 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 - Cached search p95: under 500 ms on the local stack.
 - First uncached partial results: under 4 seconds when at least one provider is healthy.
 - OpenAlex outbound HTTP exchange deadline: 10 seconds by default, covering request transmission, response headers, and response-body consumption.
+- Same-instance search-coordination acquisition limit: 12 seconds by default; this is not an end-to-end request target.
 - Full multi-provider fan-out target: 10 seconds by default; end-to-end REST/MCP deadlines remain planned.
 - Cached paper detail p95: under 300 ms.
 
 ### Reliability
 
 - One provider failure must not discard successful results from other providers.
-- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination waits, database or persistence work, final response serialization, or the REST/MCP operation as a whole. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; bounded coordination, global cancellation propagation, bounded retries, and general per-provider budgets remain planned.
+- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination, database or persistence work, final response serialization, or the REST/MCP operation as a whole. Search coordination separately bounds only JVM-local lock acquisition to 12 seconds by default; it neither starts duplicate work after timeout nor cancels the leader. A timed-out caller reuses an exact snapshot when available and otherwise returns retryable `SEARCH_COORDINATION_TIMEOUT`; interruption is reported separately as retryable `SEARCH_COORDINATION_INTERRUPTED`. Both public errors omit `Retry-After` because release timing is unknown. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; global cancellation propagation, whole-request deadlines, bounded retries, and general per-provider budgets remain planned.
 - Failed jobs are retryable and visible to maintainers.
 - Search persistence is idempotent.
 

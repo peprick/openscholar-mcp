@@ -8,6 +8,7 @@
 - Deduplication/conflict resolution.
 - Ranking features and explanations.
 - Cache freshness/coverage.
+- Search-coordinator default/custom/invalid budgets, deterministic acquisition timeout, supplier non-entry, lock reuse, and interruption-state restoration.
 - Access classification.
 - Citation type mapping, identifier normalization, deterministic keys, Unicode, literal authors, and hostile BibTeX escaping.
 - Ordered citation batches, strict size/distinct-ID bounds, and all-or-nothing missing-paper behavior.
@@ -27,7 +28,7 @@
 
 ## Integration tests
 
-Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, deterministic repeat reads, identical-search miss coalescing, distinct-stripe provider concurrency, explicit concurrent force-refresh behavior, immutable embedding profiles, exact cosine storage, source invalidation, missing-vector cursor paging, and PostgreSQL advisory-lock exclusion. Broader concurrent reconciliation and durable job-leasing tests remain later work.
+Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, deterministic repeat reads, identical-search miss coalescing, distinct-stripe provider concurrency, explicit concurrent force-refresh behavior, timeout snapshot rechecks and stale fallback without a duplicate provider call, immutable embedding profiles, exact cosine storage, source invalidation, missing-vector cursor paging, and PostgreSQL advisory-lock exclusion. Broader concurrent reconciliation and durable job-leasing tests remain later work.
 
 ## Provider contract tests
 
@@ -48,6 +49,7 @@ The first real-model invocation stopped before complete metrics because a valid 
 ## MCP tests
 
 - Implemented: direct adapter tests for defaults, bounds, result mapping, database-only behavior, stable errors, and safe unexpected failures.
+- Implemented: safe retryable `SEARCH_COORDINATION_TIMEOUT` and `SEARCH_COORDINATION_INTERRUPTED` tool mappings without nested causes or invented retry-after values.
 - Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, input/output schemas, annotations, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
 - Implemented: successful raw structured calls for all four database-only tools, using a canonical paper created through the search tool where required.
 - Implemented: API-key, duplicate-header, exact-Origin, response-header, and disabled-until-configured security-filter coverage.
@@ -56,7 +58,7 @@ The first real-model invocation stopped before complete metrics because a valid 
 - Remaining: additional invalid/oversized input and response-size cases.
 - Remaining: access-restricted results and provider partial failure at the MCP wire boundary.
 - Current limitation: the configured 20-second MCP request timeout is not enforced as whole-tool cancellation by the stateless MCP Java SDK 2.0 path.
-- Remaining: whole-tool deadlines, global cancellation propagation, bounded coordination waits, and duplicate-request behavior.
+- Remaining: whole-tool deadlines, global cancellation propagation, and duplicate-request behavior at the MCP wire boundary; the local coordination acquisition wait is already bounded and tested.
 - Hosted follow-up: token audience/scope/principal ownership; local API-key and Origin behavior are already covered.
 - Track the canonical frozen `2025-11-25` requirements set as the official runner advances beyond its current fixture-oriented release.
 

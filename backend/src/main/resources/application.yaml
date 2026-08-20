@@ -109,6 +109,7 @@ openscholar:
       max-response-bytes: ${OPENALEX_MAX_RESPONSE_BYTES:8388608}
   search:
     cache-ttl: 24h
+    coordination-wait-timeout: ${SEARCH_COORDINATION_WAIT_TIMEOUT:12s}
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}

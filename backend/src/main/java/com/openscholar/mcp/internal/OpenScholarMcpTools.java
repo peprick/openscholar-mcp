@@ -45,6 +45,8 @@ import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.ProviderCoverageView;
 import com.openscholar.search.RankingReason;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchCoordinationInterruptedException;
+import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchUnavailableException;
@@ -267,6 +269,14 @@ public class OpenScholarMcpTools {
 		}
 		catch (UnsupportedCitationFormatException exception) {
 			throw failure("UNSUPPORTED_CITATION_FORMAT", exception);
+		}
+		catch (SearchCoordinationTimeoutException exception) {
+			throw new SafeMcpToolException("SEARCH_COORDINATION_TIMEOUT: " + exception.getMessage()
+					+ retrySuffix(true, null));
+		}
+		catch (SearchCoordinationInterruptedException exception) {
+			throw new SafeMcpToolException("SEARCH_COORDINATION_INTERRUPTED: " + exception.getMessage()
+					+ retrySuffix(true, null));
 		}
 		catch (SearchUnavailableException exception) {
 			throw new SafeMcpToolException("SEARCH_PROVIDER_UNAVAILABLE: " + exception.getMessage()

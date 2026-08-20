@@ -38,6 +38,8 @@ import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperView;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchCoordinationInterruptedException;
+import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchUnavailableException;
 import com.openscholar.search.SearchView;
@@ -316,6 +318,28 @@ class OpenScholarMcpToolsTests {
 		assertSafeFailure(catchThrowable(
 				() -> tools.searchSavedLibrary(null, COLLECTION_ID, null, null, null, null)),
 				"COLLECTION_NOT_FOUND: Collection not found: " + COLLECTION_ID);
+	}
+
+	@Test
+	void coordinationFailuresExposeSafeRetryablePrefixesWithoutNestedCauseDetails() {
+		SearchCoordinationTimeoutException timeout = new SearchCoordinationTimeoutException();
+		timeout.initCause(new IllegalStateException(NESTED_SECRET));
+		search.failure = timeout;
+
+		Throwable timeoutFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
+				null, null, null, null, null));
+
+		assertSafeFailure(timeoutFailure,
+				"SEARCH_COORDINATION_TIMEOUT: Search coordination wait timed out; retryable=true");
+		assertThat(timeoutFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
+
+		search.failure = new SearchCoordinationInterruptedException(new InterruptedException(NESTED_SECRET));
+		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
+				null, null, null, null, null));
+
+		assertSafeFailure(interruptedFailure,
+				"SEARCH_COORDINATION_INTERRUPTED: Search coordination wait was interrupted; retryable=true");
+		assertThat(interruptedFailure.getMessage()).doesNotContain(NESTED_SECRET, "InterruptedException");
 	}
 
 	@Test

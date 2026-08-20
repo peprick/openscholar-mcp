@@ -28,9 +28,9 @@ Status: the end-to-end search, immutable result snapshot, cursor-continuation UI
 - Query normalization, fingerprinting, cache policy, normalization, and exact-ID deduplication.
 - Implemented: `POST /api/v1/searches`, immutable snapshots, and canonical paper details with stored provenance/access summary.
 - Implemented: server-derived cursor continuation that preserves the stored query and filters across immutable result pages, with cached replay and an accessible web control.
-- Implemented: bounded, single-instance coordination of identical normal searches with an in-lock cache recheck, preventing concurrent cache misses from duplicating provider calls and snapshots.
+- Implemented: bounded, single-instance coordination with an in-lock cache recheck and a configurable 12-second default acquisition limit. A timed-out waiter never invokes duplicate work or cancels the leader; it reuses a newly fresh exact snapshot, falls back to an available stale snapshot with `SEARCH_COORDINATION_TIMEOUT`, or returns the retryable timeout error when no snapshot exists. Interrupted waits preserve their distinct retryable `SEARCH_COORDINATION_INTERRUPTED` contract.
 - Implemented: configurable 8 MiB OpenAlex response-body limit before JSON deserialization, including declared-length and streaming enforcement with a stable non-retryable oversized-response error.
-- Implemented: configurable 10-second OpenAlex whole HTTP exchange deadline from request transmission through response-body consumption, with stable retryable timeout translation. It does not bound coordination waits, database or persistence work, final response serialization, or the full REST/MCP operation.
+- Implemented: configurable 10-second OpenAlex whole HTTP exchange deadline from request transmission through response-body consumption, with stable retryable timeout translation. It is independent of the coordination-acquisition limit and does not bound database or persistence work, final response serialization, or the full REST/MCP operation.
 - Implemented: paper-specific credited-name snapshots and publication date/year integrity.
 - Implemented: accessible search/result-detail UI with provenance, ranking rationale, provider coverage, warnings, and cache status.
 
@@ -76,7 +76,7 @@ Status: complete for the current five-tool local MVP. The Spring AI 2.0 stateles
 - Implemented: stateless Streamable HTTP and five bounded, non-destructive, read-oriented tools. Search is correctly marked non-read-only/non-idempotent because it may fetch and persist cache/catalog data; the other four tools are database-only reads.
 - Deferred post-MVP: job-handle tools if provider breadth creates genuinely long-running searches.
 - Implemented: local API-key security, Origin validation, bounded inbound rate limiting, metrics, and request logging context.
-- Known limitation: the configured 20-second MCP request timeout is not enforced as whole-tool cancellation by the stateless MCP Java SDK 2.0 path; global cancellation propagation remains a follow-up.
+- Known limitation: the configured 20-second MCP request timeout is not enforced as whole-tool cancellation by the stateless MCP Java SDK 2.0 path. The 12-second coordination limit bounds only lock acquisition and does not replace whole-tool deadlines or global cancellation propagation.
 - Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios run with `--spec-version 2025-11-25` through a loopback bearer-injection proxy; both pass without warnings and discover exactly five tools.
 - The fixture-only full conformance suite is intentionally not a production target because it requires synthetic tools/resources/prompts and capabilities OpenScholar does not advertise.
 - Implemented: documented MCP Inspector connection plus live `tools/list` and `search_saved_library` smoke calls.
@@ -109,7 +109,7 @@ Estimated effort: 2 weeks.
 - CORE and one thesis source.
 - PubMed Central or DOAJ based on target audience.
 - Scheduled metadata/access refresh.
-- Job dashboard, retry controls, provider metrics, end-to-end request budgets, bounded coordination waits, and cancellation propagation.
+- Job dashboard, retry controls, provider metrics, end-to-end request budgets, and cancellation propagation.
 - Optional permitted-document storage.
 
 Exit: improved coverage with isolated partial failures.

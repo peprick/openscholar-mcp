@@ -10,6 +10,8 @@ import com.openscholar.citation.UnsupportedCitationFormatException;
 import com.openscholar.library.CollectionNotFoundException;
 import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
+import com.openscholar.search.SearchCoordinationInterruptedException;
+import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchUnavailableException;
@@ -138,6 +140,28 @@ public class ApiExceptionHandler {
 			headers.set(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfter().toSeconds()));
 		}
 		return new ResponseEntity<>(problem, headers, HttpStatus.SERVICE_UNAVAILABLE);
+	}
+
+	@ExceptionHandler(SearchCoordinationTimeoutException.class)
+	ProblemDetail handleSearchCoordinationTimeout(SearchCoordinationTimeoutException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"SEARCH_COORDINATION_TIMEOUT",
+				"Search coordination timed out",
+				"Search coordination did not become available within the configured wait limit.");
+		problem.setProperty("retryable", true);
+		return problem;
+	}
+
+	@ExceptionHandler(SearchCoordinationInterruptedException.class)
+	ProblemDetail handleSearchCoordinationInterrupted(SearchCoordinationInterruptedException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"SEARCH_COORDINATION_INTERRUPTED",
+				"Search coordination interrupted",
+				"Search coordination was interrupted before it became available.");
+		problem.setProperty("retryable", true);
+		return problem;
 	}
 
 	@ExceptionHandler(AccessUnavailableException.class)

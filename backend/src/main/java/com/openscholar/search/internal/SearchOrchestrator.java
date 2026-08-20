@@ -11,6 +11,7 @@ import com.openscholar.provider.ProviderSearchResult;
 import com.openscholar.provider.ResearchProvider;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchResearchUseCase;
@@ -21,6 +22,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 class SearchOrchestrator implements SearchResearchUseCase {
+
+	private static final String COORDINATION_TIMEOUT_WARNING = "SEARCH_COORDINATION_TIMEOUT";
 
 	private final ResearchProvider provider;
 	private final QueryFingerprinter fingerprinter;
@@ -53,9 +56,32 @@ class SearchOrchestrator implements SearchResearchUseCase {
 		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
 			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
 		}
-		return requestCoordinator.execute(
-				fingerprint,
-				() -> searchCoordinated(command, normalizedQuery, fingerprint));
+		try {
+			return requestCoordinator.execute(
+					fingerprint,
+					() -> searchCoordinated(command, normalizedQuery, fingerprint));
+		}
+		catch (SearchCoordinationTimeoutException exception) {
+			return afterCoordinationTimeout(command, fingerprint, exception);
+		}
+	}
+
+	private SearchView afterCoordinationTimeout(
+			SearchCommand command,
+			String fingerprint,
+			SearchCoordinationTimeoutException exception) {
+		var latest = snapshotStore.findLatest(fingerprint);
+		if (latest.isEmpty()) {
+			throw exception;
+		}
+		var snapshot = latest.orElseThrow();
+		if (!command.forceRefresh() && snapshot.isFreshAt(Instant.now(clock))) {
+			return withDisposition(snapshot.view(), CacheDisposition.EXACT_HIT, null);
+		}
+		return withDisposition(
+				snapshot.view(),
+				CacheDisposition.STALE_FALLBACK,
+				COORDINATION_TIMEOUT_WARNING);
 	}
 
 	private SearchView searchCoordinated(SearchCommand command, String normalizedQuery, String fingerprint) {

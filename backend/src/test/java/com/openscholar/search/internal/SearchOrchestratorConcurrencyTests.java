@@ -1,12 +1,15 @@
 package com.openscholar.search.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +31,7 @@ import com.openscholar.provider.ProviderSearchResult;
 import com.openscholar.provider.ResearchProvider;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchView;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,8 +45,13 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @Import({TestcontainersConfiguration.class, SearchOrchestratorConcurrencyTests.FakeProviderConfiguration.class})
-@SpringBootTest(properties = "openscholar.search.cache-ttl=1h")
+@SpringBootTest(properties = {
+	"openscholar.search.cache-ttl=1h",
+	"openscholar.search.coordination-wait-timeout=500ms"
+})
 class SearchOrchestratorConcurrencyTests {
+
+	private static final Instant INITIAL_TIME = Instant.parse("2026-08-21T12:00:00Z");
 
 	@Autowired
 	private SearchResearchUseCase searchUseCase;
@@ -57,11 +66,15 @@ class SearchOrchestratorConcurrencyTests {
 	private BlockingResearchProvider provider;
 
 	@Autowired
+	private MutableClock clock;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
 	void resetProvider() {
 		provider.reset();
+		clock.set(INITIAL_TIME);
 	}
 
 	@Test
@@ -137,6 +150,76 @@ class SearchOrchestratorConcurrencyTests {
 		}
 	}
 
+	@Test
+	void coldFollowerTimesOutWithoutCallingTheProviderAndRecoversFromTheLeaderSnapshot() throws Exception {
+		SearchCommand command = command("cold timeout " + UUID.randomUUID(), false);
+		String fingerprint = fingerprinter.fingerprint(command);
+
+		try (BlockedSearchRun leader = startBlockedSearch(command)) {
+			assertThatThrownBy(() -> searchUseCase.search(command))
+					.isInstanceOf(SearchCoordinationTimeoutException.class)
+					.hasMessage("Search coordination wait timed out");
+			assertThat(provider.calls()).isOne();
+			assertThat(snapshotCount(fingerprint)).isZero();
+
+			provider.releaseCalls();
+			SearchView fetched = leader.result();
+			SearchView recovered = searchUseCase.search(command);
+
+			assertThat(fetched.cacheDisposition()).isEqualTo(CacheDisposition.MISS_FETCHED);
+			assertThat(recovered.searchId()).isEqualTo(fetched.searchId());
+			assertThat(recovered.cacheDisposition()).isEqualTo(CacheDisposition.EXACT_HIT);
+			assertThat(provider.calls()).isOne();
+			assertThat(snapshotCount(fingerprint)).isOne();
+		}
+	}
+
+	@Test
+	void normalFollowerUsesTheStaleSnapshotWhenCoordinationTimesOut() throws Exception {
+		SearchCommand command = command("stale coordination fallback " + UUID.randomUUID(), false);
+		String fingerprint = fingerprinter.fingerprint(command);
+		SearchView initial = searchUseCase.search(command);
+		clock.advance(Duration.ofHours(2));
+
+		try (BlockedSearchRun leader = startBlockedSearch(command)) {
+			SearchView fallback = searchUseCase.search(command);
+
+			assertThat(fallback.searchId()).isEqualTo(initial.searchId());
+			assertThat(fallback.cacheDisposition()).isEqualTo(CacheDisposition.STALE_FALLBACK);
+			assertThat(fallback.warnings()).contains("SEARCH_COORDINATION_TIMEOUT");
+			assertThat(provider.calls()).isEqualTo(2);
+			assertThat(snapshotCount(fingerprint)).isOne();
+
+			provider.releaseCalls();
+			assertThat(leader.result().cacheDisposition()).isEqualTo(CacheDisposition.STALE_REFRESHED);
+			assertThat(provider.calls()).isEqualTo(2);
+			assertThat(snapshotCount(fingerprint)).isEqualTo(2);
+		}
+	}
+
+	@Test
+	void forcedRefreshFollowerUsesTheExistingSnapshotWithoutAnEventualDuplicateFetch() throws Exception {
+		String query = "forced coordination fallback " + UUID.randomUUID();
+		SearchView initial = searchUseCase.search(command(query, false));
+		SearchCommand forceRefresh = command(query, true);
+		String fingerprint = fingerprinter.fingerprint(forceRefresh);
+
+		try (BlockedSearchRun leader = startBlockedSearch(forceRefresh)) {
+			SearchView fallback = searchUseCase.search(forceRefresh);
+
+			assertThat(fallback.searchId()).isEqualTo(initial.searchId());
+			assertThat(fallback.cacheDisposition()).isEqualTo(CacheDisposition.STALE_FALLBACK);
+			assertThat(fallback.warnings()).contains("SEARCH_COORDINATION_TIMEOUT");
+			assertThat(provider.calls()).isEqualTo(2);
+			assertThat(snapshotCount(fingerprint)).isOne();
+
+			provider.releaseCalls();
+			assertThat(leader.result().cacheDisposition()).isEqualTo(CacheDisposition.FORCED_REFRESH);
+			assertThat(provider.calls()).isEqualTo(2);
+			assertThat(snapshotCount(fingerprint)).isEqualTo(2);
+		}
+	}
+
 	private SearchCommand commandOnAnotherStripe(SearchCommand first) {
 		int firstStripe = requestCoordinator.stripeIndex(fingerprinter.fingerprint(first));
 		for (int candidate = 0; candidate < 1_000; candidate++) {
@@ -160,6 +243,18 @@ class SearchOrchestratorConcurrencyTests {
 		}
 		start.countDown();
 		return new ConcurrentSearchRun(executor, List.of(firstResult, secondResult));
+	}
+
+	private BlockedSearchRun startBlockedSearch(SearchCommand command) throws Exception {
+		provider.blockNextCalls(1);
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		Future<SearchView> result = executor.submit(() -> searchUseCase.search(command));
+		if (!provider.awaitBlockedCalls(Duration.ofSeconds(5))) {
+			provider.releaseCalls();
+			executor.shutdownNow();
+			throw new IllegalStateException("Search leader did not reach the provider");
+		}
+		return new BlockedSearchRun(executor, result, provider);
 	}
 
 	private SearchView executeAfterStart(
@@ -208,13 +303,35 @@ class SearchOrchestratorConcurrencyTests {
 		}
 	}
 
+	private record BlockedSearchRun(
+			ExecutorService executor,
+			Future<SearchView> future,
+			BlockingResearchProvider provider) implements AutoCloseable {
+
+		private SearchView result() throws Exception {
+			return future.get(10, TimeUnit.SECONDS);
+		}
+
+		@Override
+		public void close() {
+			provider.releaseCalls();
+			executor.shutdownNow();
+		}
+	}
+
 	@TestConfiguration(proxyBeanMethods = false)
 	static class FakeProviderConfiguration {
 
 		@Bean
 		@Primary
-		BlockingResearchProvider blockingResearchProvider(Clock clock) {
+		BlockingResearchProvider blockingResearchProvider(MutableClock clock) {
 			return new BlockingResearchProvider(clock);
+		}
+
+		@Bean
+		@Primary
+		MutableClock mutableClock() {
+			return new MutableClock(INITIAL_TIME);
 		}
 	}
 
@@ -303,6 +420,38 @@ class SearchOrchestratorConcurrencyTests {
 
 		private static CallGate blocking(int expectedCalls) {
 			return new CallGate(new CountDownLatch(expectedCalls), new CountDownLatch(1));
+		}
+	}
+
+	static final class MutableClock extends Clock {
+
+		private volatile Instant current;
+
+		MutableClock(Instant current) {
+			this.current = current;
+		}
+
+		@Override
+		public ZoneId getZone() {
+			return ZoneOffset.UTC;
+		}
+
+		@Override
+		public Clock withZone(ZoneId zone) {
+			return this;
+		}
+
+		@Override
+		public Instant instant() {
+			return current;
+		}
+
+		void set(Instant instant) {
+			current = instant;
+		}
+
+		void advance(Duration duration) {
+			current = current.plus(duration);
 		}
 	}
 }

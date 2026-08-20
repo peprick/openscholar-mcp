@@ -11,7 +11,7 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Canonical DOI/OpenAlex deduplication, authors, and provider provenance
 - Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
 - Paper-specific credited author names and publication date/year integrity enforced by Flyway
-- Immutable 24-hour search snapshots with exact-cache hits and stale fallback
+- Immutable 24-hour search snapshots with exact-cache hits, stale fallback, and bounded same-instance coordination waits
 - Exact DOI legal-access lookup through Unpaywall when a backend contact email is configured
 - Exact arXiv-ID access lookup with canonical entry matching and a three-second request gate
 - Provider-isolated access resolution with a 24-hour cache, forced refresh, and stale fallback
@@ -137,6 +137,8 @@ OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
 ```
 
 OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
+
+Searches waiting to acquire one of the same-instance coordination stripes stop after 12 seconds by default. Override this acquisition-only bound with `SEARCH_COORDINATION_WAIT_TIMEOUT`. A timeout never cancels the leader or starts a duplicate provider request: an available snapshot is returned as an exact hit or stale fallback, while a cold miss returns retryable `SEARCH_COORDINATION_TIMEOUT`. Provider work, persistence, serialization, and the complete REST/MCP request remain outside this coordination-wait limit.
 
 Unpaywall's exact DOI endpoint requires a contact email. The application can start without one, but Unpaywall then reports `NOT_CONFIGURED`; arXiv resolution remains available for papers with an arXiv ID. Configure a backend-owned address, never an end-user address:
 
