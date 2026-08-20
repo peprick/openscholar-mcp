@@ -29,6 +29,7 @@ Status: the end-to-end search, immutable result snapshot, cursor-continuation UI
 - Implemented: `POST /api/v1/searches`, immutable snapshots, and canonical paper details with stored provenance/access summary.
 - Implemented: server-derived cursor continuation that preserves the stored query and filters across immutable result pages, with cached replay and an accessible web control.
 - Implemented: bounded, single-instance coordination of identical normal searches with an in-lock cache recheck, preventing concurrent cache misses from duplicating provider calls and snapshots.
+- Implemented: configurable 8 MiB OpenAlex response-body limit before JSON deserialization, including declared-length and streaming enforcement with a stable non-retryable oversized-response error.
 - Implemented: paper-specific credited-name snapshots and publication date/year integrity.
 - Implemented: accessible search/result-detail UI with provenance, ranking rationale, provider coverage, warnings, and cache status.
 

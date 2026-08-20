@@ -12,6 +12,7 @@ public record OpenAlexProperties(
 		@DefaultValue("https://api.openalex.org") URI baseUrl,
 		@DefaultValue("3s") Duration connectTimeout,
 		@DefaultValue("15s") Duration readTimeout,
+		@DefaultValue("8388608") int maxResponseBytes,
 		String apiKey) {
 
 	static final String PREFIX = "openscholar.providers.openalex";
@@ -20,6 +21,9 @@ public record OpenAlexProperties(
 		baseUrl = requireHttpBaseUrl(baseUrl);
 		connectTimeout = requirePositive(connectTimeout, "connectTimeout");
 		readTimeout = requirePositive(readTimeout, "readTimeout");
+		if (maxResponseBytes < 1) {
+			throw new IllegalArgumentException("OpenAlex maxResponseBytes must be positive");
+		}
 		apiKey = apiKey == null || apiKey.isBlank() ? null : apiKey.strip();
 		if (apiKey != null && (apiKey.indexOf('\r') >= 0 || apiKey.indexOf('\n') >= 0)) {
 			throw new IllegalArgumentException("OpenAlex apiKey must not contain line breaks");

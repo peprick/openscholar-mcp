@@ -92,7 +92,7 @@ interface ResearchProvider {
 }
 ```
 
-The current OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. It returns provider records and never writes directly to canonical paper tables. Unpaywall and arXiv are separate exact-identifier clients inside access resolution.
+The current OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. Its configurable 8 MiB default limit is enforced while the body is streamed and before JSON deserialization; responses that exceed it fail as non-retryable `OPENALEX_RESPONSE_TOO_LARGE`. It returns provider records and never writes directly to canonical paper tables. Unpaywall and arXiv are separate exact-identifier clients inside access resolution.
 
 Implemented resilience:
 

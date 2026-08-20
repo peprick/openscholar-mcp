@@ -3,6 +3,7 @@ package com.openscholar.provider.openalex;
 import java.net.http.HttpClient;
 import java.time.Clock;
 
+import com.openscholar.common.ProviderResponseBodyLimit;
 import com.openscholar.provider.ResearchProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,10 +27,15 @@ class OpenAlexConfiguration {
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 		requestFactory.setReadTimeout(properties.readTimeout());
 
-		return builder.clone()
-				.baseUrl(properties.baseUrl())
+		return configure(builder.clone(), properties)
 				.requestFactory(requestFactory)
 				.build();
+	}
+
+	static RestClient.Builder configure(RestClient.Builder builder, OpenAlexProperties properties) {
+		return builder
+				.baseUrl(properties.baseUrl())
+				.requestInterceptor(ProviderResponseBodyLimit.boundedResponseBody(properties.maxResponseBytes()));
 	}
 
 	@Bean

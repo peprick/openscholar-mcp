@@ -215,6 +215,44 @@ class OpenAlexResearchProviderTests {
 	}
 
 	@Test
+	void acceptsAValidResponseAtTheConfiguredByteLimit() {
+		String response = "{\"meta\":{\"count\":0},\"results\":[]}";
+		int responseBytes = response.getBytes(StandardCharsets.UTF_8).length;
+		Harness harness = harness(null, responseBytes);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(withSuccess(response, MediaType.APPLICATION_JSON)
+						.header(HttpHeaders.CONTENT_LENGTH, Integer.toString(responseBytes)));
+
+		ProviderSearchResult result = harness.provider().search(minimalQuery());
+
+		assertThat(result.records()).isEmpty();
+		assertThat(result.totalMatches()).isZero();
+		harness.server().verify();
+	}
+
+	@Test
+	void rejectsAnOversizedDeclaredResponseBeforeDeserialization() {
+		String response = "{\"meta\":{\"count\":0},\"results\":[]}";
+		int responseBytes = response.getBytes(StandardCharsets.UTF_8).length;
+		Harness harness = harness(null, responseBytes - 1);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(withSuccess(response, MediaType.APPLICATION_JSON)
+						.header(HttpHeaders.CONTENT_LENGTH, Integer.toString(responseBytes)));
+
+		assertResponseTooLarge(harness);
+	}
+
+	@Test
+	void rejectsAnOversizedStreamedResponseWithUnknownContentLength() {
+		String response = "{\"meta\":{\"count\":0},\"results\":[]}";
+		Harness harness = harness(null, response.getBytes(StandardCharsets.UTF_8).length - 1);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+
+		assertResponseTooLarge(harness);
+	}
+
+	@Test
 	void rejectsAnIncompleteSuccessfulEnvelope() {
 		Harness harness = harness(null);
 		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
@@ -337,14 +375,28 @@ class OpenAlexResearchProviderTests {
 	}
 
 	private static Harness harness(String apiKey) {
-		RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		return harness(apiKey, 8 * 1024 * 1024);
+	}
+
+	private static Harness harness(String apiKey, int maxResponseBytes) {
 		OpenAlexProperties properties = new OpenAlexProperties(
 				BASE_URL,
 				Duration.ofSeconds(2),
 				Duration.ofSeconds(5),
+				maxResponseBytes,
 				apiKey);
+		RestClient.Builder builder = OpenAlexConfiguration.configure(RestClient.builder(), properties);
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		return new Harness(new OpenAlexResearchProvider(builder.build(), properties, CLOCK), server);
+	}
+
+	private static void assertResponseTooLarge(Harness harness) {
+		assertThatThrownBy(() -> harness.provider().search(minimalQuery()))
+				.isInstanceOfSatisfying(ProviderException.class, exception -> {
+					assertThat(exception.errorCode()).isEqualTo(OpenAlexResearchProvider.RESPONSE_TOO_LARGE);
+					assertThat(exception.retryable()).isFalse();
+				});
+		harness.server().verify();
 	}
 
 	private static ProviderSearchQuery minimalQuery() {

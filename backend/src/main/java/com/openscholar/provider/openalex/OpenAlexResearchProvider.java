@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.openscholar.common.ProviderResponseBodyLimit;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderAuthor;
 import com.openscholar.provider.ProviderException;
@@ -46,6 +47,7 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 	static final String TIMEOUT = "OPENALEX_TIMEOUT";
 	static final String UNAVAILABLE = "OPENALEX_UNAVAILABLE";
 	static final String RESPONSE_ERROR = "OPENALEX_RESPONSE_ERROR";
+	static final String RESPONSE_TOO_LARGE = "OPENALEX_RESPONSE_TOO_LARGE";
 
 	private static final String SELECT_FIELDS = String.join(",",
 			"id",
@@ -132,9 +134,15 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 			throw translateStatus(exception);
 		}
 		catch (ResourceAccessException exception) {
+			if (ProviderResponseBodyLimit.wasExceeded(exception)) {
+				throw responseTooLarge(exception);
+			}
 			throw translateAccessFailure(exception);
 		}
 		catch (RestClientException exception) {
+			if (ProviderResponseBodyLimit.wasExceeded(exception)) {
+				throw responseTooLarge(exception);
+			}
 			throw providerException(
 					RESPONSE_ERROR,
 					"OpenAlex returned a response that could not be processed",
@@ -142,6 +150,15 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 					null,
 					exception);
 		}
+	}
+
+	private ProviderException responseTooLarge(RestClientException exception) {
+		return providerException(
+				RESPONSE_TOO_LARGE,
+				"OpenAlex response exceeded the configured byte limit",
+				false,
+				null,
+				exception);
 	}
 
 	private ProviderSearchResult mapResponse(OpenAlexResponse response, Instant retrievedAt) {

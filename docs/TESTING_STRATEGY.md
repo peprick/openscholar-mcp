@@ -31,7 +31,7 @@ Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyw
 
 ## Provider contract tests
 
-Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases.
+Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases. OpenAlex additionally verifies exact-limit acceptance and non-retryable rejection of oversized bodies with declared or unknown content lengths.
 
 Live-provider tests run manually or on a scheduled, strictly budgeted workflow—not normal pull requests.
 
