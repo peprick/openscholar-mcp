@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "policyId": "related-hybrid-policy-v1",
+  "developmentFixtureId": "related-metadata-baseline-v1",
+  "semanticWeight": 0.5,
+  "lexicalTransform": "TS_RANK_CD_NORMALIZATION_32_IDENTITY",
+  "semanticTransform": "CLAMPED_COSINE_PLUS_ONE_OVER_TWO",
+  "candidateRule": "ALL_EXACT_VECTOR_CANDIDATES",
+  "mixedWeightTieBreak": "FIXTURE_PAPER_KEY",
+  "acceptance": {
+    "minimumQueryRecall": 0.5,
+    "minimumQueryNdcg": 0.6,
+    "preserveLexicalQueryRecall": true,
+    "minimumMacroNdcgGainOverLexical": 0.03,
+    "preserveLexicalMacroRecall": true,
+    "preserveLexicalMacroPrecisionAtOne": true,
+    "preserveLexicalMeanReciprocalRank": true,
+    "minimumStrictNdcgImprovementQueryCount": 2,
+    "maximumNdcgRegressionQueryCount": 1,
+    "maximumPerQueryNdcgRegression": 0.1
+  }
+}
