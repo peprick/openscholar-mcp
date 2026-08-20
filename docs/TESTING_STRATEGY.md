@@ -41,6 +41,10 @@ An opt-in Testcontainers evaluation runs the synthetic 18-paper fixture through 
 
 That manual run also reports an exploratory in-sample hybrid sensitivity sweep over the complete 17-candidate fixture pool. The lexical component is the returned `ts_rank_cd(..., 32)` score, the semantic component is `(cosine + 1) / 2`, and weights `0`, `0.25`, `0.50`, `0.75`, and `1` are all reported. Judgments are applied only after ranking. Endpoint equivalence, repeated component reads, bounded features, deterministic ties, and source/duplicate exclusion are structural gates; no mixed-weight quality floor or product default is selected without independently authored held-out query groups.
 
+A separate opt-in holdout evaluation is enabled only by `RUN_OLLAMA_HOLDOUT_EVALUATION=true`. It proves that the development and holdout paper keys, query keys, source keys, and normalized content fingerprints are disjoint; loads the frozen policy; embeds only the independently authored 26-paper holdout; and evaluates seven query groups over all 25 non-seed candidates. It reads lexical and exact-vector components twice for stability, reports lexical/vector controls and only the frozen `w = 0.50` hybrid, and enforces the predeclared per-query and macro advancement gates. Ordinary CI loads no real model and skips this class.
+
+The first real-model invocation stopped before complete metrics because a valid zero-match Japanese lexical control hit an overstrict structural assertion. Commit `288bf4f` fixed the assertion without consulting labels: empty lexical results remain a measurable control, while vector and frozen-hybrid candidate-pool completeness stays enforced. No policy, fixture paper, judgment, cutoff, or acceptance gate changed. The subsequent run passed all frozen gates: lexical macro `0.857 / 0.648 / 0.286 / 0.571`, exact-vector macro `1.000 / 0.893 / 1.000 / 1.000`, and hybrid macro `1.000 / 0.917 / 0.857 / 0.929` for Recall@K, nDCG@K, Precision@1, and MRR. Five query groups strictly improved nDCG and none regressed. This gate does not test HNSW or activate the product ranker.
+
 ## MCP tests
 
 - Implemented: direct adapter tests for defaults, bounds, result mapping, database-only behavior, stable errors, and safe unexpected failures.
@@ -78,7 +82,7 @@ Version small metadata-only cases for:
 
 Expected canonical clusters and top-result ranges are preferred over brittle total ordering.
 
-The versioned `related-metadata-baseline-v1.json` corpus contains only synthetic metadata and graded `0..3` relevance judgments. Its related-paper evaluations record lexical and exact-vector Recall@K, nDCG@K, Precision@1, and mean-reciprocal-rank floors plus a non-gating hybrid sensitivity sweep; it retains recent uncited work, a DOI-less thesis, Spanish metadata, incomplete metadata, and deliberately difficult cross-domain negatives. Exact score decimals and exact total ordering are not test contracts.
+The versioned `related-metadata-baseline-v1.json` development corpus contains only synthetic metadata and graded `0..3` relevance judgments. Its related-paper evaluations record lexical and exact-vector Recall@K, nDCG@K, Precision@1, and mean-reciprocal-rank floors plus a non-gating hybrid sensitivity sweep; it retains recent uncited work, a DOI-less thesis, Spanish metadata, incomplete metadata, and deliberately difficult cross-domain negatives. The independently authored `related-metadata-holdout-v1.json` adds seven whole query groups across 26 disjoint synthetic papers, including German, English, French, and Japanese metadata, and is paired with the machine-readable frozen `related-hybrid-policy-v1.json`. Exact score decimals and exact total ordering are not ordinary test contracts; the opt-in holdout evaluator records rankings and checks stable repeated reads under the pinned runtime.
 
 ## Performance tests
 

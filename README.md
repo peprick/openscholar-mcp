@@ -2,7 +2,7 @@
 
 OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. Its core read use cases are also exposed to AI agents through the Model Context Protocol (MCP).
 
-> Status: the first end-to-end web flow, persistent local research library, and read-oriented MCP adapter are implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, reads fresh CORS-compatible PDF sources through a direct PDF.js browser session, and saves papers into collections with reading status and tags. PostgreSQL preserves reusable metadata, access results, and the library across restarts, and now supplies a measured full-text related-paper baseline plus versioned pgvector storage. A disabled-by-default local Ollama adapter and explicit offline job can safely populate artifact-and-runtime-pinned paper embeddings; interactive ranking remains lexical until semantic quality is measured. Users and MCP clients can search, inspect stored metadata/access, query saved research, and export citations. The API never returns PDF bytes, and the application retains no PDF documents.
+> Status: the first end-to-end web flow, persistent local research library, and read-oriented MCP adapter are implemented. The Next.js client searches OpenAlex-backed snapshots, renders canonical paper details and provenance, explicitly verifies legal versions through Unpaywall/arXiv, reads fresh CORS-compatible PDF sources through a direct PDF.js browser session, and saves papers into collections with reading status and tags. PostgreSQL preserves reusable metadata, access results, and the library across restarts, and now supplies a measured full-text related-paper baseline plus versioned pgvector storage. A disabled-by-default local Ollama adapter and explicit offline job can safely populate artifact-and-runtime-pinned paper embeddings, and a frozen hybrid candidate has passed its first independent holdout; interactive ranking remains lexical pending HNSW and production-readiness gates. Users and MCP clients can search, inspect stored metadata/access, query saved research, and export citations. The API never returns PDF bytes, and the application retains no PDF documents.
 
 ## Product goals
 
@@ -30,7 +30,7 @@ OpenScholar MCP is an open-access research discovery and reading workspace. A us
 - Docker Compose for local development
 - Testcontainers, JUnit, Vitest, and Testing Library for verification
 
-Planned additions include automated Playwright coverage, measured vector/hybrid retrieval, richer scholarly metadata, and more providers.
+Planned additions include automated Playwright coverage, HNSW and hybrid production-readiness evaluation, richer scholarly metadata, and more providers.
 
 ## Repository layout
 

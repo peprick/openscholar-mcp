@@ -202,6 +202,19 @@ OLLAMA_QWEN3_EMBEDDING_DIGEST='replace-with-the-full-64-character-digest' \
 
 Do not set `EMBEDDING_BACKFILL_ENABLED` for this test. The evaluation creates 18 synthetic papers, invokes the backfill use case programmatically, measures exact vector-only retrieval twice for stability, reports a five-weight exploratory lexical/vector sensitivity sweep, and then discards the Testcontainer. The sweep is evidence only; it neither selects a production hybrid weight nor changes the live lexical endpoint. Without `RUN_OLLAMA_VECTOR_EVALUATION=true`, the real-model method is skipped and the normal lexical evaluation still runs. The pinned baselines, formulas, caveats, and current quality floors are recorded in the [search-quality document](../docs/SEARCH_QUALITY.md).
 
+After the development run, the hybrid transform, `w = 0.50` weight, candidate rule, tie-break, and advancement gates were frozen before the independently authored holdout was scored. Run that separate 26-paper, seven-query evaluation with the exact pinned digest:
+
+```bash
+RUN_OLLAMA_HOLDOUT_EVALUATION=true \
+SPRING_DOCKER_COMPOSE_ENABLED=false \
+OLLAMA_EMBEDDING_ENABLED=true \
+OLLAMA_LOCAL_ONLY_CONFIRMED=true \
+OLLAMA_QWEN3_EMBEDDING_DIGEST='ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d' \
+./mvnw -Dtest=MetadataHybridHoldoutEvaluationTests test
+```
+
+This run also requires the local `qwen3-embedding:0.6b` tag to resolve to that full digest under Ollama `0.31.1`; it never pulls a model or touches a development database. The completed run passed every frozen gate. Macro lexical results were Recall 0.857, nDCG 0.648, Precision@1 0.286, and MRR 0.571; exact vector produced 1.000, 0.893, 1.000, and 1.000; the frozen hybrid produced 1.000, 0.917, 0.857, and 0.929. Five query groups strictly improved nDCG and none regressed. Passing this holdout does not enable hybrid ranking: the live related-paper endpoint remains lexical pending HNSW and production-readiness gates.
+
 ## Legal-access behavior
 
 Access candidates are accepted only from configured providers. Each redirect hop must remain on an absolute HTTPS URL with no credentials, fragment, or non-default port, and DNS must resolve exclusively to public addresses. PDF candidates receive only a bounded range probe and must report `application/pdf` or begin with `%PDF-`; landing pages use `HEAD` with a bounded `GET` fallback when `HEAD` is unsupported.

@@ -118,16 +118,49 @@ The same opt-in run performs a label-independent score interpolation over all 17
 
 Weight `0.50` has the highest observed in-sample metrics on these five synthetic query groups. It is not an optimal, validated, or selected product weight. The same fixture has already informed lexical and vector decisions, there is no held-out query group, unjudged papers are treated as grade zero in this closed corpus, and model-training overlap cannot be established. No hybrid quality floor or runtime default is created. A production candidate needs a larger independently authored fixture, whole query groups held out, and a weight frozen before the holdout is scored.
 
+## Frozen independent holdout result
+
+The [`related-hybrid-policy-v1`](HOLDOUT_EVALUATION_PROTOCOL.md) transform, semantic weight `w = 0.50`, candidate rule, tie-break, and acceptance gates were frozen before scoring the independently authored `related-metadata-holdout-v1` fixture. The holdout contains 26 synthetic papers and seven disjoint query groups; each query is reranked over all 25 non-seed candidates. The run used the same exact pinned Ollama/Qwen profile described above. The compact cells below report `Recall@5 / nDCG@5 / Precision@1 / reciprocal rank`.
+
+| Holdout query | Lexical control | Exact-vector control | Frozen hybrid |
+|---|---:|---:|---:|
+| Reef recovery soundscapes | 1.000 / 0.983 / 1.000 / 1.000 | 1.000 / 0.710 / 1.000 / 1.000 | 1.000 / 1.000 / 1.000 / 1.000 |
+| Photonic bosonic correction | 1.000 / 0.665 / 0.000 / 0.500 | 1.000 / 1.000 / 1.000 / 1.000 | 1.000 / 0.956 / 1.000 / 1.000 |
+| French urban heat | 1.000 / 0.631 / 0.000 / 0.500 | 1.000 / 1.000 / 1.000 / 1.000 | 1.000 / 1.000 / 1.000 / 1.000 |
+| Sodium-metal interphases | 1.000 / 0.983 / 1.000 / 1.000 | 1.000 / 0.710 / 1.000 / 1.000 | 1.000 / 0.983 / 1.000 / 1.000 |
+| Japanese ukiyo-e pigments | 0.000 / 0.000 / 0.000 / 0.000 | 1.000 / 0.834 / 1.000 / 1.000 | 1.000 / 0.834 / 1.000 / 1.000 |
+| Temperate exoplanet clouds | 1.000 / 0.631 / 0.000 / 0.500 | 1.000 / 1.000 / 1.000 / 1.000 | 1.000 / 1.000 / 1.000 / 1.000 |
+| Software build provenance | 1.000 / 0.644 / 0.000 / 0.500 | 1.000 / 1.000 / 1.000 / 1.000 | 1.000 / 0.644 / 0.000 / 0.500 |
+| **Macro** | **0.857 / 0.648 / 0.286 / 0.571** | **1.000 / 0.893 / 1.000 / 1.000** | **1.000 / 0.917 / 0.857 / 0.929** |
+| **Hybrid minus lexical** | — | — | **+0.143 / +0.269 / +0.571 / +0.357** |
+
+The reported cutoff rankings, using fixture keys, were:
+
+| Holdout query | Lexical ranking | Exact-vector ranking | Frozen-hybrid ranking |
+|---|---|---|---|
+| Reef recovery soundscapes | `reef-larval`, `bridge-acoustic-negative`, `reef-title-only`, `exoplanet-source` | `reef-title-only`, `reef-larval`, `bridge-acoustic-negative`, `urban-biodiversity-negative`, `sodium-abstract-only` | `reef-larval`, `reef-title-only`, `bridge-acoustic-negative`, `exoplanet-source`, `urban-biodiversity-negative` |
+| Photonic bosonic correction | `fiber-code-negative`, `photonic-loss`, `photonic-thesis` | `photonic-loss`, `photonic-thesis`, `fiber-code-negative`, `reef-title-only`, `bridge-acoustic-negative` | `photonic-loss`, `fiber-code-negative`, `photonic-thesis`, `reef-title-only`, `bridge-acoustic-negative` |
+| French urban heat | `urban-biodiversity-negative`, `urban-heat-shade`, `earth-cloud-negative` | `urban-heat-shade`, `urban-biodiversity-negative`, `earth-cloud-negative`, `exoplanet-reflected`, `exoplanet-source` | `urban-heat-shade`, `urban-biodiversity-negative`, `earth-cloud-negative`, `exoplanet-reflected`, `exoplanet-source` |
+| Sodium-metal interphases | `sodium-cryo`, `sodium-catalyst-negative`, `sodium-abstract-only` | `sodium-abstract-only`, `sodium-cryo`, `sodium-catalyst-negative`, `ukiyoe-portable`, `ukiyoe-source` | `sodium-cryo`, `sodium-catalyst-negative`, `sodium-abstract-only`, `ukiyoe-portable`, `ukiyoe-source` |
+| Japanese ukiyo-e pigments | no lexical matches | `ukiyoe-portable`, `ukiyoe-hyperspectral`, `ukiyoe-recommendation-negative`, `sodium-source`, `provenance-german` | `ukiyoe-portable`, `ukiyoe-hyperspectral`, `ukiyoe-recommendation-negative`, `sodium-source`, `provenance-german` |
+| Temperate exoplanet clouds | `earth-cloud-negative`, `exoplanet-reflected` | `exoplanet-reflected`, `earth-cloud-negative`, `urban-heat-shade`, `ukiyoe-hyperspectral`, `urban-biodiversity-negative` | `exoplanet-reflected`, `earth-cloud-negative`, `urban-heat-shade`, `ukiyoe-hyperspectral`, `urban-biodiversity-negative` |
+| Software build provenance | `food-attestation-negative`, `provenance-graphs`, `provenance-german` | `provenance-graphs`, `provenance-german`, `food-attestation-negative`, `ukiyoe-hyperspectral`, `ukiyoe-source` | `food-attestation-negative`, `provenance-graphs`, `provenance-german`, `ukiyoe-hyperspectral`, `ukiyoe-source` |
+
+The frozen hybrid passed every predeclared gate: it preserved or improved recall for every query, improved macro nDCG by `0.269` against the required `0.030`, strictly improved nDCG for five query groups, and produced zero nDCG regressions. It also raised macro Precision@1 by `0.571` and MRR by `0.357`.
+
+The first invocation stopped before complete metrics were available because the valid zero-match Japanese lexical control triggered an overstrict harness assertion. Commit `288bf4f` corrected that assertion label-independently so an empty lexical control is measured as zero while the vector and frozen-hybrid paths still require complete candidate pools. The policy, scoring rule, fixture papers, judgments, cutoffs, and acceptance gates did not change before the successful run.
+
+Passing this small synthetic holdout lets the frozen candidate advance to HNSW and production-readiness evaluation; it does not activate hybrid ranking. The REST and MCP related-paper path remains the existing database-only lexical implementation.
+
 ## Remaining evaluation gates
 
 Candidate work includes:
 
 - compare `english`, `simple`, and language-aware lexical configurations;
-- expand the relevance corpus and freeze a hybrid transform/weight before scoring held-out query groups;
 - compare HNSW against exact neighbors with an explicit ANN-recall and latency gate;
 - record feature-level reasons and persist them if hybrid results enter immutable search snapshots;
 - bump the search pipeline/fingerprint version before blending local retrieval into provider-backed topic search.
 
-A replacement hybrid should exceed the current macro nDCG of `0.857`, improve both adversarial query groups currently at `0.665`, and preserve the current recall result. If it does not, the lexical implementation remains the product ranker and the vector experiment remains documented evidence rather than an unmeasured feature.
+The frozen hybrid has cleared its first independent holdout gate, but a replacement product ranker must also demonstrate acceptable HNSW recall and latency, preserve deterministic database-only fallback behavior, and expose honest ranking reasons. Until those gates pass, the lexical implementation remains the product ranker and the holdout remains evaluation evidence rather than an activated feature.
 
 Deduplication quality remains a separate evaluation concern because full-text retrieval operates on already-canonical `paper` rows. DOI duplicates and preprint/published pairs belong in a dedicated reconciliation fixture.
