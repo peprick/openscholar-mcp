@@ -9,7 +9,9 @@ export default defineConfig([
     ".next/**",
     "coverage/**",
     "out/**",
+    "playwright-report/**",
     "public/pdfjs/**",
+    "test-results/**",
     "next-env.d.ts",
   ]),
 ]);

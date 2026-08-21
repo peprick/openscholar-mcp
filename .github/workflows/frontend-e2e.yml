@@ -1,0 +1,70 @@
+name: Frontend E2E
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-e2e.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium:
+    name: Offline Chromium workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium and operating-system dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the production frontend
+        run: pnpm build
+
+      - name: Run offline browser workflows with managed server cleanup
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+
+      - name: Upload failure-only traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-e2e-${{ github.run_attempt }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results/playwright
+          if-no-files-found: ignore
+          retention-days: 7
