@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -93,9 +94,10 @@ describe("PdfReader", () => {
 
     render(<PdfReader source={source} title="A verified research paper" />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Loading verified PDF",
-    );
+    const announcement = screen.getByRole("status");
+    expect(announcement).toHaveAttribute("aria-atomic", "true");
+    expect(announcement).toHaveAttribute("aria-live", "polite");
+    expect(announcement).toHaveTextContent("Loading verified PDF");
     expect(loader.startPdfLoad).toHaveBeenCalledWith(source.pdfUrl);
     await waitFor(() => expect(pdf.page.render).toHaveBeenCalledOnce());
     expect(screen.getByText("Rendering…")).toBeVisible();
@@ -110,19 +112,125 @@ describe("PdfReader", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("Page 1 of 3")).toBeVisible();
     expect(screen.getByText("CC-BY-4.0")).toBeVisible();
+    await waitFor(() =>
+      expect(announcement).toHaveTextContent(
+        "Page 1 of 3 rendered at 100 percent.",
+      ),
+    );
+
+    const viewport = screen.getByRole("region", {
+      name: "PDF page viewport for A verified research paper",
+    });
+    expect(viewport).toHaveAttribute("tabindex", "0");
+    expect(viewport).toHaveAccessibleDescription(
+      /Page Up, Page Down, Home, End, plus, minus, or 0/,
+    );
 
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Page 2 of 3")).toBeVisible();
     await waitFor(() => expect(pdf.document.getPage).toHaveBeenCalledWith(2));
+    await waitFor(() => expect(screen.getByText("Page 2 of 3")).toBeVisible());
+    await waitFor(() => expect(viewport).toHaveFocus());
 
     await user.click(screen.getByRole("button", { name: "Zoom in" }));
-    expect(screen.getByText("125%")).toBeVisible();
+    await waitFor(() => expect(screen.getByText("125%")).toBeVisible());
+    await waitFor(() => expect(viewport).toHaveFocus());
+    expect(announcement).toHaveTextContent(
+      "Page 2 of 3 rendered at 125 percent.",
+    );
 
     const externalLink = screen.getByRole("link", {
       name: /Open verified PDF externally/,
     });
     expect(externalLink).toHaveAttribute("href", source.pdfUrl);
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("supports direct page entry with bounded validation and focus restoration", async () => {
+    const user = userEvent.setup();
+    const pdf = successfulPdf();
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+
+    render(<PdfReader source={source} title="A verified research paper" />);
+
+    const viewport = await screen.findByRole("region", {
+      name: "PDF page viewport for A verified research paper",
+    });
+    await screen.findByRole("img");
+    const pageInput = screen.getByRole("spinbutton", { name: "Page" });
+    const go = screen.getByRole("button", { name: "Go" });
+
+    await user.clear(pageInput);
+    await user.type(pageInput, "3");
+    await user.click(go);
+
+    await waitFor(() => expect(pdf.document.getPage).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(screen.getByText("Page 3 of 3")).toBeVisible());
+    await waitFor(() => expect(viewport).toHaveFocus());
+    expect(pageInput).toHaveValue(3);
+    expect(pageInput).not.toHaveAttribute("aria-invalid");
+
+    const callsBeforeInvalidSubmission = vi.mocked(pdf.document.getPage).mock
+      .calls.length;
+    await user.clear(pageInput);
+    await user.type(pageInput, "4");
+    await user.click(go);
+
+    const pageError = await screen.findByRole("alert");
+    expect(pageError).toHaveTextContent("Enter a page from 1 to 3.");
+    expect(pageInput).toHaveAttribute("aria-invalid", "true");
+    expect(pageInput).toHaveAccessibleDescription("Enter a page from 1 to 3.");
+    expect(pdf.document.getPage).toHaveBeenCalledTimes(
+      callsBeforeInvalidSubmission,
+    );
+
+    await user.clear(pageInput);
+    await user.type(pageInput, "2");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(pdf.document.getPage).toHaveBeenCalledWith(2));
+    await waitFor(() => expect(viewport).toHaveFocus());
+  });
+
+  it("supports viewport page and zoom shortcuts without overriding browser modifiers", async () => {
+    const pdf = successfulPdf();
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+
+    render(<PdfReader source={source} title="A verified research paper" />);
+
+    await screen.findByRole("img");
+    const viewport = screen.getByRole("region", {
+      name: "PDF page viewport for A verified research paper",
+    });
+    viewport.focus();
+
+    expect(fireEvent.keyDown(viewport, { key: "End" })).toBe(false);
+    await waitFor(() => expect(pdf.document.getPage).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(screen.getByText("Page 3 of 3")).toBeVisible());
+    expect(viewport).toHaveFocus();
+
+    fireEvent.keyDown(viewport, { key: "Home" });
+    await waitFor(() => expect(screen.getByText("Page 1 of 3")).toBeVisible());
+    fireEvent.keyDown(viewport, { key: "PageDown" });
+    await waitFor(() => expect(screen.getByText("Page 2 of 3")).toBeVisible());
+    fireEvent.keyDown(viewport, { key: "PageUp" });
+    await waitFor(() => expect(screen.getByText("Page 1 of 3")).toBeVisible());
+
+    fireEvent.keyDown(viewport, { key: "+" });
+    await waitFor(() => expect(screen.getByText("125%")).toBeVisible());
+    fireEvent.keyDown(viewport, { key: "=" });
+    await waitFor(() => expect(screen.getByText("150%")).toBeVisible());
+    fireEvent.keyDown(viewport, { key: "-" });
+    await waitFor(() => expect(screen.getByText("125%")).toBeVisible());
+    fireEvent.keyDown(viewport, { key: "0" });
+    await waitFor(() => expect(screen.getByText("100%")).toBeVisible());
+
+    const rendersBeforeModifiedShortcut = vi.mocked(pdf.page.render).mock.calls
+      .length;
+    expect(
+      fireEvent.keyDown(viewport, { ctrlKey: true, key: "+" }),
+    ).toBe(true);
+    expect(pdf.page.render).toHaveBeenCalledTimes(rendersBeforeModifiedShortcut);
+    expect(screen.getByText("100%")).toBeVisible();
   });
 
   it("shows a generic CORS-safe failure with retry and external fallback", async () => {
@@ -142,6 +250,7 @@ describe("PdfReader", () => {
     loadFailure.reject(new TypeError("Failed to fetch"));
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(failedTask.destroy).toHaveBeenCalledOnce());
+    await waitFor(() => expect(alert).toHaveFocus());
     expect(alert).toHaveTextContent(
       "This PDF cannot be displayed inside OpenScholar.",
     );
@@ -170,6 +279,13 @@ describe("PdfReader", () => {
     ).toBeVisible();
     expect(loader.startPdfLoad).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(recoveredPdf.page.cleanup).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", {
+          name: "PDF page viewport for A verified research paper",
+        }),
+      ).toHaveFocus(),
+    );
   });
 
   it("recovers when rendering a loaded page fails", async () => {
@@ -292,6 +408,7 @@ describe("PdfReader", () => {
   });
 
   it("exposes bounded extracted page text to assistive technology", async () => {
+    const user = userEvent.setup();
     const pdf = successfulPdf();
     const textReader = {
       cancel: vi.fn().mockResolvedValue(undefined),
@@ -320,6 +437,22 @@ describe("PdfReader", () => {
     ).toBeInTheDocument();
     expect(textReader.cancel).not.toHaveBeenCalled();
     expect(textReader.releaseLock).toHaveBeenCalledOnce();
+    const announcement = screen.getByRole("status");
+    expect(announcement).toHaveTextContent(
+      "Extracted page text is available.",
+    );
+
+    const showText = screen.getByRole("button", { name: "Show page text" });
+    expect(showText).toHaveAttribute("aria-expanded", "false");
+    expect(accessiblePage).not.toHaveClass("readerAccessibleText--visible");
+    await user.click(showText);
+    expect(accessiblePage).toHaveClass("readerAccessibleText--visible");
+    expect(showText).toHaveFocus();
+    const hideText = screen.getByRole("button", { name: "Hide page text" });
+    expect(hideText).toHaveAttribute("aria-expanded", "true");
+    await user.click(hideText);
+    expect(accessiblePage).not.toHaveClass("readerAccessibleText--visible");
+    expect(hideText).toHaveFocus();
   });
 
   it("cancels incremental text extraction at the character ceiling", async () => {

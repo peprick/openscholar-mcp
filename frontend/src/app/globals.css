@@ -1655,6 +1655,53 @@ button:disabled {
   z-index: 5;
 }
 
+.readerPageJump {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  position: relative;
+}
+
+.readerPageJump label,
+.readerPageJump > span:not(.readerPageJumpError) {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.readerPageJump input {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  padding: 8px 6px;
+  text-align: center;
+  width: 62px;
+}
+
+.readerPageJump input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.readerPageGoButton {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.readerPageJumpError {
+  background: var(--danger-soft);
+  border: 1px solid rgb(156 46 40 / 35%);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 0.7rem;
+  left: 0;
+  padding: 7px 9px;
+  position: absolute;
+  top: calc(100% + 9px);
+  white-space: nowrap;
+  z-index: 6;
+}
+
 .readerPageStatus,
 .readerZoomStatus {
   color: var(--ink-soft);
@@ -1672,6 +1719,13 @@ button:disabled {
   font-size: 1.1rem;
   min-width: 43px;
   padding-inline: 12px;
+}
+
+.readerShortcutHint {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin: 0 2px 10px;
 }
 
 .readerControlDivider {
@@ -1781,6 +1835,35 @@ button:disabled {
   position: absolute;
   white-space: normal;
   width: 1px;
+}
+
+.readerAccessibleText--visible {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  clip: auto;
+  clip-path: none;
+  height: auto;
+  margin: 16px 0 0;
+  overflow: visible;
+  padding: clamp(20px, 4vw, 34px);
+  position: static;
+  width: auto;
+}
+
+.readerAccessibleText--visible h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.65rem;
+  font-weight: 400;
+  margin: 0 0 14px;
+}
+
+.readerAccessibleText--visible p {
+  color: var(--ink-soft);
+  line-height: 1.75;
+  margin: 0;
+  max-width: 80ch;
+  white-space: pre-wrap;
 }
 
 .readerUnavailable {

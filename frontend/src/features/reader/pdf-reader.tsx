@@ -7,7 +7,7 @@ import type {
   PDFPageProxy,
   RenderTask,
 } from "pdfjs-dist";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { startPdfLoad } from "@/features/reader/pdfjs-loader";
 import type { ReaderSource } from "@/features/reader/reader-source";
@@ -138,17 +138,27 @@ function PdfReaderSession({
   source: ReaderSource;
   title: string;
 }): React.JSX.Element {
+  const accessibleTextId = useId();
+  const pageInputErrorId = useId();
+  const pageInputId = useId();
+  const shortcutHintId = useId();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const destroyLoadingTaskRef = useRef<(() => void) | null>(null);
+  const failureRef = useRef<HTMLDivElement>(null);
+  const focusViewportAfterRenderRef = useRef(false);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
+  const [pageInputInvalid, setPageInputInvalid] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [loadPercent, setLoadPercent] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [renderError, setRenderError] = useState(false);
   const [renderedPage, setRenderedPage] = useState<RenderedPage | null>(null);
+  const [showAccessibleText, setShowAccessibleText] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -298,24 +308,156 @@ function PdfReaderSession({
   const renderedPageMatches =
     renderedPage?.pageNumber === pageNumber && renderedPage.zoom === zoom;
   const rendering = document !== null && !readerFailed && !renderedPageMatches;
+  const accessibleTextAvailable =
+    renderedPageMatches &&
+    renderedPage !== null &&
+    renderedPage.accessibleText !== null;
+  const renderAnnouncement = readerFailed
+    ? "PDF preview unavailable. External fallback and retry controls are ready."
+    : loading
+      ? `Loading verified PDF. ${
+          loadPercent === null
+            ? "Waiting for the source."
+            : `${Math.round(loadPercent)} percent received.`
+        }`
+      : rendering
+        ? `Rendering page ${pageNumber} of ${pageCount}.`
+        : `Page ${pageNumber} of ${pageCount} rendered at ${Math.round(
+            zoom * 100,
+          )} percent${
+            accessibleTextAvailable ? ". Extracted page text is available." : "."
+          }`;
+
+  useEffect(() => {
+    if (!readerFailed) {
+      return;
+    }
+    focusViewportAfterRenderRef.current = false;
+    failureRef.current?.focus({ preventScroll: true });
+  }, [readerFailed]);
+
+  useEffect(() => {
+    if (
+      readerFailed ||
+      !renderedPageMatches ||
+      !focusViewportAfterRenderRef.current
+    ) {
+      return;
+    }
+    focusViewportAfterRenderRef.current = false;
+    viewportRef.current?.focus({ preventScroll: true });
+  }, [readerFailed, renderedPageMatches]);
+
+  function focusViewportAfterRender(): void {
+    focusViewportAfterRenderRef.current = true;
+  }
+
+  function goToPage(nextPage: number): void {
+    if (document === null || readerFailed || pageCount < 1) {
+      return;
+    }
+    const boundedPage = Math.max(1, Math.min(pageCount, nextPage));
+    setPageInput(String(boundedPage));
+    setPageInputInvalid(false);
+    focusViewportAfterRender();
+    if (boundedPage === pageNumber && renderedPageMatches) {
+      focusViewportAfterRenderRef.current = false;
+      viewportRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    setRenderedPage(null);
+    setPageNumber(boundedPage);
+  }
 
   function changePage(direction: -1 | 1): void {
-    setRenderedPage(null);
-    setPageNumber((current) =>
-      Math.max(1, Math.min(pageCount, current + direction)),
-    );
+    goToPage(pageNumber + direction);
   }
 
   function changeZoom(nextZoom: number): void {
+    if (document === null || readerFailed) {
+      return;
+    }
+    const boundedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextZoom));
+    focusViewportAfterRender();
+    if (boundedZoom === zoom && renderedPageMatches) {
+      focusViewportAfterRenderRef.current = false;
+      viewportRef.current?.focus({ preventScroll: true });
+      return;
+    }
     setRenderedPage(null);
-    setZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextZoom)));
+    setZoom(boundedZoom);
+  }
+
+  function submitPageNumber(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const requestedPage = Number(pageInput);
+    if (
+      !Number.isInteger(requestedPage) ||
+      requestedPage < 1 ||
+      requestedPage > pageCount
+    ) {
+      setPageInputInvalid(true);
+      return;
+    }
+    goToPage(requestedPage);
+  }
+
+  function handleViewportKeyDown(
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ): void {
+    if (
+      document === null ||
+      readerFailed ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+
+    switch (event.key) {
+      case "PageUp":
+        event.preventDefault();
+        goToPage(pageNumber - 1);
+        break;
+      case "PageDown":
+        event.preventDefault();
+        goToPage(pageNumber + 1);
+        break;
+      case "Home":
+        event.preventDefault();
+        goToPage(1);
+        break;
+      case "End":
+        event.preventDefault();
+        goToPage(pageCount);
+        break;
+      case "+":
+      case "=":
+        event.preventDefault();
+        changeZoom(zoom + ZOOM_STEP);
+        break;
+      case "-":
+      case "_":
+        event.preventDefault();
+        changeZoom(zoom - ZOOM_STEP);
+        break;
+      case "0":
+        event.preventDefault();
+        changeZoom(1);
+        break;
+    }
   }
 
   function retryReader(): void {
     destroyLoadingTaskRef.current?.();
+    viewportRef.current?.focus({ preventScroll: true });
+    focusViewportAfterRender();
     setDocument(null);
     setPageCount(0);
     setPageNumber(1);
+    setPageInput("1");
+    setPageInputInvalid(false);
     setZoom(1);
     setLoadPercent(null);
     setLoadError(false);
@@ -374,7 +516,7 @@ function PdfReaderSession({
         >
           Previous
         </button>
-        <span aria-live="polite" className="readerPageStatus">
+        <span className="readerPageStatus">
           {renderedPageMatches
             ? `Page ${pageNumber} of ${pageCount}`
             : document === null
@@ -391,6 +533,44 @@ function PdfReaderSession({
         >
           Next
         </button>
+        <form className="readerPageJump" noValidate onSubmit={submitPageNumber}>
+          <label htmlFor={pageInputId}>Page</label>
+          <input
+            aria-describedby={
+              pageInputInvalid ? pageInputErrorId : undefined
+            }
+            aria-invalid={pageInputInvalid || undefined}
+            disabled={document === null || readerFailed}
+            id={pageInputId}
+            inputMode="numeric"
+            max={Math.max(1, pageCount)}
+            min="1"
+            onChange={(event) => {
+              setPageInput(event.currentTarget.value);
+              setPageInputInvalid(false);
+            }}
+            step="1"
+            type="number"
+            value={pageInput}
+          />
+          <span aria-hidden="true">of {pageCount || "—"}</span>
+          <button
+            className="button button--ghost readerPageGoButton"
+            disabled={document === null || readerFailed}
+            type="submit"
+          >
+            Go
+          </button>
+          {pageInputInvalid && !readerFailed ? (
+            <span
+              className="readerPageJumpError"
+              id={pageInputErrorId}
+              role="alert"
+            >
+              Enter a page from 1 to {pageCount}.
+            </span>
+          ) : null}
+        </form>
         <span aria-hidden="true" className="readerControlDivider" />
         <button
           aria-label="Zoom out"
@@ -401,7 +581,7 @@ function PdfReaderSession({
         >
           −
         </button>
-        <span aria-live="polite" className="readerZoomStatus">
+        <span className="readerZoomStatus">
           {Math.round(zoom * 100)}%
         </span>
         <button
@@ -421,10 +601,37 @@ function PdfReaderSession({
         >
           Reset zoom
         </button>
+        {accessibleTextAvailable ? (
+          <button
+            aria-controls={accessibleTextId}
+            aria-expanded={showAccessibleText}
+            className="button button--ghost"
+            onClick={() => setShowAccessibleText((current) => !current)}
+            type="button"
+          >
+            {showAccessibleText ? "Hide page text" : "Show page text"}
+          </button>
+        ) : null}
       </div>
+
+      <p className="readerShortcutHint" id={shortcutHintId}>
+        Focus the page viewport to use Page Up, Page Down, Home, End, plus,
+        minus, or 0 for page and zoom control.
+      </p>
+
+      <p
+        aria-atomic="true"
+        aria-live="polite"
+        className="srOnly"
+        role="status"
+      >
+        {renderAnnouncement}
+      </p>
 
       <div
         aria-busy={loading || rendering}
+        aria-describedby={shortcutHintId}
+        aria-label={`PDF page viewport for ${title}`}
         className="readerViewport"
         data-reader-state={
           readerFailed
@@ -435,9 +642,13 @@ function PdfReaderSession({
                 ? "rendering"
                 : "ready"
         }
+        onKeyDown={handleViewportKeyDown}
+        ref={viewportRef}
+        role="region"
+        tabIndex={0}
       >
         {loading ? (
-          <div className="readerLoading" role="status">
+          <div className="readerLoading">
             <span aria-hidden="true" className="readerSpinner" />
             <strong>Loading verified PDF…</strong>
             <span>
@@ -449,7 +660,7 @@ function PdfReaderSession({
         ) : null}
 
         {rendering ? (
-          <div className="readerLoading" role="status">
+          <div className="readerLoading">
             <span aria-hidden="true" className="readerSpinner" />
             <strong>Rendering verified page…</strong>
             <span>The preview will appear after this page is ready.</span>
@@ -457,7 +668,12 @@ function PdfReaderSession({
         ) : null}
 
         {readerFailed ? (
-          <div className="readerFailure" role="alert">
+          <div
+            className="readerFailure"
+            ref={failureRef}
+            role="alert"
+            tabIndex={-1}
+          >
             <span className="eyebrow">External fallback ready</span>
             <h2>This PDF cannot be displayed inside OpenScholar.</h2>
             <p>
@@ -500,7 +716,10 @@ function PdfReaderSession({
       {renderedPageMatches && renderedPage.accessibleText !== null ? (
         <section
           aria-label={`Accessible text for page ${pageNumber}`}
-          className="readerAccessibleText"
+          className={`readerAccessibleText${
+            showAccessibleText ? " readerAccessibleText--visible" : ""
+          }`}
+          id={accessibleTextId}
         >
           <h2>Page {pageNumber} text</h2>
           <p>{renderedPage.accessibleText}</p>
@@ -511,8 +730,8 @@ function PdfReaderSession({
         PDF.js requests this document directly from the verified host. OpenScholar
         does not proxy, persist, or redistribute its bytes. A bounded page-text
         representation is exposed to assistive technology when extraction is
-        available; use an external PDF reader for selectable visual text, search,
-        or document-native controls.
+        available. Use Show page text to make that extraction visible, or use an
+        external PDF reader for document search and native controls.
       </p>
     </section>
   );
