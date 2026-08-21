@@ -1,0 +1,88 @@
+name: MCP Conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "compose.yaml"
+      - "scripts/mcp-conformance-proxy.mjs"
+      - ".github/workflows/mcp-conformance.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "compose.yaml"
+      - "scripts/mcp-conformance-proxy.mjs"
+      - ".github/workflows/mcp-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supported-scenarios:
+    name: Supported MCP scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MCP_LOCAL_API_KEY: openscholar-ci-conformance-key
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Build and start PostgreSQL and backend
+        run: docker compose up --build --detach postgres backend
+
+      - name: Wait for backend readiness
+        run: >-
+          curl --fail --silent --show-error
+          --retry 30 --retry-delay 2 --retry-connrefused
+          http://127.0.0.1:8080/actuator/health/readiness
+
+      - name: Run supported conformance scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/mcp-conformance-proxy.mjs &
+          proxy_pid=$!
+          trap 'kill "$proxy_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --silent --output /dev/null http://127.0.0.1:6277/not-found; then
+              break
+            fi
+            if ! kill -0 "$proxy_pid" 2>/dev/null; then
+              echo "MCP conformance proxy stopped before it became ready" >&2
+              exit 1
+            fi
+            sleep 0.25
+          done
+          kill -0 "$proxy_pid"
+
+          npx --yes @modelcontextprotocol/conformance@0.1.16 server \
+            --url http://127.0.0.1:6277/mcp \
+            --scenario server-initialize \
+            --spec-version 2025-11-25
+
+          npx --yes @modelcontextprotocol/conformance@0.1.16 server \
+            --url http://127.0.0.1:6277/mcp \
+            --scenario tools-list \
+            --spec-version 2025-11-25
+
+      - name: Show backend logs after failure
+        if: failure()
+        run: docker compose logs --no-color backend postgres
+
+      - name: Stop services
+        if: always()
+        run: docker compose down --volumes --remove-orphans

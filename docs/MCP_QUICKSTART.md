@@ -172,3 +172,5 @@ npx @modelcontextprotocol/conformance@0.1.16 server \
 Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, resources, prompts, sampling, and elicitation that this five-tool domain server intentionally does not advertise; failing those fixture scenarios would not indicate a production contract failure. Do not use the `server-stateless` scenario, which targets a later protocol revision.
 
 Both commands were verified against the Compose image with conformance `0.1.16`: each passed `1/1` with no warnings, and `tools-list` discovered exactly the five documented tools.
+
+The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, and workflow changes. It starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.

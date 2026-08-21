@@ -105,7 +105,7 @@ Run `./mvnw verify` from `backend` and `pnpm check` from `frontend`. See the [ba
 
 ## Remaining MVP work
 
-CI automation for the applicable MCP conformance subset, richer typed citation metadata, automated Playwright coverage, and reader accessibility enhancements remain on the roadmap. Job-handle tools are deferred until a genuinely long-running workflow needs them. The local MCP boundary already enforces bearer authentication, exact Origin checks, bounded per-address request rates, request IDs, and safe response headers; raw integration coverage invokes every database-only tool, the official MCP Inspector discovers all five tools and invokes the stored-library tool, and the pinned official conformance initialize/tool-list scenarios pass without warnings.
+Richer typed citation metadata, automated Playwright coverage, and reader accessibility enhancements remain on the roadmap. Job-handle tools are deferred until a genuinely long-running workflow needs them. The local MCP boundary already enforces bearer authentication, exact Origin checks, bounded per-address request rates, request IDs, and safe response headers; raw integration coverage invokes every database-only tool, the official MCP Inspector discovers all five tools and invokes the stored-library tool, and CI runs the pinned official conformance initialize/tool-list scenarios.
 
 ## License
 
