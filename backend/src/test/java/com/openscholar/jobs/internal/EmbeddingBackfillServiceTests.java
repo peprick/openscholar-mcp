@@ -507,7 +507,14 @@ class EmbeddingBackfillServiceTests {
 		}
 
 		@Override
-		public List<PaperEmbeddingMatch> findNearest(UUID sourcePaperId, String profileKey, int limit) {
+		public List<PaperEmbeddingMatch> findNearestExact(
+				UUID sourcePaperId, String profileKey, int limit) {
+			throw new AssertionError("Nearest-neighbor lookup must not run during backfill");
+		}
+
+		@Override
+		public List<PaperEmbeddingMatch> findNearestApproximate(
+				UUID sourcePaperId, String profileKey, int limit) {
 			throw new AssertionError("Nearest-neighbor lookup must not run during backfill");
 		}
 	}

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -281,10 +282,10 @@ class PostgresPaperEmbeddingStoreTests {
 		storeCurrent(sourceId, profileB, List.of(1.0f, 0.0f), NOW);
 		storeCurrent(candidateB, profileB, List.of(0.8f, 0.2f), NOW);
 
-		assertThat(embeddingStore.findNearest(sourceId, profileA, 10))
+		assertThat(embeddingStore.findNearestExact(sourceId, profileA, 10))
 				.extracting(PaperEmbeddingMatch::paperId)
 				.containsExactly(candidateA);
-		assertThat(embeddingStore.findNearest(sourceId, profileB, 10))
+		assertThat(embeddingStore.findNearestExact(sourceId, profileB, 10))
 				.extracting(PaperEmbeddingMatch::paperId)
 				.containsExactly(candidateB);
 	}
@@ -308,8 +309,8 @@ class PostgresPaperEmbeddingStoreTests {
 		storeCurrent(orthogonalId, PROFILE_KEY, List.of(0.0f, 1.0f, 0.0f), NOW);
 		storeCurrent(oppositeId, PROFILE_KEY, List.of(-1.0f, 0.0f, 0.0f), NOW);
 
-		List<PaperEmbeddingMatch> first = embeddingStore.findNearest(sourceId, PROFILE_KEY, 4);
-		List<PaperEmbeddingMatch> repeated = embeddingStore.findNearest(sourceId, PROFILE_KEY, 4);
+		List<PaperEmbeddingMatch> first = embeddingStore.findNearestExact(sourceId, PROFILE_KEY, 4);
+		List<PaperEmbeddingMatch> repeated = embeddingStore.findNearestExact(sourceId, PROFILE_KEY, 4);
 
 		assertThat(first).extracting(PaperEmbeddingMatch::paperId)
 				.containsExactly(nearId, lowerTieId, higherTieId, orthogonalId)
@@ -321,9 +322,77 @@ class PostgresPaperEmbeddingStoreTests {
 		assertThat(first.get(2).cosineSimilarity()).isCloseTo(0.6d, within(0.000001d));
 		assertThat(first.get(3).cosineSimilarity()).isCloseTo(0.0d, within(0.000001d));
 		assertThat(repeated).isEqualTo(first);
-		assertThat(embeddingStore.findNearest(sourceId, PROFILE_KEY, 2))
+		assertThat(embeddingStore.findNearestExact(sourceId, PROFILE_KEY, 2))
 				.extracting(PaperEmbeddingMatch::paperId)
 				.containsExactly(nearId, lowerTieId);
+	}
+
+	@Test
+	void approximateLookupUsesThePinnedSpaceAndDeterministicallyReranksItsCandidatePool() {
+		UUID sourceId = uuid(500);
+		UUID nearId = uuid(510);
+		UUID lowerTieId = uuid(3);
+		UUID higherTieId = uuid(4);
+		UUID orthogonalId = uuid(520);
+		List.of(sourceId, nearId, lowerTieId, higherTieId, orthogonalId)
+				.forEach(id -> insertPaper(id, "ANN paper " + id, "A pinned ANN vector fixture"));
+		embeddingStore.registerProfile(pinnedProfile());
+
+		storeCurrent(sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(1.0f, 0.0f), NOW);
+		storeCurrent(nearId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.99f, 0.01f), NOW);
+		storeCurrent(lowerTieId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.8f, 0.2f), NOW);
+		storeCurrent(higherTieId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.8f, 0.2f), NOW);
+		storeCurrent(orthogonalId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.0f, 1.0f), NOW);
+
+		List<PaperEmbeddingMatch> exact = embeddingStore.findNearestExact(
+				sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, 4);
+		List<PaperEmbeddingMatch> approximate = embeddingStore.findNearestApproximate(
+				sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, 4);
+		List<PaperEmbeddingMatch> repeated = embeddingStore.findNearestApproximate(
+				sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, 4);
+
+		assertThat(approximate).isEqualTo(exact).isEqualTo(repeated);
+		assertThat(approximate).extracting(PaperEmbeddingMatch::paperId)
+				.containsExactly(nearId, lowerTieId, higherTieId, orthogonalId)
+				.doesNotContain(sourceId);
+		assertThat(approximate).extracting(PaperEmbeddingMatch::rank)
+				.containsExactly(1, 2, 3, 4);
+	}
+
+	@Test
+	void approximateLookupRejectsAProfileThatOnlyImitatesThePinnedKey() {
+		EmbeddingProfile impostor = profile(
+				PaperEmbeddingAnnPolicy.PROFILE_KEY,
+				"different-model",
+				"different-revision",
+				PaperEmbeddingAnnPolicy.DIMENSIONS);
+		embeddingStore.registerProfile(impostor);
+
+		assertThatThrownBy(() -> embeddingStore.findNearestApproximate(
+				uuid(530), PaperEmbeddingAnnPolicy.PROFILE_KEY, 10))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("supports only the pinned")
+				.hasMessageContaining(PaperEmbeddingAnnPolicy.PROFILE_KEY);
+	}
+
+	@Test
+	void approximateQueryShapeCanUseThePinnedHnswIndex() {
+		jdbcTemplate.queryForMap("select set_config('enable_seqscan', 'off', true)");
+
+		List<String> plan = jdbcTemplate.query("""
+				explain (costs off)
+				select candidate.paper_id
+				from paper_embedding candidate
+				where candidate.profile_key = '%s'
+				order by candidate.embedding::public.vector(1024)
+				         <=> cast(? as public.vector(1024))
+				limit 100
+				""".formatted(PaperEmbeddingAnnPolicy.PROFILE_KEY),
+				(resultSet, rowNumber) -> resultSet.getString(1),
+				unitVectorLiteral());
+
+		assertThat(String.join("\n", plan))
+				.contains("Index Scan using " + PaperEmbeddingAnnPolicy.INDEX_NAME);
 	}
 
 	@Test
@@ -340,14 +409,14 @@ class PostgresPaperEmbeddingStoreTests {
 				unembeddedPaperId, "unknown-profile-v1"))
 				.isInstanceOf(EmbeddingProfileNotFoundException.class)
 				.hasMessageContaining("unknown-profile-v1");
-		assertThatThrownBy(() -> embeddingStore.findNearest(unembeddedPaperId, PROFILE_KEY, 10))
+		assertThatThrownBy(() -> embeddingStore.findNearestExact(unembeddedPaperId, PROFILE_KEY, 10))
 				.isInstanceOf(PaperEmbeddingNotFoundException.class)
 				.hasMessageContaining(unembeddedPaperId.toString())
 				.hasMessageContaining(PROFILE_KEY);
-		assertThatThrownBy(() -> embeddingStore.findNearest(unembeddedPaperId, PROFILE_KEY, 0))
+		assertThatThrownBy(() -> embeddingStore.findNearestExact(unembeddedPaperId, PROFILE_KEY, 0))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("between 1 and 100");
-		assertThatThrownBy(() -> embeddingStore.findNearest(unembeddedPaperId, PROFILE_KEY, 101))
+		assertThatThrownBy(() -> embeddingStore.findNearestExact(unembeddedPaperId, PROFILE_KEY, 101))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("between 1 and 100");
 	}
@@ -367,6 +436,32 @@ class PostgresPaperEmbeddingStoreTests {
 				1,
 				dimensions,
 				EmbeddingDistanceMetric.COSINE);
+	}
+
+	private EmbeddingProfile pinnedProfile() {
+		return new EmbeddingProfile(
+				PaperEmbeddingAnnPolicy.PROFILE_KEY,
+				PaperEmbeddingAnnPolicy.PROVIDER,
+				PaperEmbeddingAnnPolicy.MODEL,
+				PaperEmbeddingAnnPolicy.MODEL_REVISION,
+				PaperEmbeddingAnnPolicy.CONTENT_KIND,
+				PaperEmbeddingAnnPolicy.INPUT_POLICY_VERSION,
+				PaperEmbeddingAnnPolicy.DIMENSIONS,
+				EmbeddingDistanceMetric.COSINE);
+	}
+
+	private List<Float> vector(float first, float second) {
+		List<Float> vector = new ArrayList<>(PaperEmbeddingAnnPolicy.DIMENSIONS);
+		vector.add(first);
+		vector.add(second);
+		while (vector.size() < PaperEmbeddingAnnPolicy.DIMENSIONS) {
+			vector.add(0.0f);
+		}
+		return List.copyOf(vector);
+	}
+
+	private String unitVectorLiteral() {
+		return vector(1.0f, 0.0f).toString().replace(" ", "");
 	}
 
 	private PaperEmbeddingCandidate candidate(

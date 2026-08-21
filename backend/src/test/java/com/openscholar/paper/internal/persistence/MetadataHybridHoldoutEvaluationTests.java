@@ -217,9 +217,9 @@ class MetadataHybridHoldoutEvaluationTests {
 				repeatedLexical, corpus, query);
 		assertThat(repeatedLexicalFeatures).isEqualTo(firstLexicalFeatures);
 
-		List<PaperEmbeddingMatch> firstVector = embeddingStore.findNearest(
+		List<PaperEmbeddingMatch> firstVector = embeddingStore.findNearestExact(
 				source.id(), profileKey, CANDIDATE_COUNT);
-		List<PaperEmbeddingMatch> repeatedVector = embeddingStore.findNearest(
+		List<PaperEmbeddingMatch> repeatedVector = embeddingStore.findNearestExact(
 				source.id(), profileKey, CANDIDATE_COUNT);
 		RelatedPaperEvaluationAssertions.assertStableExactVectorResults(
 				firstVector, repeatedVector, source.id(), CANDIDATE_COUNT);

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "policyId": "paper-embedding-hnsw-policy-v1",
+  "activation": "EVALUATION_ONLY",
+  "databaseImage": "pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+  "profileKey": "paper-semantic-v1-ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d-ollama-0-31-1",
+  "provider": "ollama",
+  "model": "qwen3-embedding:0.6b",
+  "modelRevision": "sha256:ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d;ollama:0.31.1",
+  "contentKind": "TITLE_ABSTRACT",
+  "inputPolicyVersion": 1,
+  "dimensions": 1024,
+  "distanceMetric": "COSINE",
+  "index": {
+    "name": "idx_paper_embedding_qwen06b_v1_cosine_hnsw",
+    "m": 16,
+    "efConstruction": 64
+  },
+  "query": {
+    "efSearch": 1000,
+    "iterativeScan": "strict_order",
+    "maxScanTuples": 20000,
+    "candidateOversamplingMultiplier": 4,
+    "minimumCandidatePool": 100,
+    "maximumCandidatePool": 400,
+    "exactBaseline": "SET_LOCAL_ENABLE_INDEXSCAN_OFF",
+    "finalTieBreak": "PAPER_ID"
+  },
+  "recallGate": {
+    "corpusSize": 10000,
+    "queryCount": 20,
+    "cutoff": 25,
+    "minimumPerQueryRecall": 0.90,
+    "minimumMacroRecall": 0.95
+  },
+  "latencyGate": {
+    "warmupRuns": 2,
+    "measurementRuns": 5,
+    "maximumApproximateP95Millis": 50.0,
+    "minimumExactToApproximateP95Speedup": 1.5,
+    "referenceCpuCount": 4,
+    "referenceMemoryGiB": 8,
+    "cacheState": "WARM",
+    "concurrentLoad": 0
+  }
+}

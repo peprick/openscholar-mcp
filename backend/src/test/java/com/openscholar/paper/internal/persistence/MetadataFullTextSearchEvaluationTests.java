@@ -225,9 +225,9 @@ class MetadataFullTextSearchEvaluationTests {
 			PaperView source = RelatedPaperEvaluationAssertions.assertValidQuery(
 					query, corpus.papersByKey(), "vector evaluation");
 
-			List<PaperEmbeddingMatch> first = embeddingStore.findNearest(
+			List<PaperEmbeddingMatch> first = embeddingStore.findNearestExact(
 					source.id(), profile.profileKey(), candidateCount);
-			List<PaperEmbeddingMatch> repeated = embeddingStore.findNearest(
+			List<PaperEmbeddingMatch> repeated = embeddingStore.findNearestExact(
 					source.id(), profile.profileKey(), candidateCount);
 			RelatedPaperEvaluationAssertions.assertStableExactVectorResults(
 					first, repeated, source.id(), candidateCount);

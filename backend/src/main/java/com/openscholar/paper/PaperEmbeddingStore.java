@@ -13,5 +13,7 @@ public interface PaperEmbeddingStore {
 
 	PaperEmbeddingWorkPage findMissing(String profileKey, UUID afterExclusive, int limit);
 
-	List<PaperEmbeddingMatch> findNearest(UUID sourcePaperId, String profileKey, int limit);
+	List<PaperEmbeddingMatch> findNearestExact(UUID sourcePaperId, String profileKey, int limit);
+
+	List<PaperEmbeddingMatch> findNearestApproximate(UUID sourcePaperId, String profileKey, int limit);
 }

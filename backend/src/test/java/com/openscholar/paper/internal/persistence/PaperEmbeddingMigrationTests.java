@@ -53,6 +53,7 @@ class PaperEmbeddingMigrationTests {
 					.schemas(schema)
 					.defaultSchema(schema)
 					.locations("classpath:db/migration")
+					.target("10")
 					.load()
 					.migrate();
 
