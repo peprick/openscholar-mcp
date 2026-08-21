@@ -3,6 +3,8 @@ package com.openscholar.search.internal;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.MDC;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,6 +20,7 @@ import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 class SearchConfiguration {
 
 	static final String EXECUTION_EXECUTOR_BEAN = "searchExecutionExecutor";
+	static final String PROVIDER_EXECUTOR_BEAN = "searchProviderExecutor";
 
 	@Bean(name = EXECUTION_EXECUTOR_BEAN, destroyMethod = "close")
 	SimpleAsyncTaskExecutor searchExecutionExecutor() {
@@ -29,6 +32,13 @@ class SearchConfiguration {
 		executor.setCancelRemainingTasksOnClose(true);
 		executor.setTaskTerminationTimeout(Duration.ofSeconds(5).toMillis());
 		return executor;
+	}
+
+	@Bean(name = PROVIDER_EXECUTOR_BEAN, destroyMethod = "shutdownNow")
+	ExecutorService searchProviderExecutor(SearchProperties properties) {
+		return Executors.newFixedThreadPool(
+				properties.getProviderConcurrency(),
+				Thread.ofVirtual().name("openscholar-provider-", 0).factory());
 	}
 
 	private static TaskDecorator mdcTaskDecorator() {

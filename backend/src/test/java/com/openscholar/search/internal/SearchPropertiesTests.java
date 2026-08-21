@@ -66,4 +66,17 @@ class SearchPropertiesTests {
 		assertThatIllegalArgumentException()
 				.isThrownBy(() -> properties.setExecutionTimeout(Duration.ofNanos(999_999)));
 	}
+
+	@Test
+	void boundsProviderConcurrency() {
+		SearchProperties properties = new SearchProperties();
+
+		assertThat(properties.getProviderConcurrency()).isEqualTo(4);
+		properties.setProviderConcurrency(8);
+		assertThat(properties.getProviderConcurrency()).isEqualTo(8);
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setProviderConcurrency(0));
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setProviderConcurrency(17));
+	}
 }

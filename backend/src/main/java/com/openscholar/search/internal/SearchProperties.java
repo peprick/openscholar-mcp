@@ -10,6 +10,7 @@ class SearchProperties {
 	private Duration cacheTtl = Duration.ofHours(24);
 	private Duration coordinationWaitTimeout = Duration.ofSeconds(12);
 	private Duration executionTimeout = Duration.ofSeconds(18);
+	private int providerConcurrency = 4;
 
 	public Duration getCacheTtl() {
 		return cacheTtl;
@@ -42,5 +43,16 @@ class SearchProperties {
 			throw new IllegalArgumentException("Search execution timeout must be at least one millisecond");
 		}
 		this.executionTimeout = executionTimeout;
+	}
+
+	public int getProviderConcurrency() {
+		return providerConcurrency;
+	}
+
+	public void setProviderConcurrency(int providerConcurrency) {
+		if (providerConcurrency < 1 || providerConcurrency > 16) {
+			throw new IllegalArgumentException("Search provider concurrency must be between 1 and 16");
+		}
+		this.providerConcurrency = providerConcurrency;
 	}
 }

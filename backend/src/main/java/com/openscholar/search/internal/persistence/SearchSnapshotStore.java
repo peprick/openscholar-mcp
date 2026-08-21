@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,15 +18,16 @@ import com.openscholar.paper.CanonicalPaperCandidate;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.paper.PaperAuthorCandidate;
 import com.openscholar.paper.PaperCatalog;
-import com.openscholar.paper.PaperIdentifier;
-import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.paper.PaperView;
 import com.openscholar.paper.ProviderRecordCandidate;
 import com.openscholar.provider.ProviderAuthor;
+import com.openscholar.provider.ProviderException;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.provider.ProviderPaperRecord;
+import com.openscholar.provider.ProviderSearchBatchResult;
 import com.openscholar.provider.ProviderSearchResult;
 import com.openscholar.search.CacheDisposition;
+import com.openscholar.search.ProviderContributionView;
 import com.openscholar.search.ProviderCoverageView;
 import com.openscholar.search.RankingReason;
 import com.openscholar.search.SearchCommand;
@@ -80,23 +82,44 @@ public class SearchSnapshotStore {
 			String fingerprint,
 			int fingerprintVersion,
 			String pipelineVersion,
-			ProviderSearchResult providerResult,
+			ProviderSearchBatchResult providerResult,
 			Instant freshUntil,
 			CacheDisposition disposition) {
-		LinkedHashMap<UUID, PersistedCandidate> candidates = new LinkedHashMap<>();
-		for (ProviderPaperRecord record : providerResult.records()) {
-			PaperView paper = paperCatalog.upsert(
-					toCanonicalCandidate(record, providerResult.retrievedAt()),
-					toProviderRecord(record, providerResult.retrievedAt()),
-					providerResult.retrievedAt());
-			candidates.putIfAbsent(paper.id(), new PersistedCandidate(paper, record));
+		List<ProviderSearchResult> successfulProviders = providerResult.results().stream()
+				.sorted(Comparator.comparing(result -> result.provider().name()))
+				.toList();
+		boolean multiProvider = successfulProviders.size() + providerResult.failures().size() > 1;
+		LinkedHashMap<UUID, CandidateAccumulator> accumulated = new LinkedHashMap<>();
+		int sequence = 0;
+		for (ProviderSearchResult result : successfulProviders) {
+			int providerRank = 1;
+			for (ProviderPaperRecord record : result.records()) {
+				PaperView paper = paperCatalog.upsert(
+						toCanonicalCandidate(record, result.retrievedAt()),
+						toProviderRecord(record, result.retrievedAt()),
+						result.retrievedAt());
+				CandidateAccumulator candidate = accumulated.get(paper.id());
+				if (candidate == null) {
+					candidate = new CandidateAccumulator(paper.id(), sequence);
+					accumulated.put(paper.id(), candidate);
+				}
+				candidate.add(new ProviderContribution(record, result.retrievedAt(), providerRank++));
+				sequence++;
+			}
 		}
+		Map<UUID, PaperView> finalPapers = paperCatalog.findAllByIds(accumulated.keySet());
+		List<PersistedCandidate> candidates = accumulated.values().stream()
+				.map(candidate -> candidate.finish(requirePaper(finalPapers, candidate.paperId()), multiProvider))
+				.sorted(candidateOrder(multiProvider))
+				.limit(command.pageSize())
+				.toList();
 
-		List<Map<String, Object>> coverage = List.of(Map.of(
-				"provider", providerResult.provider().name(),
-				"status", "SUCCESS",
-				"returnedCount", providerResult.records().size(),
-				"totalMatches", providerResult.totalMatches()));
+		List<Map<String, Object>> coverage = coverage(providerResult);
+		List<String> warnings = providerResult.failures().stream()
+				.sorted(Comparator.comparing(failure -> failure.provider().name()))
+				.map(ProviderException::errorCode)
+				.distinct()
+				.toList();
 		SearchSnapshotEntity snapshot = SearchSnapshotEntity.completed(
 				command.query(),
 				normalizedQuery,
@@ -107,36 +130,34 @@ public class SearchSnapshotStore {
 				providerResult.retrievedAt(),
 				freshUntil,
 				coverage,
-				List.of(),
-				providerResult.totalMatches(),
+				warnings,
+				totalMatches(successfulProviders),
 				candidates.size(),
 				providerResult.nextCursor());
 		snapshotRepository.saveAndFlush(snapshot);
 
 		List<SearchResultEntity> results = new ArrayList<>();
 		int rank = 1;
-		for (PersistedCandidate candidate : candidates.values()) {
-			ProviderPaperRecord record = candidate.providerRecord();
-			List<Map<String, Object>> reasons = record.relevanceScore() == null
-					? List.of()
-					: List.of(Map.of("feature", "OPENALEX_RELEVANCE", "value", record.relevanceScore()));
-			List<Map<String, Object>> contributions = List.of(Map.of(
-					"provider", record.provider().name(),
-					"providerRecordId", record.providerRecordId(),
-					"retrievedAt", providerResult.retrievedAt().toString()));
+		for (PersistedCandidate candidate : candidates) {
+			ProviderContribution primary = candidate.primary();
+			ProviderPaperRecord record = primary.record();
+			List<Map<String, Object>> reasons = rankingReasons(candidate, multiProvider);
+			List<Map<String, Object>> contributions = candidate.contributions().stream()
+					.map(SearchSnapshotStore::contributionMap)
+					.toList();
 			results.add(SearchResultEntity.create(
 					snapshot.id(),
 					candidate.paper(),
 					rank++,
-					record.relevanceScore(),
-					record.reportedOpenAccess(),
+					candidate.score(),
+					candidate.reportedOpenAccess(),
 					toString(record.landingPageUrl()),
 					toString(record.pdfUrl()),
 					reasons,
 					contributions,
 					record.provider().name(),
 					record.providerRecordId(),
-					providerResult.retrievedAt()));
+					primary.retrievedAt()));
 		}
 		resultRepository.saveAllAndFlush(results);
 		return toView(snapshot, results, disposition);
@@ -174,6 +195,9 @@ public class SearchSnapshotStore {
 						String.valueOf(reason.get("feature")),
 						numberAsDouble(reason.get("value"))))
 				.toList();
+		List<ProviderContributionView> contributions = result.providerContributions().stream()
+				.map(SearchSnapshotStore::contributionView)
+				.toList();
 		return new SearchResultView(
 				result.resultRank(),
 				result.paperView(),
@@ -184,20 +208,12 @@ public class SearchSnapshotStore {
 				reasons,
 				ProviderId.valueOf(result.provider()),
 				result.providerRecordId(),
-				result.retrievedAt());
+				result.retrievedAt(),
+				contributions);
 	}
 
 	private static CanonicalPaperCandidate toCanonicalCandidate(
 			ProviderPaperRecord record, Instant retrievedAt) {
-		List<PaperIdentifier> identifiers = new ArrayList<>();
-		if (record.doi() != null && !record.doi().isBlank()) {
-			identifiers.add(new PaperIdentifier(PaperIdentifierType.DOI, "", record.doi()));
-		}
-		if (record.arxivId() != null && !record.arxivId().isBlank()) {
-			identifiers.add(new PaperIdentifier(PaperIdentifierType.ARXIV, "", record.arxivId()));
-		}
-		identifiers.add(new PaperIdentifier(
-				PaperIdentifierType.OPENALEX, "", record.providerRecordId()));
 		List<PaperAuthorCandidate> authors = record.authors().stream()
 				.filter(author -> author.displayName() != null && !author.displayName().isBlank())
 				.map(SearchSnapshotStore::toAuthorCandidate)
@@ -212,7 +228,7 @@ public class SearchSnapshotStore {
 				record.venueName(),
 				record.citationCount(),
 				retrievedAt,
-				identifiers,
+				record.identifiers(),
 				authors);
 	}
 
@@ -227,19 +243,91 @@ public class SearchSnapshotStore {
 
 	private static ProviderRecordCandidate toProviderRecord(
 			ProviderPaperRecord record, Instant retrievedAt) {
-		URI sourceUrl = record.provider() == ProviderId.OPENALEX
-				? parseHttpUri("https://openalex.org/works/" + record.providerRecordId())
-				: null;
 		return new ProviderRecordCandidate(
 				record.provider().name(),
 				record.providerRecordId(),
 				record.providerUpdatedAt(),
 				retrievedAt,
-				sourceUrl,
+				record.sourceUrl(),
 				record.reportedOpenAccess(),
 				record.landingPageUrl(),
 				record.pdfUrl(),
 				record.metadataFragment());
+	}
+
+	private static PaperView requirePaper(Map<UUID, PaperView> papers, UUID paperId) {
+		PaperView paper = papers.get(paperId);
+		if (paper == null) {
+			throw new IllegalStateException("A provider result paper disappeared before snapshot creation");
+		}
+		return paper;
+	}
+
+	private static Comparator<PersistedCandidate> candidateOrder(boolean multiProvider) {
+		if (!multiProvider) {
+			return Comparator.comparingInt(PersistedCandidate::firstSeen);
+		}
+		return Comparator.comparingDouble((PersistedCandidate candidate) -> candidate.score().doubleValue())
+				.reversed()
+				.thenComparingInt(candidate -> candidate.primary().providerRank())
+				.thenComparing(candidate -> candidate.primary().record().provider().name())
+				.thenComparing(candidate -> candidate.primary().record().providerRecordId())
+				.thenComparing(candidate -> candidate.paper().id());
+	}
+
+	private static List<Map<String, Object>> coverage(ProviderSearchBatchResult batch) {
+		List<Map<String, Object>> coverage = new ArrayList<>();
+		batch.results().forEach(result -> coverage.add(Map.of(
+				"provider", result.provider().name(),
+				"status", "SUCCESS",
+				"returnedCount", result.records().size(),
+				"totalMatches", result.totalMatches())));
+		batch.failures().forEach(failure -> coverage.add(Map.of(
+				"provider", failure.provider().name(),
+				"status", "FAILED",
+				"returnedCount", 0,
+				"totalMatches", 0L)));
+		return coverage.stream()
+				.sorted(Comparator.comparing(item -> String.valueOf(item.get("provider"))))
+				.toList();
+	}
+
+	private static long totalMatches(List<ProviderSearchResult> results) {
+		long total = 0;
+		for (ProviderSearchResult result : results) {
+			long value = Math.max(0, result.totalMatches());
+			total = Long.MAX_VALUE - total < value ? Long.MAX_VALUE : total + value;
+		}
+		return total;
+	}
+
+	private static List<Map<String, Object>> rankingReasons(
+			PersistedCandidate candidate, boolean multiProvider) {
+		if (multiProvider) {
+			return List.of(Map.of(
+					"feature", "PROVIDER_RECIPROCAL_RANK_FUSION",
+					"value", candidate.score()));
+		}
+		Double relevance = candidate.primary().record().relevanceScore();
+		return relevance == null
+				? List.of()
+				: List.of(Map.of(
+						"feature", candidate.primary().record().provider().name() + "_RELEVANCE",
+						"value", relevance));
+	}
+
+	private static Map<String, Object> contributionMap(ProviderContribution contribution) {
+		return Map.of(
+				"provider", contribution.record().provider().name(),
+				"providerRecordId", contribution.record().providerRecordId(),
+				"retrievedAt", contribution.retrievedAt().toString());
+	}
+
+	private static ProviderContributionView contributionView(Map<String, Object> contribution) {
+		return new ProviderContributionView(
+				ProviderId.valueOf(String.valueOf(contribution.get("provider"))),
+				String.valueOf(contribution.get("providerRecordId")),
+				Instant.parse(String.valueOf(contribution.get("retrievedAt"))));
 	}
 
 	private static Map<String, Object> filters(SearchCommand command) {
@@ -409,6 +497,62 @@ public class SearchSnapshotStore {
 		}
 	}
 
-	private record PersistedCandidate(PaperView paper, ProviderPaperRecord providerRecord) {
+	private static final class CandidateAccumulator {
+
+		private final UUID paperId;
+		private final int firstSeen;
+		private final Map<ProviderId, ProviderContribution> contributions = new EnumMap<>(ProviderId.class);
+
+		private CandidateAccumulator(UUID paperId, int firstSeen) {
+			this.paperId = paperId;
+			this.firstSeen = firstSeen;
+		}
+
+		private UUID paperId() {
+			return paperId;
+		}
+
+		private void add(ProviderContribution contribution) {
+			contributions.merge(
+					contribution.record().provider(),
+					contribution,
+					(left, right) -> CONTRIBUTION_ORDER.compare(left, right) <= 0 ? left : right);
+		}
+
+		private PersistedCandidate finish(PaperView paper, boolean multiProvider) {
+			List<ProviderContribution> ordered = contributions.values().stream()
+					.sorted(Comparator.comparing(contribution -> contribution.record().provider().name()))
+					.toList();
+			ProviderContribution primary = ordered.stream().min(CONTRIBUTION_ORDER).orElseThrow();
+			Double score;
+			if (multiProvider) {
+				score = ordered.stream().mapToDouble(value -> 1.0 / (60.0 + value.providerRank())).sum();
+			}
+			else {
+				score = primary.record().relevanceScore();
+			}
+			boolean reportedOpenAccess = ordered.stream()
+					.anyMatch(value -> value.record().reportedOpenAccess());
+			return new PersistedCandidate(
+					paper, ordered, primary, score, reportedOpenAccess, firstSeen);
+		}
+	}
+
+	private static final Comparator<ProviderContribution> CONTRIBUTION_ORDER = Comparator
+			.comparingInt(ProviderContribution::providerRank)
+			.thenComparing(contribution -> contribution.record().provider().name())
+			.thenComparing(contribution -> contribution.record().providerRecordId());
+
+	private record ProviderContribution(
+			ProviderPaperRecord record, Instant retrievedAt, int providerRank) {
+	}
+
+	private record PersistedCandidate(
+			PaperView paper,
+			List<ProviderContribution> contributions,
+			ProviderContribution primary,
+			Double score,
+			boolean reportedOpenAccess,
+			int firstSeen) {
 	}
 }

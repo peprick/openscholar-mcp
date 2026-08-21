@@ -160,6 +160,10 @@ class SearchResultEntity {
 		return rankingReasons;
 	}
 
+	List<Map<String, Object>> providerContributions() {
+		return providerContributions;
+	}
+
 	String provider() {
 		return provider;
 	}

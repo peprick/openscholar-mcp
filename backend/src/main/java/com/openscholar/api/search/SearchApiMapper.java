@@ -1,7 +1,5 @@
 package com.openscholar.api.search;
 
-import java.util.List;
-
 import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.paper.PaperView;
 import com.openscholar.search.SearchResultView;
@@ -60,8 +58,12 @@ final class SearchApiMapper {
 				result.rankingReasons().stream()
 						.map(reason -> new SearchResponse.Reason(reason.feature(), reason.value()))
 						.toList(),
-				List.of(new SearchResponse.Provenance(
-						result.provider(), result.providerRecordId(), result.retrievedAt())));
+				result.providerContributions().stream()
+						.map(contribution -> new SearchResponse.Provenance(
+								contribution.provider(),
+								contribution.providerRecordId(),
+								contribution.retrievedAt()))
+						.toList());
 	}
 
 	private static String identifier(PaperView paper, PaperIdentifierType type) {

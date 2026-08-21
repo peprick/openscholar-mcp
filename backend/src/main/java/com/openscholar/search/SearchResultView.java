@@ -17,9 +17,28 @@ public record SearchResultView(
 		List<RankingReason> rankingReasons,
 		ProviderId provider,
 		String providerRecordId,
-		Instant retrievedAt) {
+		Instant retrievedAt,
+		List<ProviderContributionView> providerContributions) {
 
 	public SearchResultView {
 		rankingReasons = rankingReasons == null ? List.of() : List.copyOf(rankingReasons);
+		providerContributions = providerContributions == null
+				? List.of(new ProviderContributionView(provider, providerRecordId, retrievedAt))
+				: List.copyOf(providerContributions);
+	}
+
+	public SearchResultView(
+			int rank,
+			PaperView paper,
+			boolean reportedOpenAccess,
+			URI landingPageUrl,
+			URI pdfUrl,
+			Double score,
+			List<RankingReason> rankingReasons,
+			ProviderId provider,
+			String providerRecordId,
+			Instant retrievedAt) {
+		this(rank, paper, reportedOpenAccess, landingPageUrl, pdfUrl, score, rankingReasons, provider,
+				providerRecordId, retrievedAt, null);
 	}
 }

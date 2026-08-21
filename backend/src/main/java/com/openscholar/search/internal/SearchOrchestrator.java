@@ -5,10 +5,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.UUID;
 
-import com.openscholar.provider.ProviderException;
+import com.openscholar.provider.ProviderSearchBatchResult;
 import com.openscholar.provider.ProviderSearchQuery;
-import com.openscholar.provider.ProviderSearchResult;
-import com.openscholar.provider.ResearchProvider;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationTimeoutException;
@@ -25,7 +23,7 @@ class SearchOrchestrator implements SearchResearchUseCase {
 
 	private static final String COORDINATION_TIMEOUT_WARNING = "SEARCH_COORDINATION_TIMEOUT";
 
-	private final ResearchProvider provider;
+	private final ResearchProviderFanout providerFanout;
 	private final QueryFingerprinter fingerprinter;
 	private final SearchSnapshotStore snapshotStore;
 	private final SearchProperties properties;
@@ -34,14 +32,14 @@ class SearchOrchestrator implements SearchResearchUseCase {
 	private final Clock clock;
 
 	SearchOrchestrator(
-			ResearchProvider provider,
+			ResearchProviderFanout providerFanout,
 			QueryFingerprinter fingerprinter,
 			SearchSnapshotStore snapshotStore,
 			SearchProperties properties,
 			SearchRequestCoordinator requestCoordinator,
 			SearchExecutionDeadline executionDeadline,
 			Clock clock) {
-		this.provider = provider;
+		this.providerFanout = providerFanout;
 		this.fingerprinter = fingerprinter;
 		this.snapshotStore = snapshotStore;
 		this.properties = properties;
@@ -108,7 +106,7 @@ class SearchOrchestrator implements SearchResearchUseCase {
 		}
 		try {
 			executionDeadline.checkpoint();
-			ProviderSearchResult result = provider.search(new ProviderSearchQuery(
+			ProviderSearchBatchResult result = providerFanout.search(new ProviderSearchQuery(
 					command.query(),
 					command.yearFrom(),
 					command.yearTo(),
@@ -124,21 +122,21 @@ class SearchOrchestrator implements SearchResearchUseCase {
 					command,
 					normalizedQuery,
 					fingerprint,
-					QueryFingerprinter.FINGERPRINT_VERSION,
-					QueryFingerprinter.PIPELINE_VERSION,
+					fingerprinter.fingerprintVersion(),
+					fingerprinter.pipelineVersion(),
 					result,
 					result.retrievedAt().plus(properties.getCacheTtl()),
 					disposition);
 			executionDeadline.checkpoint();
 			return stored;
 		}
-		catch (ProviderException exception) {
+		catch (ProviderFanoutUnavailableException exception) {
 			executionDeadline.checkpoint();
 			if (latest.isPresent()) {
-				return withDisposition(
+				return withDispositionAndWarnings(
 						latest.orElseThrow().view(),
 						CacheDisposition.STALE_FALLBACK,
-						exception.provider().name() + "_UNAVAILABLE");
+						exception.warningCodes());
 			}
 			throw new SearchUnavailableException(
 					"Research provider is temporarily unavailable",
@@ -184,9 +182,19 @@ class SearchOrchestrator implements SearchResearchUseCase {
 
 	private static SearchView withDisposition(
 			SearchView view, CacheDisposition disposition, String additionalWarning) {
+		return withDispositionAndWarnings(
+				view,
+				disposition,
+				additionalWarning == null ? java.util.List.of() : java.util.List.of(additionalWarning));
+	}
+
+	private static SearchView withDispositionAndWarnings(
+			SearchView view, CacheDisposition disposition, java.util.List<String> additionalWarnings) {
 		var warnings = new ArrayList<>(view.warnings());
-		if (additionalWarning != null && !warnings.contains(additionalWarning)) {
-			warnings.add(additionalWarning);
+		for (String warning : additionalWarnings) {
+			if (warning != null && !warnings.contains(warning)) {
+				warnings.add(warning);
+			}
 		}
 		return new SearchView(
 				view.searchId(),

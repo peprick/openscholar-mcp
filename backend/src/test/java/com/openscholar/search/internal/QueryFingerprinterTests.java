@@ -2,9 +2,11 @@ package com.openscholar.search.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.Set;
 
 import com.openscholar.paper.DocumentType;
+import com.openscholar.provider.ProviderId;
 import com.openscholar.search.SearchCommand;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +45,21 @@ class QueryFingerprinterTests {
 
 		assertThat(fingerprinter.fingerprint(base)).isNotEqualTo(fingerprinter.fingerprint(filtered));
 		assertThat(fingerprinter.fingerprint(base)).hasSize(64);
+	}
+
+	@Test
+	void includesTheStableEnabledProviderSetInTheFingerprint() {
+		SearchCommand command = command("Graph Neural Networks", false, Set.of(), Set.of());
+		QueryFingerprinter reversedProviders = new QueryFingerprinter(
+				new QueryNormalizer(), List.of(ProviderId.OPENALEX, ProviderId.CORE));
+		QueryFingerprinter orderedProviders = new QueryFingerprinter(
+				new QueryNormalizer(), List.of(ProviderId.CORE, ProviderId.OPENALEX));
+
+		assertThat(reversedProviders.fingerprint(command))
+				.isEqualTo(orderedProviders.fingerprint(command))
+				.isNotEqualTo(fingerprinter.fingerprint(command));
+		assertThat(fingerprinter.pipelineVersion()).isEqualTo("openalex-v1");
+		assertThat(orderedProviders.pipelineVersion()).isEqualTo("provider-fanout-v1");
 	}
 
 	private static SearchCommand command(
