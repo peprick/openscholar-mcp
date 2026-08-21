@@ -11,7 +11,7 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Canonical DOI/OpenAlex deduplication, authors, and provider provenance
 - Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
 - Paper-specific credited author names and publication date/year integrity enforced by Flyway
-- Immutable 24-hour search snapshots with exact-cache hits, stale fallback, and bounded same-instance coordination waits
+- Immutable 24-hour search snapshots with exact-cache hits, stale fallback, bounded same-instance coordination waits, and an 18-second application execution deadline
 - Exact DOI legal-access lookup through Unpaywall when a backend contact email is configured
 - Exact arXiv-ID access lookup with canonical entry matching and a three-second request gate
 - Provider-isolated access resolution with a 24-hour cache, forced refresh, and stale fallback
@@ -139,6 +139,8 @@ OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
 OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
 
 Searches waiting to acquire one of the same-instance coordination stripes stop after 12 seconds by default. Override this acquisition-only bound with `SEARCH_COORDINATION_WAIT_TIMEOUT`. A timeout never cancels the leader or starts a duplicate provider request: an available snapshot is returned as an exact hit or stale fallback, while a cold miss returns retryable `SEARCH_COORDINATION_TIMEOUT`. Provider work, persistence, serialization, and the complete REST/MCP request remain outside this coordination-wait limit.
+
+Every `SearchResearchUseCase` `search`, `next`, and `get` execution has a shared 18-second application deadline. Override it with `SEARCH_EXECUTION_TIMEOUT`; values must be at least one millisecond. The deadline starts when the validated operation is dispatched and covers cache and coordination work, provider exchange and deserialization, persistence, and construction of the `SearchView`. It excludes request parsing/schema validation, REST/MCP DTO and framework serialization, and the socket lifetime. Expiration interrupts the dedicated virtual-thread worker, uses cooperative checkpoints, and returns retryable `SEARCH_DEADLINE_EXCEEDED` without `Retry-After`; caller or server interruption returns `SEARCH_EXECUTION_INTERRUPTED`. Deadline expiration is terminal and does not start a post-deadline stale fallback. Persistence already in progress at the boundary may continue and commit, so a new immutable snapshot may later become visible, because JDBC interruption is not guaranteed.
 
 Unpaywall's exact DOI endpoint requires a contact email. The application can start without one, but Unpaywall then reports `NOT_CONFIGURED`; arXiv resolution remains available for papers with an arXiv ID. Configure a backend-owned address, never an end-user address:
 

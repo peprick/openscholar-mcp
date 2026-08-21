@@ -30,6 +30,7 @@ class SearchOrchestrator implements SearchResearchUseCase {
 	private final SearchSnapshotStore snapshotStore;
 	private final SearchProperties properties;
 	private final SearchRequestCoordinator requestCoordinator;
+	private final SearchExecutionDeadline executionDeadline;
 	private final Clock clock;
 
 	SearchOrchestrator(
@@ -38,21 +39,29 @@ class SearchOrchestrator implements SearchResearchUseCase {
 			SearchSnapshotStore snapshotStore,
 			SearchProperties properties,
 			SearchRequestCoordinator requestCoordinator,
+			SearchExecutionDeadline executionDeadline,
 			Clock clock) {
 		this.provider = provider;
 		this.fingerprinter = fingerprinter;
 		this.snapshotStore = snapshotStore;
 		this.properties = properties;
 		this.requestCoordinator = requestCoordinator;
+		this.executionDeadline = executionDeadline;
 		this.clock = clock;
 	}
 
 	@Override
 	public SearchView search(SearchCommand command) {
+		return executionDeadline.execute(() -> searchWithinDeadline(command));
+	}
+
+	private SearchView searchWithinDeadline(SearchCommand command) {
+		executionDeadline.checkpoint();
 		String normalizedQuery = fingerprinter.normalizedQuery(command);
 		String fingerprint = fingerprinter.fingerprint(command);
 		Instant now = Instant.now(clock);
 		var latest = snapshotStore.findLatest(fingerprint);
+		executionDeadline.checkpoint();
 		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
 			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
 		}
@@ -70,7 +79,9 @@ class SearchOrchestrator implements SearchResearchUseCase {
 			SearchCommand command,
 			String fingerprint,
 			SearchCoordinationTimeoutException exception) {
+		executionDeadline.checkpoint();
 		var latest = snapshotStore.findLatest(fingerprint);
+		executionDeadline.checkpoint();
 		if (latest.isEmpty()) {
 			throw exception;
 		}
@@ -85,8 +96,10 @@ class SearchOrchestrator implements SearchResearchUseCase {
 	}
 
 	private SearchView searchCoordinated(SearchCommand command, String normalizedQuery, String fingerprint) {
+		executionDeadline.checkpoint();
 		Instant now = Instant.now(clock);
 		var latest = snapshotStore.findLatest(fingerprint);
+		executionDeadline.checkpoint();
 		// A normal caller that waited for an identical request reuses the snapshot just
 		// written by the leader. forceRefresh is an explicit provider-fetch instruction:
 		// it is serialized for same-key safety but intentionally never becomes a cache hit.
@@ -94,6 +107,7 @@ class SearchOrchestrator implements SearchResearchUseCase {
 			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
 		}
 		try {
+			executionDeadline.checkpoint();
 			ProviderSearchResult result = provider.search(new ProviderSearchQuery(
 					command.query(),
 					command.yearFrom(),
@@ -104,8 +118,9 @@ class SearchOrchestrator implements SearchResearchUseCase {
 					command.languages(),
 					command.pageSize(),
 					command.cursor()));
+			executionDeadline.checkpoint();
 			CacheDisposition disposition = dispositionFor(command, latest.isPresent());
-			return snapshotStore.store(
+			SearchView stored = snapshotStore.store(
 					command,
 					normalizedQuery,
 					fingerprint,
@@ -114,8 +129,11 @@ class SearchOrchestrator implements SearchResearchUseCase {
 					result,
 					result.retrievedAt().plus(properties.getCacheTtl()),
 					disposition);
+			executionDeadline.checkpoint();
+			return stored;
 		}
 		catch (ProviderException exception) {
+			executionDeadline.checkpoint();
 			if (latest.isPresent()) {
 				return withDisposition(
 						latest.orElseThrow().view(),
@@ -132,18 +150,29 @@ class SearchOrchestrator implements SearchResearchUseCase {
 
 	@Override
 	public SearchView next(UUID searchId) {
+		return executionDeadline.execute(() -> nextWithinDeadline(searchId));
+	}
+
+	private SearchView nextWithinDeadline(UUID searchId) {
+		executionDeadline.checkpoint();
 		var continuation = snapshotStore.findContinuation(searchId)
 				.orElseThrow(() -> new SearchNotFoundException(searchId));
+		executionDeadline.checkpoint();
 		if (!continuation.hasNextPage()) {
 			throw new SearchPageExhaustedException(searchId);
 		}
-		return search(continuation.nextCommand());
+		return searchWithinDeadline(continuation.nextCommand());
 	}
 
 	@Override
 	public SearchView get(UUID searchId) {
-		return snapshotStore.findById(searchId)
-				.orElseThrow(() -> new SearchNotFoundException(searchId));
+		return executionDeadline.execute(() -> {
+			executionDeadline.checkpoint();
+			SearchView result = snapshotStore.findById(searchId)
+					.orElseThrow(() -> new SearchNotFoundException(searchId));
+			executionDeadline.checkpoint();
+			return result;
+		});
 	}
 
 	private static CacheDisposition dispositionFor(SearchCommand command, boolean hasPreviousSnapshot) {

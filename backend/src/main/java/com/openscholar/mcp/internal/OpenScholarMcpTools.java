@@ -47,6 +47,8 @@ import com.openscholar.search.RankingReason;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
+import com.openscholar.search.SearchDeadlineExceededException;
+import com.openscholar.search.SearchExecutionInterruptedException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchUnavailableException;
@@ -276,6 +278,14 @@ public class OpenScholarMcpTools {
 		}
 		catch (SearchCoordinationInterruptedException exception) {
 			throw new SafeMcpToolException("SEARCH_COORDINATION_INTERRUPTED: " + exception.getMessage()
+					+ retrySuffix(true, null));
+		}
+		catch (SearchDeadlineExceededException exception) {
+			throw new SafeMcpToolException("SEARCH_DEADLINE_EXCEEDED: " + exception.getMessage()
+					+ retrySuffix(true, null));
+		}
+		catch (SearchExecutionInterruptedException exception) {
+			throw new SafeMcpToolException("SEARCH_EXECUTION_INTERRUPTED: " + exception.getMessage()
 					+ retrySuffix(true, null));
 		}
 		catch (SearchUnavailableException exception) {

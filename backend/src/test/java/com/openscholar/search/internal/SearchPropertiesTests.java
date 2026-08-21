@@ -25,6 +25,21 @@ class SearchPropertiesTests {
 	}
 
 	@Test
+	void defaultsExecutionTimeoutToEighteenSeconds() {
+		assertThat(new SearchProperties().getExecutionTimeout())
+				.isEqualTo(Duration.ofSeconds(18));
+	}
+
+	@Test
+	void acceptsACustomExecutionTimeout() {
+		SearchProperties properties = new SearchProperties();
+
+		properties.setExecutionTimeout(Duration.ofMillis(750));
+
+		assertThat(properties.getExecutionTimeout()).isEqualTo(Duration.ofMillis(750));
+	}
+
+	@Test
 	void rejectsCoordinationWaitTimeoutsBelowOneMillisecond() {
 		SearchProperties properties = new SearchProperties();
 
@@ -36,5 +51,19 @@ class SearchPropertiesTests {
 				.isThrownBy(() -> properties.setCoordinationWaitTimeout(Duration.ofMillis(-1)));
 		assertThatIllegalArgumentException()
 				.isThrownBy(() -> properties.setCoordinationWaitTimeout(Duration.ofNanos(999_999)));
+	}
+
+	@Test
+	void rejectsExecutionTimeoutsBelowOneMillisecond() {
+		SearchProperties properties = new SearchProperties();
+
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setExecutionTimeout(null));
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setExecutionTimeout(Duration.ZERO));
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setExecutionTimeout(Duration.ofMillis(-1)));
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> properties.setExecutionTimeout(Duration.ofNanos(999_999)));
 	}
 }

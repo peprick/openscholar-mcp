@@ -9,6 +9,7 @@ class SearchProperties {
 
 	private Duration cacheTtl = Duration.ofHours(24);
 	private Duration coordinationWaitTimeout = Duration.ofSeconds(12);
+	private Duration executionTimeout = Duration.ofSeconds(18);
 
 	public Duration getCacheTtl() {
 		return cacheTtl;
@@ -30,5 +31,16 @@ class SearchProperties {
 			throw new IllegalArgumentException("Search coordination wait timeout must be at least one millisecond");
 		}
 		this.coordinationWaitTimeout = coordinationWaitTimeout;
+	}
+
+	public Duration getExecutionTimeout() {
+		return executionTimeout;
+	}
+
+	public void setExecutionTimeout(Duration executionTimeout) {
+		if (executionTimeout == null || executionTimeout.compareTo(Duration.ofMillis(1)) < 0) {
+			throw new IllegalArgumentException("Search execution timeout must be at least one millisecond");
+		}
+		this.executionTimeout = executionTimeout;
 	}
 }

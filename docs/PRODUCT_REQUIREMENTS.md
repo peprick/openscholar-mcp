@@ -69,13 +69,14 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 - First uncached partial results: under 4 seconds when at least one provider is healthy.
 - OpenAlex outbound HTTP exchange deadline: 10 seconds by default, covering request transmission, response headers, and response-body consumption.
 - Same-instance search-coordination acquisition limit: 12 seconds by default; this is not an end-to-end request target.
-- Full multi-provider fan-out target: 10 seconds by default; end-to-end REST/MCP deadlines remain planned.
+- Search application-execution deadline: 18 seconds by default across REST and MCP search use cases.
+- Full multi-provider fan-out target: 10 seconds by default; transport parsing/serialization and socket-lifetime deadlines remain planned.
 - Cached paper detail p95: under 300 ms.
 
 ### Reliability
 
 - One provider failure must not discard successful results from other providers.
-- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination, database or persistence work, final response serialization, or the REST/MCP operation as a whole. Search coordination separately bounds only JVM-local lock acquisition to 12 seconds by default; it neither starts duplicate work after timeout nor cancels the leader. A timed-out caller reuses an exact snapshot when available and otherwise returns retryable `SEARCH_COORDINATION_TIMEOUT`; interruption is reported separately as retryable `SEARCH_COORDINATION_INTERRUPTED`. Both public errors omit `Retry-After` because release timing is unknown. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; global cancellation propagation, whole-request deadlines, bounded retries, and general per-provider budgets remain planned.
+- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination, database or persistence work, or transport serialization. Search coordination separately bounds only JVM-local lock acquisition to 12 seconds by default; it neither starts duplicate work after timeout nor cancels the leader. A timed-out caller reuses an exact snapshot when available and otherwise returns retryable `SEARCH_COORDINATION_TIMEOUT`; interruption is reported separately as retryable `SEARCH_COORDINATION_INTERRUPTED`. The shared 18-second execution deadline covers validated `search`, `next`, and `get` application work and returns retryable `SEARCH_DEADLINE_EXCEEDED` when it fires first or `SEARCH_EXECUTION_INTERRUPTED` for caller/server interruption. Deadline expiration is terminal, performs no new stale fallback, and may not stop JDBC persistence already in progress; it may later commit. These public errors omit `Retry-After`. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; client-disconnect/MCP-notification cancellation, transport-level deadlines, bounded retries, and general per-provider budgets remain planned.
 - Failed jobs are retryable and visible to maintainers.
 - Search persistence is idempotent.
 

@@ -40,6 +40,8 @@ import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
+import com.openscholar.search.SearchDeadlineExceededException;
+import com.openscholar.search.SearchExecutionInterruptedException;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchUnavailableException;
 import com.openscholar.search.SearchView;
@@ -339,6 +341,28 @@ class OpenScholarMcpToolsTests {
 
 		assertSafeFailure(interruptedFailure,
 				"SEARCH_COORDINATION_INTERRUPTED: Search coordination wait was interrupted; retryable=true");
+		assertThat(interruptedFailure.getMessage()).doesNotContain(NESTED_SECRET, "InterruptedException");
+	}
+
+	@Test
+	void executionFailuresExposeSafeRetryablePrefixesWithoutNestedCauseDetails() {
+		SearchDeadlineExceededException deadline = new SearchDeadlineExceededException();
+		deadline.initCause(new IllegalStateException(NESTED_SECRET));
+		search.failure = deadline;
+
+		Throwable deadlineFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
+				null, null, null, null, null));
+
+		assertSafeFailure(deadlineFailure,
+				"SEARCH_DEADLINE_EXCEEDED: Search execution deadline exceeded; retryable=true");
+		assertThat(deadlineFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
+
+		search.failure = new SearchExecutionInterruptedException(new InterruptedException(NESTED_SECRET));
+		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
+				null, null, null, null, null));
+
+		assertSafeFailure(interruptedFailure,
+				"SEARCH_EXECUTION_INTERRUPTED: Search execution was interrupted; retryable=true");
 		assertThat(interruptedFailure.getMessage()).doesNotContain(NESTED_SECRET, "InterruptedException");
 	}
 

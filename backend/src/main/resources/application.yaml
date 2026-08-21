@@ -110,6 +110,7 @@ openscholar:
   search:
     cache-ttl: 24h
     coordination-wait-timeout: ${SEARCH_COORDINATION_WAIT_TIMEOUT:12s}
+    execution-timeout: ${SEARCH_EXECUTION_TIMEOUT:18s}
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}

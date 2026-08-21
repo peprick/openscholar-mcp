@@ -12,6 +12,8 @@ import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
+import com.openscholar.search.SearchDeadlineExceededException;
+import com.openscholar.search.SearchExecutionInterruptedException;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchUnavailableException;
@@ -160,6 +162,28 @@ public class ApiExceptionHandler {
 				"SEARCH_COORDINATION_INTERRUPTED",
 				"Search coordination interrupted",
 				"Search coordination was interrupted before it became available.");
+		problem.setProperty("retryable", true);
+		return problem;
+	}
+
+	@ExceptionHandler(SearchDeadlineExceededException.class)
+	ProblemDetail handleSearchDeadlineExceeded(SearchDeadlineExceededException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.GATEWAY_TIMEOUT,
+				"SEARCH_DEADLINE_EXCEEDED",
+				"Search deadline exceeded",
+				"The search did not complete within the configured execution deadline.");
+		problem.setProperty("retryable", true);
+		return problem;
+	}
+
+	@ExceptionHandler(SearchExecutionInterruptedException.class)
+	ProblemDetail handleSearchExecutionInterrupted(SearchExecutionInterruptedException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.SERVICE_UNAVAILABLE,
+				"SEARCH_EXECUTION_INTERRUPTED",
+				"Search execution interrupted",
+				"The search execution was interrupted before it could complete.");
 		problem.setProperty("retryable", true);
 		return problem;
 	}
