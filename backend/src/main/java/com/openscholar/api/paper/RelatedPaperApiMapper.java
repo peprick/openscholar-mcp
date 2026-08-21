@@ -13,6 +13,8 @@ final class RelatedPaperApiMapper {
 	static RelatedPapersResponse toResponse(RelatedPapersView view) {
 		return new RelatedPapersResponse(
 				view.sourcePaperId(),
+				view.rankingMode(),
+				view.fallbackReason(),
 				view.results().stream().map(RelatedPaperApiMapper::toResult).toList());
 	}
 
@@ -32,6 +34,16 @@ final class RelatedPaperApiMapper {
 				paper.documentType(),
 				paper.language(),
 				paper.venueName(),
+				paper.publisher(),
+				paper.institution(),
+				paper.volume(),
+				paper.issue(),
+				paper.pages(),
+				paper.articleNumber(),
+				paper.edition(),
+				paper.isbn(),
+				paper.issn(),
+				paper.degree(),
 				paper.citationCount(),
 				new RelatedPapersResponse.Identifiers(
 						identifier(paper, PaperIdentifierType.DOI),
@@ -39,7 +51,8 @@ final class RelatedPaperApiMapper {
 						identifier(paper, PaperIdentifierType.OPENALEX)),
 				match.score(),
 				match.rankingReasons().stream()
-						.map(feature -> new RelatedPapersResponse.Reason(feature, match.score()))
+						.map(reason -> new RelatedPapersResponse.Reason(
+								reason.feature(), reason.value()))
 						.toList());
 	}
 

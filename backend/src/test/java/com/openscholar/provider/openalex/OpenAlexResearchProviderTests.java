@@ -63,7 +63,7 @@ class OpenAlexResearchProviderTests {
 			assertThat(decodedParam(components.getQueryParams().getFirst("corpus"))).isEqualTo("core");
 			assertThat(decodedParam(components.getQueryParams().getFirst("per_page"))).isEqualTo("50");
 			assertThat(decodedParam(components.getQueryParams().getFirst("select")))
-					.contains("abstract_inverted_index", "authorships", "best_oa_location", "is_retracted");
+					.contains("abstract_inverted_index", "authorships", "best_oa_location", "biblio", "is_retracted");
 			assertThat(decodedParam(components.getQueryParams().getFirst("filter"))).isEqualTo(
 					"from_publication_date:2020-01-01,to_publication_date:2025-12-31,"
 							+ "type:article|dissertation,open_access.is_oa:true,cited_by_count:>9,language:en|fr");
@@ -96,6 +96,16 @@ class OpenAlexResearchProviderTests {
 			assertThat(record.pdfUrl()).hasToString("https://repository.test/article-123.pdf");
 			assertThat(record.relevanceScore()).isEqualTo(0.987);
 			assertThat(record.providerUpdatedAt()).isEqualTo(Instant.parse("2026-08-15T09:30:00Z"));
+			assertThat(record.publisher()).isEqualTo("Open Research Press");
+			assertThat(record.institution()).isNull();
+			assertThat(record.volume()).isEqualTo("12");
+			assertThat(record.issue()).isEqualTo("3");
+			assertThat(record.pages()).isEqualTo("101-119");
+			assertThat(record.articleNumber()).isNull();
+			assertThat(record.edition()).isNull();
+			assertThat(record.isbn()).isEmpty();
+			assertThat(record.issn()).containsExactly("2049-3630", "2049-3649");
+			assertThat(record.degree()).isNull();
 			assertThat(record.authors()).singleElement().satisfies(author -> {
 				assertThat(author.providerAuthorId()).isEqualTo("A5023888391");
 				assertThat(author.displayName()).isEqualTo("Ada Researcher");
@@ -196,6 +206,58 @@ class OpenAlexResearchProviderTests {
 			assertThat(record.landingPageUrl()).isNull();
 			assertThat(record.pdfUrl()).isNull();
 			assertThat(record.providerUpdatedAt()).isNull();
+			assertThat(record.publisher()).isNull();
+			assertThat(record.institution()).isNull();
+			assertThat(record.volume()).isNull();
+			assertThat(record.issue()).isNull();
+			assertThat(record.pages()).isNull();
+			assertThat(record.articleNumber()).isNull();
+			assertThat(record.edition()).isNull();
+			assertThat(record.isbn()).isEmpty();
+			assertThat(record.issn()).isEmpty();
+			assertThat(record.degree()).isNull();
+		});
+		harness.server().verify();
+	}
+
+	@Test
+	void mapsRepositoryInstitutionsAndElectronicArticleNumbersWithoutGuessingOtherFields() {
+		Harness harness = harness(null);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(withSuccess("""
+						{
+						  "meta": {"count": 1},
+						  "results": [{
+						    "id": "https://openalex.org/W702048",
+						    "title": "Repository-hosted proceedings paper",
+						    "type": "proceedings-article",
+						    "biblio": {"volume": "7", "issue": "2", "first_page": "e2048"},
+						    "primary_location": {
+						      "source": {
+						        "display_name": "University Research Archive",
+						        "type": "repository",
+						        "host_organization_name": "Example University",
+						        "issn": [" 1234-5678 ", "1234-5678"],
+						        "issn_l": "8765-4321"
+						      }
+						    }
+						  }]
+						}
+						""", MediaType.APPLICATION_JSON));
+
+		ProviderSearchResult result = harness.provider().search(minimalQuery());
+
+		assertThat(result.records()).singleElement().satisfies(record -> {
+			assertThat(record.publisher()).isNull();
+			assertThat(record.institution()).isEqualTo("Example University");
+			assertThat(record.volume()).isEqualTo("7");
+			assertThat(record.issue()).isEqualTo("2");
+			assertThat(record.pages()).isNull();
+			assertThat(record.articleNumber()).isEqualTo("e2048");
+			assertThat(record.edition()).isNull();
+			assertThat(record.isbn()).isEmpty();
+			assertThat(record.issn()).containsExactly("1234-5678", "8765-4321");
+			assertThat(record.degree()).isNull();
 		});
 		harness.server().verify();
 	}
@@ -444,11 +506,19 @@ class OpenAlexResearchProviderTests {
 				    "publication_year": 2024,
 				    "type": "article",
 				    "language": "EN",
+				    "biblio": {"volume": "12", "issue": "3", "first_page": "101", "last_page": "119"},
 				    "primary_location": {
 				      "landing_page_url": "https://publisher.test/article/123",
 				      "pdf_url": "https://publisher.test/paywalled.pdf",
 				      "is_oa": false,
-				      "source": {"id": "https://openalex.org/S123", "display_name": "Journal of Research Agents"}
+				      "source": {
+				        "id": "https://openalex.org/S123",
+				        "display_name": "Journal of Research Agents",
+				        "type": "journal",
+				        "host_organization_name": "Open Research Press",
+				        "issn": ["2049-3649", "2049-3630"],
+				        "issn_l": "2049-3630"
+				      }
 				    },
 				    "best_oa_location": {
 				      "landing_page_url": "https://repository.test/article-123",

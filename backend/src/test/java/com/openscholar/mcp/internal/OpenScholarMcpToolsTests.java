@@ -36,6 +36,7 @@ import com.openscholar.paper.PaperDetailsUseCase;
 import com.openscholar.paper.PaperDetailsView;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperView;
+import com.openscholar.provider.ProviderId;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationInterruptedException;
@@ -43,10 +44,12 @@ import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchDeadlineExceededException;
 import com.openscholar.search.SearchExecutionInterruptedException;
 import com.openscholar.search.SearchResearchUseCase;
+import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchUnavailableException;
 import com.openscholar.search.SearchView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 class OpenScholarMcpToolsTests {
 
@@ -80,11 +83,15 @@ class OpenScholarMcpToolsTests {
 
 	@BeforeEach
 	void setUp() {
+		PaperView paper = new PaperView(PAPER_ID, "A stored paper", "Synthetic abstract", LocalDate.of(2026, 8, 19),
+				2026, DocumentType.ARTICLE, "en", "Journal of Tests", 12, NOW, List.of(), List.of(),
+				"Test Research Press", "Example Test University", "9", "4", "50-72", "e9001", "2nd",
+				List.of("978-0-306-40615-7"), List.of("2049-3630", "2049-3649"),
+				"Doctor of Philosophy");
 		searchView = new SearchView(UUID.fromString("33333333-3333-3333-3333-333333333333"), "agent systems",
 				"fingerprint", CacheDisposition.EXACT_HIT, NOW, NOW.plus(Duration.ofHours(1)), null, List.of(),
-				List.of(), List.of());
-		PaperView paper = new PaperView(PAPER_ID, "A stored paper", "Synthetic abstract", LocalDate.of(2026, 8, 19),
-				2026, DocumentType.ARTICLE, "en", "Journal of Tests", 12, NOW, List.of(), List.of());
+				List.of(), List.of(new SearchResultView(1, paper, true, null, null, 0.9d, List.of(),
+						ProviderId.OPENALEX, "W-MCP-TYPED", NOW)));
 		paperDetailsView = new PaperDetailsView(paper, BigDecimal.ONE, NOW, List.of(), null);
 		paperAccessView = new PaperAccessView(PAPER_ID, AccessStatus.UNKNOWN, AccessDisposition.NOT_YET_RESOLVED, null,
 				null, List.of(), List.of(), List.of());
@@ -98,7 +105,7 @@ class OpenScholarMcpToolsTests {
 		library = new RecordingLibraryUseCase(new LibraryPage<>(List.of(savedPaperView), 0, 20, 1, 1));
 		citations = new RecordingCitationExportUseCase(new CitationExport(CitationFormat.BIBTEX, "batch",
 				"openscholar-citations-1.bib", CitationFormat.BIBTEX.mediaType(), "@article{batch}\n"));
-		tools = new OpenScholarMcpTools(search, paperDetails, paperAccess, library, citations);
+		tools = toolsWithResultBudget(1_048_576);
 	}
 
 	@Test
@@ -112,7 +119,18 @@ class OpenScholarMcpToolsTests {
 		assertThat(result.nextCursor()).isNull();
 		assertThat(result.providerCoverage()).isEmpty();
 		assertThat(result.warnings()).isEmpty();
-		assertThat(result.results()).isEmpty();
+		assertThat(result.results()).singleElement().satisfies(paper -> {
+			assertThat(paper.publisher()).isEqualTo("Test Research Press");
+			assertThat(paper.institution()).isEqualTo("Example Test University");
+			assertThat(paper.volume()).isEqualTo("9");
+			assertThat(paper.issue()).isEqualTo("4");
+			assertThat(paper.pages()).isEqualTo("50-72");
+			assertThat(paper.articleNumber()).isEqualTo("e9001");
+			assertThat(paper.edition()).isEqualTo("2nd");
+			assertThat(paper.isbn()).containsExactly("978-0-306-40615-7");
+			assertThat(paper.issn()).containsExactly("2049-3630", "2049-3649");
+			assertThat(paper.degree()).isEqualTo("Doctor of Philosophy");
+		});
 		assertThat(search.calls).isOne();
 		assertThat(search.command.query()).isEqualTo("agent systems");
 		assertThat(search.command.yearFrom()).isNull();
@@ -161,6 +179,16 @@ class OpenScholarMcpToolsTests {
 
 		assertThat(result.paper().paperId()).isEqualTo(PAPER_ID);
 		assertThat(result.paper().title()).isEqualTo("A stored paper");
+		assertThat(result.paper().publisher()).isEqualTo("Test Research Press");
+		assertThat(result.paper().institution()).isEqualTo("Example Test University");
+		assertThat(result.paper().volume()).isEqualTo("9");
+		assertThat(result.paper().issue()).isEqualTo("4");
+		assertThat(result.paper().pages()).isEqualTo("50-72");
+		assertThat(result.paper().articleNumber()).isEqualTo("e9001");
+		assertThat(result.paper().edition()).isEqualTo("2nd");
+		assertThat(result.paper().isbn()).containsExactly("978-0-306-40615-7");
+		assertThat(result.paper().issn()).containsExactly("2049-3630", "2049-3649");
+		assertThat(result.paper().degree()).isEqualTo("Doctor of Philosophy");
 		assertThat(result.paper().identifiers()).isEmpty();
 		assertThat(result.paper().authors()).isEmpty();
 		assertThat(result.metadataCompleteness()).isEqualByComparingTo(BigDecimal.ONE);
@@ -289,6 +317,20 @@ class OpenScholarMcpToolsTests {
 	}
 
 	@Test
+	void oversizedToolResultsFailWithAStableSafeCodeWithoutEchoingContent() {
+		String oversizedContent = "sensitive-result-" + "x".repeat(1_024);
+		citations.result = new CitationExport(CitationFormat.BIBTEX, "batch", "oversized.bib",
+				CitationFormat.BIBTEX.mediaType(), oversizedContent);
+		tools = toolsWithResultBudget(1_024);
+
+		Throwable failure = catchThrowable(() -> tools.exportCitations(List.of(PAPER_ID), "bibtex"));
+
+		assertSafeFailure(failure,
+				"MCP_RESPONSE_TOO_LARGE: The tool result exceeds the configured response budget; retryable=false");
+		assertThat(failure.getMessage()).doesNotContain(oversizedContent, "sensitive-result");
+	}
+
+	@Test
 	void citationsRejectInvalidListsAndFormatsBeforeCallingTheUseCase() {
 		assertSafeFailure(catchThrowable(() -> tools.exportCitations(null, null)),
 				"INVALID_REQUEST: paperIds must not be null");
@@ -394,6 +436,12 @@ class OpenScholarMcpToolsTests {
 		return IntStream.range(0, size)
 			.mapToObj(index -> UUID.nameUUIDFromBytes(("paper-" + index).getBytes(StandardCharsets.UTF_8)))
 			.toList();
+	}
+
+	private OpenScholarMcpTools toolsWithResultBudget(long maximumBytes) {
+		McpToolResultBudget budget = new McpToolResultBudget(JsonMapper.builder().build(),
+				new McpPayloadProperties(null, maximumBytes));
+		return new OpenScholarMcpTools(search, paperDetails, paperAccess, library, citations, budget);
 	}
 
 	private static void assertSafeFailure(Throwable failure, String message) {

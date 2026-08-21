@@ -26,6 +26,7 @@ record OpenAlexWork(
 		@JsonProperty("publication_year") Integer publicationYear,
 		String type,
 		String language,
+		OpenAlexBiblio biblio,
 		@JsonProperty("primary_location") OpenAlexLocation primaryLocation,
 		@JsonProperty("best_oa_location") OpenAlexLocation bestOpenAccessLocation,
 		@JsonProperty("open_access") OpenAlexOpenAccess openAccess,
@@ -45,7 +46,21 @@ record OpenAlexLocation(
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-record OpenAlexSource(String id, @JsonProperty("display_name") String displayName) {
+record OpenAlexSource(
+		String id,
+		@JsonProperty("display_name") String displayName,
+		String type,
+		@JsonProperty("host_organization_name") String hostOrganizationName,
+		List<String> issn,
+		@JsonProperty("issn_l") String linkingIssn) {
+}
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+record OpenAlexBiblio(
+		String volume,
+		String issue,
+		@JsonProperty("first_page") String firstPage,
+		@JsonProperty("last_page") String lastPage) {
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)

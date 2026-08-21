@@ -16,4 +16,7 @@ public interface PaperEmbeddingStore {
 	List<PaperEmbeddingMatch> findNearestExact(UUID sourcePaperId, String profileKey, int limit);
 
 	List<PaperEmbeddingMatch> findNearestApproximate(UUID sourcePaperId, String profileKey, int limit);
+
+	List<PaperEmbeddingMatch> findExactSimilarities(
+			UUID sourcePaperId, String profileKey, List<UUID> candidatePaperIds);
 }

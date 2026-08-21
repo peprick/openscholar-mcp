@@ -3,6 +3,7 @@ package com.openscholar.paper.internal.persistence;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -16,6 +17,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "paper")
@@ -49,6 +52,31 @@ class PaperEntity {
 	@Column(name = "venue_name")
 	private String venueName;
 
+	private String publisher;
+
+	private String institution;
+
+	private String volume;
+
+	private String issue;
+
+	private String pages;
+
+	@Column(name = "article_number")
+	private String articleNumber;
+
+	private String edition;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(nullable = false, columnDefinition = "jsonb")
+	private List<String> isbn;
+
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(nullable = false, columnDefinition = "jsonb")
+	private List<String> issn;
+
+	private String degree;
+
 	@Column(name = "citation_count")
 	private Integer citationCount;
 
@@ -78,6 +106,8 @@ class PaperEntity {
 		this.title = title;
 		this.normalizedTitle = normalizedTitle;
 		this.documentType = documentType;
+		this.isbn = List.of();
+		this.issn = List.of();
 		this.metadataQuality = BigDecimal.ZERO;
 		this.metadataUpdatedAt = now;
 		this.createdAt = now;
@@ -119,6 +149,16 @@ class PaperEntity {
 		mergePublication(candidate.publicationDate(), candidate.publicationYear(), incomingIsAtLeastAsRecent);
 		language = mergeText(language, candidate.language(), incomingIsAtLeastAsRecent);
 		venueName = mergeText(venueName, candidate.venueName(), incomingIsAtLeastAsRecent);
+		publisher = mergeText(publisher, candidate.publisher(), incomingIsAtLeastAsRecent);
+		institution = mergeText(institution, candidate.institution(), incomingIsAtLeastAsRecent);
+		volume = mergeText(volume, candidate.volume(), incomingIsAtLeastAsRecent);
+		issue = mergeText(issue, candidate.issue(), incomingIsAtLeastAsRecent);
+		pages = mergeText(pages, candidate.pages(), incomingIsAtLeastAsRecent);
+		articleNumber = mergeText(articleNumber, candidate.articleNumber(), incomingIsAtLeastAsRecent);
+		edition = mergeText(edition, candidate.edition(), incomingIsAtLeastAsRecent);
+		isbn = mergeList(isbn, candidate.isbn(), incomingIsAtLeastAsRecent);
+		issn = mergeList(issn, candidate.issn(), incomingIsAtLeastAsRecent);
+		degree = mergeText(degree, candidate.degree(), incomingIsAtLeastAsRecent);
 
 		if (incomingIsAtLeastAsRecent) {
 			metadataUpdatedAt = incomingTimestamp;
@@ -168,6 +208,13 @@ class PaperEntity {
 			return current;
 		}
 		return current == null || replace ? incoming : current;
+	}
+
+	private static List<String> mergeList(List<String> current, List<String> incoming, boolean replace) {
+		if (incoming == null || incoming.isEmpty()) {
+			return current == null ? List.of() : current;
+		}
+		return current == null || current.isEmpty() || replace ? List.copyOf(incoming) : current;
 	}
 
 	private void mergePublication(
@@ -237,6 +284,46 @@ class PaperEntity {
 
 	String venueName() {
 		return venueName;
+	}
+
+	String publisher() {
+		return publisher;
+	}
+
+	String institution() {
+		return institution;
+	}
+
+	String volume() {
+		return volume;
+	}
+
+	String issue() {
+		return issue;
+	}
+
+	String pages() {
+		return pages;
+	}
+
+	String articleNumber() {
+		return articleNumber;
+	}
+
+	String edition() {
+		return edition;
+	}
+
+	List<String> isbn() {
+		return isbn;
+	}
+
+	List<String> issn() {
+		return issn;
+	}
+
+	String degree() {
+		return degree;
 	}
 
 	Integer citationCount() {

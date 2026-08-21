@@ -7,7 +7,7 @@ public record RelatedPaperMatch(
 		int rank,
 		PaperView paper,
 		Double score,
-		List<String> rankingReasons) {
+		List<RelatedPaperRankingReason> rankingReasons) {
 
 	public static final String POSTGRES_FULL_TEXT_REASON = "POSTGRES_FULL_TEXT";
 
@@ -21,5 +21,8 @@ public record RelatedPaperMatch(
 			throw new IllegalArgumentException("Related-paper score must be finite and non-negative");
 		}
 		rankingReasons = rankingReasons == null ? List.of() : List.copyOf(rankingReasons);
+		if (rankingReasons.stream().anyMatch(Objects::isNull)) {
+			throw new IllegalArgumentException("Related-paper ranking reasons must not contain null");
+		}
 	}
 }

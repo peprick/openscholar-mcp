@@ -89,7 +89,7 @@ Exit: an MCP client discovers/calls tools with the same policies as REST.
 
 Estimated effort: 1–2 weeks.
 
-Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, bounded offline backfill, opt-in exact-vector evaluation, exploratory hybrid sensitivity sweep, and frozen independent holdout validation are implemented. Generation remains opt-in and no model is downloaded by the project; HNSW and production-readiness evaluation remain.
+Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, bounded offline backfill, opt-in exact-vector evaluation, exploratory hybrid sensitivity sweep, frozen independent holdout validation, pinned `V11` HNSW gate, and default-off production-readiness hybrid path are implemented. Generation remains opt-in and no model is downloaded by the project.
 
 - Implemented: first related-paper relevance evaluation set; dedicated provider/deduplication cases remain.
 - Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
@@ -100,7 +100,9 @@ Status: in progress. A versioned synthetic related-paper relevance corpus, Postg
 - Implemented: measured lexical baseline (macro Recall 1.000 and macro nDCG 0.857) and exact vector-only baseline (macro Recall 1.000 and macro nDCG 0.934) on the synthetic v1 fixture. The vector run is gated, uses an ephemeral Testcontainer and a locally installed full-digest-pinned model, and is skipped by ordinary CI.
 - Implemented: label-independent fixed-scale hybrid sensitivity at five predeclared weights. Weight 0.50 has the highest observed in-sample macro result on the five synthetic query groups, but no production weight or hybrid regression floor is selected.
 - Implemented: the independently authored 26-paper, seven-query holdout was scored only after freezing the `w = 0.50` transform and gates. Lexical macro results were Recall 0.857, nDCG 0.648, Precision@1 0.286, and MRR 0.571; the frozen hybrid reached 1.000, 0.917, 0.857, and 0.929 respectively, for gains of `+0.143`, `+0.269`, `+0.571`, and `+0.357`. It strictly improved five query-group nDCG values, regressed none, and passed every frozen gate.
-- Next: add an HNSW exact-recall/performance gate, evaluate related-topic reuse, and complete the ranking-reason, fallback, and production-readiness work. Passing the holdout did not activate hybrid ranking; the current related endpoint remains database-only and lexical until those later gates pass.
+- Implemented: the frozen HNSW mechanics gate achieved macro Recall@25 1.0000 with approximate p95 20.082 ms versus exact p95 47.491 ms (`2.365x`) on its reference-shaped run.
+- Implemented: a default-off hybrid path over bounded lexical/HNSW pools, exact lexical-candidate vector-coverage checks, frozen 50/50 scoring, deterministic UUID ties, typed component values, and explicit lexical fallback modes. Database/provider calls remain outside the read path.
+- Next: evaluate related-topic reuse, multilingual lexical configuration, and a larger representative relevance set before considering any default change.
 
 Exit: measured retrieval improvement without hiding ranking rationale.
 

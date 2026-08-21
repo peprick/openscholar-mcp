@@ -441,6 +441,100 @@ class PaperCatalogServiceTests {
 	}
 
 	@Test
+	void persistsTypedPublicationMetadataAndMergesSparseStaleAndNewerRecordsDeterministically() {
+		String doi = "10.1000/typed-publication-metadata";
+		List<PaperIdentifier> identifiers = List.of(
+				new PaperIdentifier(PaperIdentifierType.DOI, "", doi),
+				new PaperIdentifier(PaperIdentifierType.OPENALEX, "", "W-TYPED-METADATA"));
+		CanonicalPaperCandidate rich = typedPaper(
+				"Typed publication metadata",
+				identifiers,
+				"Research Press",
+				"Example University",
+				"12",
+				"3",
+				"101-119",
+				"e2048",
+				"2nd",
+				List.of(" 978-1-4028-9462-6 ", "978-1-4028-9462-6", "978-0-306-40615-7"),
+				List.of("2049-3649", "2049-3630", "2049-3649"),
+				"Doctor of Philosophy");
+
+		PaperView created = paperCatalog.upsert(
+				rich,
+				providerRecord("W-TYPED-METADATA", NOW, Map.of()),
+				NOW);
+		Double originalQuality = jdbcTemplate.queryForObject(
+				"select metadata_quality from paper where id = ?", Double.class, created.id());
+		assertThat(originalQuality).isEqualTo(0.9d);
+
+		assertTypedMetadata(created,
+				"Research Press", "Example University", "12", "3", "101-119", "e2048", "2nd",
+				List.of("978-0-306-40615-7", "978-1-4028-9462-6"),
+				List.of("2049-3630", "2049-3649"), "Doctor of Philosophy");
+
+		CanonicalPaperCandidate newerSparse = new CanonicalPaperCandidate(
+				"Typed publication metadata",
+				"Still current",
+				LocalDate.of(2026, 8, 1),
+				2026,
+				DocumentType.ARTICLE,
+				"en",
+				"Research Journal",
+				1,
+				NOW.plusSeconds(60),
+				identifiers,
+				List.of());
+		PaperView afterSparse = paperCatalog.upsert(
+				newerSparse,
+				providerRecord("W-TYPED-METADATA", NOW.plusSeconds(60), Map.of()),
+				NOW.plusSeconds(60));
+
+		assertTypedMetadata(afterSparse,
+				"Research Press", "Example University", "12", "3", "101-119", "e2048", "2nd",
+				List.of("978-0-306-40615-7", "978-1-4028-9462-6"),
+				List.of("2049-3630", "2049-3649"), "Doctor of Philosophy");
+
+		CanonicalPaperCandidate staleConflict = typedPaper(
+				"Stale typed metadata",
+				List.of(new PaperIdentifier(PaperIdentifierType.DOI, "", doi)),
+				"Stale Press", "Stale Institute", "1", "1", "1-2", "old", "1st",
+				List.of("stale-isbn"), List.of("stale-issn"), "Stale degree");
+		PaperView afterStale = paperCatalog.upsert(
+				staleConflict,
+				providerRecord("W-TYPED-METADATA-STALE", NOW.minusSeconds(60), Map.of()),
+				NOW.plusSeconds(120));
+
+		assertTypedMetadata(afterStale,
+				"Research Press", "Example University", "12", "3", "101-119", "e2048", "2nd",
+				List.of("978-0-306-40615-7", "978-1-4028-9462-6"),
+				List.of("2049-3630", "2049-3649"), "Doctor of Philosophy");
+
+		CanonicalPaperCandidate newerConflict = typedPaper(
+				"New typed metadata",
+				List.of(new PaperIdentifier(PaperIdentifierType.DOI, "", doi)),
+				"New Press", "New Institute", "13", "4", "120-140", "e4096", "3rd",
+				List.of("new-isbn"), List.of("new-issn"), "Doctor of Science");
+		PaperView afterNewer = paperCatalog.upsert(
+				newerConflict,
+				providerRecord("W-TYPED-METADATA-NEW", NOW.plusSeconds(120), Map.of()),
+				NOW.plusSeconds(180));
+
+		assertTypedMetadata(afterNewer,
+				"New Press", "New Institute", "13", "4", "120-140", "e4096", "3rd",
+				List.of("new-isbn"), List.of("new-issn"), "Doctor of Science");
+		assertThat(jdbcTemplate.queryForObject(
+				"select jsonb_typeof(isbn) from paper where id = ?", String.class, created.id()))
+				.isEqualTo("array");
+		assertThat(jdbcTemplate.queryForObject(
+				"select jsonb_typeof(issn) from paper where id = ?", String.class, created.id()))
+				.isEqualTo("array");
+		assertThat(jdbcTemplate.queryForObject(
+				"select metadata_quality from paper where id = ?", Double.class, created.id()))
+				.isEqualTo(originalQuality);
+	}
+
+	@Test
 	void rejectsIdentifiersThatWouldMergeCanonicalPapers() {
 		PaperView doiPaper = paperCatalog.upsert(
 				paper(
@@ -516,6 +610,67 @@ class PaperCatalogServiceTests {
 				citationCountAsOf,
 				identifiers,
 				authors);
+	}
+
+	private CanonicalPaperCandidate typedPaper(
+			String title,
+			List<PaperIdentifier> identifiers,
+			String publisher,
+			String institution,
+			String volume,
+			String issue,
+			String pages,
+			String articleNumber,
+			String edition,
+			List<String> isbn,
+			List<String> issn,
+			String degree) {
+		return new CanonicalPaperCandidate(
+				title,
+				"Typed metadata abstract",
+				LocalDate.of(2026, 8, 1),
+				2026,
+				DocumentType.ARTICLE,
+				"en",
+				"Research Journal",
+				1,
+				NOW,
+				identifiers,
+				List.of(),
+				publisher,
+				institution,
+				volume,
+				issue,
+				pages,
+				articleNumber,
+				edition,
+				isbn,
+				issn,
+				degree);
+	}
+
+	private void assertTypedMetadata(
+			PaperView paper,
+			String publisher,
+			String institution,
+			String volume,
+			String issue,
+			String pages,
+			String articleNumber,
+			String edition,
+			List<String> isbn,
+			List<String> issn,
+			String degree) {
+		assertThat(paper.publisher()).isEqualTo(publisher);
+		assertThat(paper.institution()).isEqualTo(institution);
+		assertThat(paper.volume()).isEqualTo(volume);
+		assertThat(paper.issue()).isEqualTo(issue);
+		assertThat(paper.pages()).isEqualTo(pages);
+		assertThat(paper.articleNumber()).isEqualTo(articleNumber);
+		assertThat(paper.edition()).isEqualTo(edition);
+		assertThat(paper.isbn()).containsExactlyElementsOf(isbn);
+		assertThat(paper.issn()).containsExactlyElementsOf(issn);
+		assertThat(paper.degree()).isEqualTo(degree);
 	}
 
 	private ProviderRecordCandidate providerRecord(

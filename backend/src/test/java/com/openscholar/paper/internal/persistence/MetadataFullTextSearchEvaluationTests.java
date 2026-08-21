@@ -32,7 +32,7 @@ import com.openscholar.paper.internal.persistence.RelatedPaperEvaluationMetrics.
 import com.openscholar.paper.internal.persistence.RelatedPaperEvaluationMetrics.Summary;
 import com.openscholar.paper.internal.persistence.RelatedPaperHybridScorer.HybridCandidateFeatures;
 import com.openscholar.paper.internal.persistence.RelatedPaperHybridScorer.HybridRankedPaper;
-import com.openscholar.paper.internal.persistence.RelatedPaperHybridScorer.HybridWeightMeasurement;
+import com.openscholar.paper.internal.persistence.RelatedPaperHybridEvaluationSummary.HybridWeightMeasurement;
 import com.openscholar.paper.internal.persistence.RelatedPaperHybridScorer.VectorRankedPaper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -296,7 +296,7 @@ class MetadataFullTextSearchEvaluationTests {
 				meanReciprocalRank);
 
 		List<HybridWeightMeasurement> hybridWeights = HYBRID_SEMANTIC_WEIGHTS.stream()
-				.map(weight -> RelatedPaperHybridScorer.summarizeHybridWeight(
+				.map(weight -> RelatedPaperHybridEvaluationSummary.summarize(
 						weight, hybridMeasurements.get(weight)))
 				.toList();
 		HybridWeightMeasurement semanticEndpoint = hybridWeights.getLast();

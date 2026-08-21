@@ -348,6 +348,8 @@ function accessResponse(paperId, disposition = "CACHE_HIT") {
 function relatedPapers(paperId) {
   return {
     sourcePaperId: paperId,
+    rankingMode: "LEXICAL",
+    fallbackReason: "HYBRID_DISABLED",
     results:
       paperId === ids.verifiedPaper
         ? [

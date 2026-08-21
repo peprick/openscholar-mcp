@@ -65,7 +65,7 @@ The next retrieval version should improve those two nDCG values without reducing
 | Local inference | Implemented but disabled by default; direct Spring AI/Ollama adapter with exact runtime/tag/full-digest verification, digest/runtime-derived identity, fixed 1024 dimensions, and `truncate=false` |
 | Offline population | Implemented; explicit non-web cursor-paged run, same-profile advisory lock, bounded retry/stale handling, fail-fast systemic errors, and no REST/MCP/scheduler trigger |
 | Hosted comparison | Deferred; no OpenAI dependency, key, call, or production fallback is configured |
-| Product ranking | The endpoint remains the measured PostgreSQL full-text implementation; vector, HNSW, and hybrid ranking are not active |
+| Product ranking | The measured PostgreSQL full-text implementation remains the default; a production-readiness hybrid path is implemented behind an explicit default-off flag |
 
 `TITLE_ABSTRACT` input-policy v1 renders exact canonical metadata as:
 
@@ -82,7 +82,7 @@ OpenAI [`text-embedding-3-large`](https://developers.openai.com/api/docs/models/
 
 ## Database-only retrieval rule
 
-Embedding generation and refresh must occur outside `GET /api/v1/papers/{paperId}/related`. A future vector or hybrid implementation may read stored source/candidate vectors only. If the required profile or paper vector is absent or was invalidated by a metadata update, the endpoint returns the existing lexical ranking; it does not contact Ollama/OpenAI and does not fail solely because semantic data is unavailable.
+Embedding generation and refresh must occur outside `GET /api/v1/papers/{paperId}/related`. The opt-in hybrid implementation reads stored source/candidate vectors only. If the required profile or source vector is absent, or a lexical candidate lacks its vector after metadata invalidation, the endpoint returns the existing lexical ranking; it does not contact Ollama/OpenAI and does not fail solely because semantic data is unavailable.
 
 The selected Qwen model supports instructed query embeddings, but related-paper v1 will first measure symmetric stored document vectors. A separate precomputed query content kind is justified only if it materially improves the fixture enough to offset doubled generation/storage. On-demand query inference is not compatible with the database-only endpoint decision.
 
@@ -150,17 +150,33 @@ The frozen hybrid passed every predeclared gate: it preserved or improved recall
 
 The first invocation stopped before complete metrics were available because the valid zero-match Japanese lexical control triggered an overstrict harness assertion. Commit `288bf4f` corrected that assertion label-independently so an empty lexical control is measured as zero while the vector and frozen-hybrid paths still require complete candidate pools. The policy, scoring rule, fixture papers, judgments, cutoffs, and acceptance gates did not change before the successful run.
 
-Passing this small synthetic holdout lets the frozen candidate advance to HNSW and production-readiness evaluation; it does not activate hybrid ranking. The REST and MCP related-paper path remains the existing database-only lexical implementation.
+Passing this small synthetic holdout allowed the frozen candidate to advance to the separately pinned HNSW and production-readiness gates; it did not by itself activate hybrid ranking.
+
+## HNSW gate and default-off hybrid mode
+
+`V11` adds an expression/partial HNSW index only for the pinned 1024-dimensional Qwen/Ollama profile. Its frozen policy uses `m=16`, `ef_construction=64`, `hnsw.ef_search=1000`, strict iterative scans, at most 20,000 scanned tuples, and a four-times candidate oversampling rule clamped to `100..400`. Approximate candidates are reranked by exact cosine distance and paper UUID. The exact oracle remains a separately named store operation with index scans disabled.
+
+The opt-in 10,000-vector mechanics run passed its frozen gate on the reference-shaped environment: macro Recall@25 was `1.0000` across 20 queries, exact p95 was `47.491 ms`, approximate p95 was `20.082 ms`, and the exact-to-approximate speedup was `2.365x`. These synthetic dense vectors validate ANN mechanics and latency, not scholarly relevance; relevance remains grounded in the independent holdout above.
+
+The production-readiness implementation remains off by default. With `RELATED_PAPERS_HYBRID_ENABLED=false`, result IDs, order, scores, and lexical feature values are unchanged. When explicitly enabled, it:
+
+1. reads a bounded lexical pool and a bounded pinned-profile HNSW pool;
+2. obtains exact cosine values for every lexical candidate and falls back if even one is unavailable;
+3. reranks the bounded union with the frozen formula `H = 0.50L + 0.50V`, where `L` is the normalized PostgreSQL score and `V = clamp((cosine + 1) / 2, 0, 1)`;
+4. breaks final ties by canonical UUID text; and
+5. reports typed `POSTGRES_FULL_TEXT` and `CLAMPED_COSINE` values for hybrid results.
+
+The pool setting is validated in `25..100` and defaults to 100. A missing profile, missing source vector, or incomplete lexical-candidate vector coverage returns the same lexical result slice with an explicit typed fallback reason. Only those expected availability exceptions are translated; JDBC and other operational failures propagate. The request path reads precomputed data only and never invokes Ollama or a hosted embedding provider.
 
 ## Remaining evaluation gates
 
 Candidate work includes:
 
 - compare `english`, `simple`, and language-aware lexical configurations;
-- compare HNSW against exact neighbors with an explicit ANN-recall and latency gate;
-- record feature-level reasons and persist them if hybrid results enter immutable search snapshots;
+- evaluate the default-off mode on a larger and more representative relevance set before considering a default change;
+- persist feature-level reasons if hybrid results enter immutable search snapshots;
 - bump the search pipeline/fingerprint version before blending local retrieval into provider-backed topic search.
 
-The frozen hybrid has cleared its first independent holdout gate, but a replacement product ranker must also demonstrate acceptable HNSW recall and latency, preserve deterministic database-only fallback behavior, and expose honest ranking reasons. Until those gates pass, the lexical implementation remains the product ranker and the holdout remains evaluation evidence rather than an activated feature.
+The frozen hybrid has cleared the first independent holdout plus the pinned HNSW mechanics gate and now has deterministic database-only fallback behavior and honest feature values. Lexical remains the default product ranker until an explicit later review changes the flag default.
 
 Deduplication quality remains a separate evaluation concern because full-text retrieval operates on already-canonical `paper` rows. DOI duplicates and preprint/published pairs belong in a dedicated reconciliation fixture.

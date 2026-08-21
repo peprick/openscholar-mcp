@@ -5,8 +5,15 @@ import java.util.List;
 import java.util.UUID;
 
 import com.openscholar.paper.DocumentType;
+import com.openscholar.paper.RelatedPaperFallbackReason;
+import com.openscholar.paper.RelatedPaperRankingFeature;
+import com.openscholar.paper.RelatedPaperRankingMode;
 
-public record RelatedPapersResponse(UUID sourcePaperId, List<Result> results) {
+public record RelatedPapersResponse(
+		UUID sourcePaperId,
+		RelatedPaperRankingMode rankingMode,
+		RelatedPaperFallbackReason fallbackReason,
+		List<Result> results) {
 
 	public RelatedPapersResponse {
 		results = results == null ? List.of() : List.copyOf(results);
@@ -23,6 +30,16 @@ public record RelatedPapersResponse(UUID sourcePaperId, List<Result> results) {
 			DocumentType documentType,
 			String language,
 			String venue,
+			String publisher,
+			String institution,
+			String volume,
+			String issue,
+			String pages,
+			String articleNumber,
+			String edition,
+			List<String> isbn,
+			List<String> issn,
+			String degree,
 			Integer citationCount,
 			Identifiers identifiers,
 			Double score,
@@ -35,6 +52,6 @@ public record RelatedPapersResponse(UUID sourcePaperId, List<Result> results) {
 	public record Identifiers(String doi, String arxiv, String openAlex) {
 	}
 
-	public record Reason(String feature, Double value) {
+	public record Reason(RelatedPaperRankingFeature feature, double value) {
 	}
 }

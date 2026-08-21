@@ -60,6 +60,7 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 			"publication_year",
 			"type",
 			"language",
+			"biblio",
 			"primary_location",
 			"best_oa_location",
 			"open_access",
@@ -225,6 +226,12 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 				bestOpenAccessLocation == null ? null : bestOpenAccessLocation.landingPageUrl(),
 				bestOpenAccessLocation == null ? null : bestOpenAccessLocation.pdfUrl(),
 				work.openAccess() == null ? null : work.openAccess().url());
+		OpenAlexBiblio biblio = work.biblio();
+		String firstPage = biblio == null ? null : blankToNull(biblio.firstPage());
+		String lastPage = biblio == null ? null : blankToNull(biblio.lastPage());
+		String articleNumber = lastPage == null && looksLikeArticleNumber(firstPage) ? firstPage : null;
+		String pages = articleNumber == null ? pageRange(firstPage, lastPage) : null;
+		SourceMetadata sourceMetadata = sourceMetadata(primaryLocation, bestOpenAccessLocation);
 		ProviderPaperRecord record = new ProviderPaperRecord(
 				id(),
 				recordId,
@@ -244,7 +251,19 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 				pdfUrl,
 				work.relevanceScore(),
 				parseInstant(work.updatedDate()),
-				metadataFragment(work));
+				metadataFragment(work),
+				List.of(),
+				URI.create("https://openalex.org/works/" + recordId),
+				sourceMetadata.publisher(),
+				sourceMetadata.institution(),
+				biblio == null ? null : blankToNull(biblio.volume()),
+				biblio == null ? null : blankToNull(biblio.issue()),
+				pages,
+				articleNumber,
+				null,
+				List.of(),
+				sourceMetadata.issn(),
+				null);
 		return Optional.of(record);
 	}
 
@@ -364,6 +383,55 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 				? null
 				: bestOpenAccess.source().displayName();
 		return firstNonBlank(primaryName, openAccessName);
+	}
+
+	private static SourceMetadata sourceMetadata(
+			OpenAlexLocation primary, OpenAlexLocation bestOpenAccess) {
+		OpenAlexSource primarySource = primary == null ? null : primary.source();
+		OpenAlexSource openAccessSource = bestOpenAccess == null ? null : bestOpenAccess.source();
+		OpenAlexSource organizationSource = hasOrganization(primarySource)
+				? primarySource
+				: hasOrganization(openAccessSource) ? openAccessSource : null;
+		String organization = organizationSource == null
+				? null
+				: blankToNull(organizationSource.hostOrganizationName());
+		boolean repository = organizationSource != null
+				&& "repository".equalsIgnoreCase(blankToNull(organizationSource.type()));
+		List<String> issn = java.util.stream.Stream.of(primarySource, openAccessSource)
+				.filter(Objects::nonNull)
+				.flatMap(source -> java.util.stream.Stream.concat(
+						source.issn() == null ? java.util.stream.Stream.empty() : source.issn().stream(),
+						java.util.stream.Stream.ofNullable(source.linkingIssn())))
+				.map(OpenAlexResearchProvider::blankToNull)
+				.filter(Objects::nonNull)
+				.distinct()
+				.sorted()
+				.toList();
+		return new SourceMetadata(
+				repository ? null : organization,
+				repository ? organization : null,
+				issn);
+	}
+
+	private static boolean hasOrganization(OpenAlexSource source) {
+		return source != null && blankToNull(source.hostOrganizationName()) != null;
+	}
+
+	private static String pageRange(String firstPage, String lastPage) {
+		if (firstPage == null) {
+			return lastPage;
+		}
+		if (lastPage == null || firstPage.equals(lastPage)) {
+			return firstPage;
+		}
+		return firstPage + "-" + lastPage;
+	}
+
+	private static boolean looksLikeArticleNumber(String value) {
+		return value != null && value.codePoints().anyMatch(Character::isLetter);
+	}
+
+	private record SourceMetadata(String publisher, String institution, List<String> issn) {
 	}
 
 	private static Map<String, Object> metadataFragment(OpenAlexWork work) {

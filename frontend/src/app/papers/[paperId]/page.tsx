@@ -41,6 +41,8 @@ export default async function PaperPage({
       () => ({
         response: {
           sourcePaperId: paperId,
+          rankingMode: "LEXICAL",
+          fallbackReason: "HYBRID_DISABLED",
           results: [],
         } satisfies RelatedPapersResponse,
         unavailable: true,

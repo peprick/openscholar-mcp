@@ -215,6 +215,8 @@ export function relatedPapersResponseFixture(
 ): RelatedPapersResponse {
   return {
     sourcePaperId: testIds.paper,
+    rankingMode: "LEXICAL",
+    fallbackReason: "HYBRID_DISABLED",
     results: [
       {
         rank: 1,

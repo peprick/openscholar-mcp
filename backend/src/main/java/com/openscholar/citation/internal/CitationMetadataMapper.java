@@ -50,6 +50,16 @@ final class CitationMetadataMapper {
 				paper.publicationYear(),
 				normalizeLanguage(paper.language()),
 				clean(paper.venueName()),
+				clean(paper.publisher()),
+				clean(paper.institution()),
+				clean(paper.volume()),
+				clean(paper.issue()),
+				clean(paper.pages()),
+				clean(paper.articleNumber()),
+				clean(paper.edition()),
+				cleanList(paper.isbn()),
+				cleanList(paper.issn()),
+				clean(paper.degree()),
 				doi,
 				arxivId,
 				pmid,
@@ -123,6 +133,18 @@ final class CitationMetadataMapper {
 		String language = matcher.group("language").toLowerCase(Locale.ROOT);
 		String region = matcher.group("region");
 		return region == null ? language : language + "-" + region.toUpperCase(Locale.ROOT);
+	}
+
+	private static List<String> cleanList(List<String> values) {
+		if (values == null) {
+			return List.of();
+		}
+		return values.stream()
+				.map(CitationMetadataMapper::clean)
+				.filter(java.util.Objects::nonNull)
+				.distinct()
+				.sorted()
+				.toList();
 	}
 
 	static String clean(String value) {

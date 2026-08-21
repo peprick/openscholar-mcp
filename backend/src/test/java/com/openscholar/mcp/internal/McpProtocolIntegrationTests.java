@@ -12,10 +12,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import com.openscholar.TestcontainersConfiguration;
+import com.openscholar.access.AccessDisposition;
+import com.openscholar.access.AccessStatus;
+import com.openscholar.access.internal.persistence.PaperAccessStore;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderAuthor;
 import com.openscholar.provider.ProviderId;
@@ -44,6 +48,8 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(properties = {
 		"openscholar.mcp.security.local-api-key=mcp-wire-test-key",
 		"openscholar.mcp.security.allowed-origins=http://mcp-client.test",
+		"openscholar.mcp.payload.max-request-bytes=4096",
+		"openscholar.mcp.payload.max-tool-result-bytes=4096",
 		"openscholar.search.cache-ttl=1h"
 })
 class McpProtocolIntegrationTests {
@@ -60,6 +66,9 @@ class McpProtocolIntegrationTests {
 
 	@Autowired
 	private FakeResearchProvider researchProvider;
+
+	@Autowired
+	private PaperAccessStore paperAccessStore;
 
 	@BeforeEach
 	void resetProvider() {
@@ -126,7 +135,19 @@ class McpProtocolIntegrationTests {
 		JsonNode searchItem = searchOutput.required("properties").required("results").required("items");
 		assertThat(arrayValues(searchItem.required("required"))).doesNotContain(
 				"abstractText", "publicationDate", "publicationYear", "language", "venueName", "citationCount",
-				"citationCountAsOf", "providerLandingPageUrl", "providerReportedPdfUrl", "score");
+				"publisher", "institution", "volume", "issue", "pages", "articleNumber", "edition", "isbn",
+				"issn", "degree", "citationCountAsOf", "providerLandingPageUrl", "providerReportedPdfUrl", "score");
+		assertThat(searchItem.required("properties").required("publisher").required("type").asString())
+				.isEqualTo("string");
+		assertThat(searchItem.required("properties").required("isbn").required("type").asString())
+				.isEqualTo("array");
+		assertThat(searchItem.required("properties").required("issn").required("items").required("type").asString())
+				.isEqualTo("string");
+		JsonNode detailPaper = tools.get("get_paper_details").required("outputSchema")
+				.required("properties").required("paper");
+		assertThat(arrayValues(detailPaper.required("required"))).doesNotContain(
+				"publisher", "institution", "volume", "issue", "pages", "articleNumber", "edition", "isbn",
+				"issn", "degree");
 		JsonNode authorItem = searchItem.required("properties").required("authors").required("items");
 		assertThat(arrayValues(authorItem.required("required"))).doesNotContain("orcid", "openAlexId");
 	}
@@ -154,6 +175,16 @@ class McpProtocolIntegrationTests {
 		assertThat(searchResult.has("publicationYear")).isFalse();
 		assertThat(searchResult.has("language")).isFalse();
 		assertThat(searchResult.has("venueName")).isFalse();
+		assertThat(searchResult.has("publisher")).isFalse();
+		assertThat(searchResult.has("institution")).isFalse();
+		assertThat(searchResult.has("volume")).isFalse();
+		assertThat(searchResult.has("issue")).isFalse();
+		assertThat(searchResult.has("pages")).isFalse();
+		assertThat(searchResult.has("articleNumber")).isFalse();
+		assertThat(searchResult.has("edition")).isFalse();
+		assertThat(searchResult.has("isbn")).isFalse();
+		assertThat(searchResult.has("issn")).isFalse();
+		assertThat(searchResult.has("degree")).isFalse();
 		assertThat(searchResult.has("citationCount")).isFalse();
 		assertThat(searchResult.has("citationCountAsOf")).isFalse();
 		assertThat(searchResult.has("providerLandingPageUrl")).isFalse();
@@ -182,7 +213,18 @@ class McpProtocolIntegrationTests {
 
 		JsonNode details = successfulStructuredContent(
 				callTool(11, "get_paper_details", Map.of("paperId", paperId)));
-		assertThat(details.required("paper").required("paperId").asString()).isEqualTo(paperId);
+		JsonNode detailsPaper = details.required("paper");
+		assertThat(detailsPaper.required("paperId").asString()).isEqualTo(paperId);
+		assertThat(detailsPaper.has("publisher")).isFalse();
+		assertThat(detailsPaper.has("institution")).isFalse();
+		assertThat(detailsPaper.has("volume")).isFalse();
+		assertThat(detailsPaper.has("issue")).isFalse();
+		assertThat(detailsPaper.has("pages")).isFalse();
+		assertThat(detailsPaper.has("articleNumber")).isFalse();
+		assertThat(detailsPaper.has("edition")).isFalse();
+		assertThat(detailsPaper.has("isbn")).isFalse();
+		assertThat(detailsPaper.has("issn")).isFalse();
+		assertThat(detailsPaper.has("degree")).isFalse();
 		assertThat(details.required("storedAccess").required("disposition").asString())
 			.isEqualTo("NOT_YET_RESOLVED");
 
@@ -201,6 +243,72 @@ class McpProtocolIntegrationTests {
 		assertThat(citations.required("format").asString()).isEqualTo("bibtex");
 		assertThat(citations.required("paperCount").asInt()).isEqualTo(1);
 		assertThat(citations.required("content").asString()).contains("Deterministic MCP paper");
+	}
+
+	@Test
+	void rejectsOversizedHttpBodiesBeforeToolDispatch() throws Exception {
+		String oversizedMessage = objectMapper.writeValueAsString(Map.of(
+				"jsonrpc", "2.0",
+				"id", 20,
+				"method", "tools/call",
+				"params", Map.of(
+						"name", "search_research",
+						"arguments", Map.of("topic", "x".repeat(5000)))));
+
+		MvcResult result = mockMvc.perform(post("/mcp")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + API_KEY)
+				.header("MCP-Protocol-Version", PROTOCOL_VERSION)
+				.contentType(MediaType.APPLICATION_JSON)
+				.accept(MediaType.APPLICATION_JSON)
+				.content(oversizedMessage))
+			.andExpect(status().isPayloadTooLarge())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andReturn();
+
+		JsonNode problem = objectMapper.readTree(result.getResponse().getContentAsString());
+		assertThat(problem.required("code").asString()).isEqualTo("MCP_REQUEST_TOO_LARGE");
+		assertThat(researchProvider.calls()).isZero();
+	}
+
+	@Test
+	void returnsOnlyASafeToolErrorWhenTheStructuredResultExceedsItsBudget() throws Exception {
+		researchProvider.returnOversizedResult();
+		String topic = "oversized MCP result " + UUID.randomUUID();
+
+		JsonNode response = callTool(21, "search_research", Map.of("topic", topic, "limit", 1));
+		JsonNode result = response.required("result");
+		assertThat(result.required("isError").asBoolean()).isTrue();
+		String error = result.required("content").required(0).required("text").asString();
+		assertThat(error).contains("MCP_RESPONSE_TOO_LARGE", "retryable=false")
+			.doesNotContain(FakeResearchProvider.LEAK_MARKER);
+	}
+
+	@Test
+	void returnsStoredRestrictedAccessWithoutInventingAFullTextLocation() throws Exception {
+		researchProvider.returnRestrictedRecord();
+		String topic = "restricted access MCP result " + UUID.randomUUID();
+		JsonNode search = successfulStructuredContent(
+				callTool(23, "search_research", Map.of("topic", topic, "limit", 1)));
+		UUID paperId = UUID.fromString(search.required("results").required(0).required("paperId").asString());
+		Instant checkedAt = RETRIEVED_AT.plus(Duration.ofHours(1));
+		paperAccessStore.store(
+				paperId,
+				AccessStatus.RESTRICTED,
+				AccessDisposition.RESOLVED,
+				checkedAt,
+				checkedAt.plus(Duration.ofDays(1)),
+				accessLookupFingerprint("10.1000/openscholar.mcp-wire-restricted", false),
+				List.of(),
+				List.of("NO_LEGAL_FULL_TEXT_FOUND"),
+				Set.of(),
+				List.of());
+
+		JsonNode access = successfulStructuredContent(
+				callTool(24, "get_legal_full_text", Map.of("paperId", paperId.toString())));
+		assertThat(access.required("status").asString()).isEqualTo("RESTRICTED");
+		assertThat(access.required("disposition").asString()).isEqualTo("CACHE_HIT");
+		assertThat(arrayValues(access.required("warnings"))).containsExactly("NO_LEGAL_FULL_TEXT_FOUND");
+		assertThat(access.required("locations")).isEmpty();
 	}
 
 	private JsonNode initialize(int id) throws Exception {
@@ -296,6 +404,17 @@ class McpProtocolIntegrationTests {
 		return IntStream.range(0, array.size()).mapToObj(index -> array.required(index).asString()).toList();
 	}
 
+	private static String accessLookupFingerprint(String normalizedDoi, boolean hasAbstract) {
+		String input = normalizedDoi + "\n\n" + hasAbstract;
+		try {
+			return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+					.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+		}
+		catch (java.security.NoSuchAlgorithmException exception) {
+			throw new IllegalStateException(exception);
+		}
+	}
+
 	@TestConfiguration(proxyBeanMethods = false)
 	static class FakeProviderConfiguration {
 
@@ -304,11 +423,16 @@ class McpProtocolIntegrationTests {
 		FakeResearchProvider fakeResearchProvider() {
 			return new FakeResearchProvider();
 		}
+
 	}
 
 	static final class FakeResearchProvider implements ResearchProvider {
 
+		private static final String LEAK_MARKER = "MCP_RESULT_MUST_NOT_LEAK";
+
 		private final AtomicInteger calls = new AtomicInteger();
+		private final AtomicBoolean oversized = new AtomicBoolean();
+		private final AtomicBoolean restricted = new AtomicBoolean();
 
 		@Override
 		public ProviderId id() {
@@ -318,13 +442,21 @@ class McpProtocolIntegrationTests {
 		@Override
 		public ProviderSearchResult search(ProviderSearchQuery query) {
 			calls.incrementAndGet();
+			String providerRecordId = oversized.get()
+					? "W-MCP-WIRE-OVERSIZED"
+					: restricted.get() ? "W-MCP-WIRE-RESTRICTED" : "W-MCP-WIRE-TEST";
+			String doi = oversized.get()
+					? "10.1000/openscholar.mcp-wire-oversized"
+					: restricted.get()
+							? "10.1000/openscholar.mcp-wire-restricted"
+							: "10.1000/openscholar.mcp-wire-test";
 			ProviderPaperRecord paper = new ProviderPaperRecord(
 					ProviderId.OPENALEX,
-					"W-MCP-WIRE-TEST",
-					"10.1000/openscholar.mcp-wire-test",
+					providerRecordId,
+					doi,
 					null,
 					"Deterministic MCP paper",
-					null,
+					oversized.get() ? LEAK_MARKER.repeat(512) : null,
 					null,
 					null,
 					DocumentType.ARTICLE,
@@ -343,6 +475,16 @@ class McpProtocolIntegrationTests {
 
 		void reset() {
 			calls.set(0);
+			oversized.set(false);
+			restricted.set(false);
+		}
+
+		void returnOversizedResult() {
+			oversized.set(true);
+		}
+
+		void returnRestrictedRecord() {
+			restricted.set(true);
 		}
 
 		int calls() {

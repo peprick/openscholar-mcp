@@ -36,25 +36,30 @@ class ResearchProviderFanout {
 	private final ExecutorService executor;
 	private final Clock clock;
 
+	private final ResearchProviderMetrics metrics;
+
 	@Autowired
 	ResearchProviderFanout(
 			Map<String, ResearchProvider> providerBeans,
 			ConfigurableListableBeanFactory beanFactory,
 			ProviderCursorCodec cursorCodec,
 			@Qualifier(SearchConfiguration.PROVIDER_EXECUTOR_BEAN) ExecutorService executor,
-			Clock clock) {
-		this(selectProviders(providerBeans, beanFactory), cursorCodec, executor, clock);
+			Clock clock,
+			ResearchProviderMetrics metrics) {
+		this(selectProviders(providerBeans, beanFactory), cursorCodec, executor, clock, metrics);
 	}
 
 	ResearchProviderFanout(
 			List<ResearchProvider> providers,
 			ProviderCursorCodec cursorCodec,
 			ExecutorService executor,
-			Clock clock) {
+			Clock clock,
+			ResearchProviderMetrics metrics) {
 		this.providers = orderedProviders(providers);
 		this.cursorCodec = Objects.requireNonNull(cursorCodec, "cursorCodec");
 		this.executor = Objects.requireNonNull(executor, "executor");
 		this.clock = Objects.requireNonNull(clock, "clock");
+		this.metrics = Objects.requireNonNull(metrics, "metrics");
 	}
 
 	ProviderSearchBatchResult search(ProviderSearchQuery query) {
@@ -141,20 +146,25 @@ class ResearchProviderFanout {
 
 	private ProviderCall invoke(ProviderRequest request) {
 		ResearchProvider provider = request.provider();
+		long startedAt = System.nanoTime();
 		try {
 			ProviderSearchResult result = Objects.requireNonNull(
 					provider.search(request.query()), "Research providers must not return null");
 			validateResult(provider.id(), result);
+			metrics.success(provider.id(), System.nanoTime() - startedAt, result.records().size());
 			return new ProviderCall(provider.id(), result, null);
 		}
 		catch (ProviderException exception) {
 			ProviderException failure = exception.provider() == provider.id()
 					? exception
 					: unexpectedFailure(provider.id(), exception);
+			metrics.failure(provider.id(), System.nanoTime() - startedAt, failure);
 			return new ProviderCall(provider.id(), null, failure);
 		}
 		catch (RuntimeException exception) {
-			return new ProviderCall(provider.id(), null, unexpectedFailure(provider.id(), exception));
+			ProviderException failure = unexpectedFailure(provider.id(), exception);
+			metrics.failure(provider.id(), System.nanoTime() - startedAt, failure);
+			return new ProviderCall(provider.id(), null, failure);
 		}
 	}
 

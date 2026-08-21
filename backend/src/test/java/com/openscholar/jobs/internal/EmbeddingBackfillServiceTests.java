@@ -517,6 +517,12 @@ class EmbeddingBackfillServiceTests {
 				UUID sourcePaperId, String profileKey, int limit) {
 			throw new AssertionError("Nearest-neighbor lookup must not run during backfill");
 		}
+
+		@Override
+		public List<PaperEmbeddingMatch> findExactSimilarities(
+				UUID sourcePaperId, String profileKey, List<UUID> candidatePaperIds) {
+			throw new AssertionError("Exact-similarity lookup must not run during backfill");
+		}
 	}
 
 	private static final class FakeBackfillLock implements EmbeddingBackfillLock {

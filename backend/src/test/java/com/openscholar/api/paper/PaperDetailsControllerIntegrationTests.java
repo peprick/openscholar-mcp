@@ -122,6 +122,17 @@ class PaperDetailsControllerIntegrationTests {
 				.andExpect(jsonPath("$.documentType").value("ARTICLE"))
 				.andExpect(jsonPath("$.language").value("en"))
 				.andExpect(jsonPath("$.venueName").value("Journal of Reproducible Systems"))
+				.andExpect(jsonPath("$.publisher").value("Reproducible Research Press"))
+				.andExpect(jsonPath("$.institution").value("Example Institute of Technology"))
+				.andExpect(jsonPath("$.volume").value("12"))
+				.andExpect(jsonPath("$.issue").value("3"))
+				.andExpect(jsonPath("$.pages").value("101-119"))
+				.andExpect(jsonPath("$.articleNumber").value("e2048"))
+				.andExpect(jsonPath("$.edition").value("2nd"))
+				.andExpect(jsonPath("$.isbn[0]").value("978-0-306-40615-7"))
+				.andExpect(jsonPath("$.issn[0]").value("2049-3630"))
+				.andExpect(jsonPath("$.issn[1]").value("2049-3649"))
+				.andExpect(jsonPath("$.degree").value("Doctor of Philosophy"))
 				.andExpect(jsonPath("$.citationCount").value(37))
 				.andExpect(jsonPath("$.citationCountAsOf").value(CITATION_COUNT_AS_OF.toString()))
 				.andExpect(jsonPath("$.metadataCompleteness").value(1.0))
@@ -209,6 +220,16 @@ class PaperDetailsControllerIntegrationTests {
 				.andExpect(jsonPath("$.documentType").value("OTHER"))
 				.andExpect(jsonPath("$.language").value(nullValue()))
 				.andExpect(jsonPath("$.venueName").value(nullValue()))
+				.andExpect(jsonPath("$.publisher").value(nullValue()))
+				.andExpect(jsonPath("$.institution").value(nullValue()))
+				.andExpect(jsonPath("$.volume").value(nullValue()))
+				.andExpect(jsonPath("$.issue").value(nullValue()))
+				.andExpect(jsonPath("$.pages").value(nullValue()))
+				.andExpect(jsonPath("$.articleNumber").value(nullValue()))
+				.andExpect(jsonPath("$.edition").value(nullValue()))
+				.andExpect(jsonPath("$.isbn").isEmpty())
+				.andExpect(jsonPath("$.issn").isEmpty())
+				.andExpect(jsonPath("$.degree").value(nullValue()))
 				.andExpect(jsonPath("$.citationCount").value(nullValue()))
 				.andExpect(jsonPath("$.citationCountAsOf").value(nullValue()))
 				.andExpect(jsonPath("$.identifiers").isEmpty())
@@ -425,7 +446,17 @@ class PaperDetailsControllerIntegrationTests {
 				37,
 				CITATION_COUNT_AS_OF,
 				identifiers,
-				authors);
+				authors,
+				"Reproducible Research Press",
+				"Example Institute of Technology",
+				"12",
+				"3",
+				"101-119",
+				"e2048",
+				"2nd",
+				List.of("978-0-306-40615-7"),
+				List.of("2049-3649", "2049-3630", "2049-3649"),
+				"Doctor of Philosophy");
 	}
 
 	private static ProviderRecordCandidate providerRecord(

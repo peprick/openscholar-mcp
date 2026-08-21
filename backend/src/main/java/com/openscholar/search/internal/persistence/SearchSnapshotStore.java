@@ -229,7 +229,17 @@ public class SearchSnapshotStore {
 				record.citationCount(),
 				retrievedAt,
 				record.identifiers(),
-				authors);
+				authors,
+				record.publisher(),
+				record.institution(),
+				record.volume(),
+				record.issue(),
+				record.pages(),
+				record.articleNumber(),
+				record.edition(),
+				record.isbn(),
+				record.issn(),
+				record.degree());
 	}
 
 	private static PaperAuthorCandidate toAuthorCandidate(ProviderAuthor author) {

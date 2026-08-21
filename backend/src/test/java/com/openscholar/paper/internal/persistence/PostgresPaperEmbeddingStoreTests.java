@@ -376,6 +376,62 @@ class PostgresPaperEmbeddingStoreTests {
 	}
 
 	@Test
+	void exactCandidateLookupReturnsOnlyCoveredCandidatesWithDeterministicScores() {
+		UUID sourceId = uuid(540);
+		UUID nearId = uuid(541);
+		UUID orthogonalId = uuid(542);
+		UUID missingVectorId = uuid(543);
+		List.of(sourceId, nearId, orthogonalId, missingVectorId)
+			.forEach(id -> insertPaper(
+					id, "Exact candidate paper " + id, "A candidate coverage fixture"));
+		embeddingStore.registerProfile(pinnedProfile());
+		storeCurrent(sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(1.0f, 0.0f), NOW);
+		storeCurrent(nearId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.8f, 0.2f), NOW);
+		storeCurrent(
+				orthogonalId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(0.0f, 1.0f), NOW);
+
+		List<PaperEmbeddingMatch> matches = embeddingStore.findExactSimilarities(
+				sourceId,
+				PaperEmbeddingAnnPolicy.PROFILE_KEY,
+				List.of(orthogonalId, missingVectorId, nearId));
+
+		assertThat(matches).extracting(PaperEmbeddingMatch::paperId)
+			.containsExactly(nearId, orthogonalId)
+			.doesNotContain(missingVectorId);
+		assertThat(matches).extracting(PaperEmbeddingMatch::rank)
+			.containsExactly(1, 2);
+		assertThat(matches.getFirst().cosineSimilarity())
+			.isCloseTo(0.9701425d, within(0.000001d));
+		assertThat(matches.getLast().cosineSimilarity()).isCloseTo(0.0d, within(0.000001d));
+	}
+
+	@Test
+	void exactCandidateLookupValidatesItsBoundedInputAndMissingSource() {
+		UUID sourceId = uuid(550);
+		UUID candidateId = uuid(551);
+		insertPaper(sourceId, "Missing source vector", null);
+		insertPaper(candidateId, "Candidate vector", null);
+		embeddingStore.registerProfile(pinnedProfile());
+		storeCurrent(
+				candidateId, PaperEmbeddingAnnPolicy.PROFILE_KEY, vector(1.0f, 0.0f), NOW);
+
+		assertThatThrownBy(() -> embeddingStore.findExactSimilarities(
+				sourceId, PaperEmbeddingAnnPolicy.PROFILE_KEY, List.of(candidateId)))
+			.isInstanceOf(PaperEmbeddingNotFoundException.class)
+			.hasMessageContaining(sourceId.toString());
+		assertThatThrownBy(() -> embeddingStore.findExactSimilarities(
+				candidateId, PaperEmbeddingAnnPolicy.PROFILE_KEY, List.of()))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("between 1 and 100");
+		assertThatThrownBy(() -> embeddingStore.findExactSimilarities(
+				candidateId,
+				PaperEmbeddingAnnPolicy.PROFILE_KEY,
+				List.of(sourceId, sourceId)))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("unique");
+	}
+
+	@Test
 	void approximateQueryShapeCanUseThePinnedHnswIndex() {
 		jdbcTemplate.queryForMap("select set_config('enable_seqscan', 'off', true)");
 

@@ -21,6 +21,7 @@ import com.openscholar.provider.ProviderSearchBatchResult;
 import com.openscholar.provider.ProviderSearchQuery;
 import com.openscholar.provider.ProviderSearchResult;
 import com.openscholar.provider.ResearchProvider;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -133,7 +134,8 @@ class ResearchProviderFanoutTests {
 				providers,
 				cursorCodec,
 				executor,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC),
+				new ResearchProviderMetrics(new SimpleMeterRegistry()));
 	}
 
 	private static ProviderSearchQuery query(String cursor) {

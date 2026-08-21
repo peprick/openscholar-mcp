@@ -80,6 +80,16 @@ class SearchControllerIntegrationTests {
 				.andExpect(jsonPath("$.providerCoverage[0].provider").value("OPENALEX"))
 				.andExpect(jsonPath("$.results[0].title").value("A useful OpenAlex paper"))
 				.andExpect(jsonPath("$.results[0].authors[0].name").value("Ada Researcher"))
+				.andExpect(jsonPath("$.results[0].publisher").value("Open Research Press"))
+				.andExpect(jsonPath("$.results[0].institution").value("Example Research Institute"))
+				.andExpect(jsonPath("$.results[0].volume").value("12"))
+				.andExpect(jsonPath("$.results[0].issue").value("3"))
+				.andExpect(jsonPath("$.results[0].pages").value("101-119"))
+				.andExpect(jsonPath("$.results[0].articleNumber").value("e2048"))
+				.andExpect(jsonPath("$.results[0].edition").value("2nd"))
+				.andExpect(jsonPath("$.results[0].isbn[0]").value("978-0-306-40615-7"))
+				.andExpect(jsonPath("$.results[0].issn[0]").value("2049-3630"))
+				.andExpect(jsonPath("$.results[0].degree").value("Doctor of Philosophy"))
 				.andExpect(jsonPath("$.results[0].identifiers.doi").value(provider.doi()))
 				.andExpect(jsonPath("$.results[0].identifiers.arxiv").value(provider.arxivId()))
 				.andReturn()
@@ -362,7 +372,19 @@ class SearchControllerIntegrationTests {
 					URI.create("https://example.org/paper.pdf"),
 					42.5,
 					retrievedAt.minus(Duration.ofDays(1)),
-					Map.of("oaStatus", "gold"));
+					Map.of("oaStatus", "gold"),
+					List.of(),
+					URI.create("https://openalex.org/works/" + recordId),
+					"Open Research Press",
+					"Example Research Institute",
+					"12",
+					"3",
+					"101-119",
+					"e2048",
+					"2nd",
+					List.of("978-0-306-40615-7"),
+					List.of("2049-3630"),
+					"Doctor of Philosophy");
 			return new ProviderSearchResult(
 					ProviderId.OPENALEX, List.of(record), 42, nextCursor, retrievedAt);
 		}

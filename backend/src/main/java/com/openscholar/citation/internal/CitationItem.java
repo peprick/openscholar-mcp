@@ -17,6 +17,16 @@ record CitationItem(
 		Integer publicationYear,
 		String language,
 		String venueName,
+		String publisher,
+		String institution,
+		String volume,
+		String issue,
+		String pages,
+		String articleNumber,
+		String edition,
+		List<String> isbn,
+		List<String> issn,
+		String degree,
 		String doi,
 		String arxivId,
 		String pmid,
@@ -25,6 +35,8 @@ record CitationItem(
 
 	CitationItem {
 		authors = authors == null ? List.of() : List.copyOf(authors);
+		isbn = isbn == null ? List.of() : List.copyOf(isbn);
+		issn = issn == null ? List.of() : List.copyOf(issn);
 	}
 
 	int effectiveYear() {

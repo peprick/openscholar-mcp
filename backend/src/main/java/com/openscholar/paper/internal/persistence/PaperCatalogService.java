@@ -382,7 +382,17 @@ class PaperCatalogService implements PaperCatalog {
 					paper.citationCount(),
 					paper.citationCountAsOf(),
 					identifiers,
-					authorsByPaper.getOrDefault(requestedId, List.of())));
+					authorsByPaper.getOrDefault(requestedId, List.of()),
+					paper.publisher(),
+					paper.institution(),
+					paper.volume(),
+					paper.issue(),
+					paper.pages(),
+					paper.articleNumber(),
+					paper.edition(),
+					paper.isbn(),
+					paper.issn(),
+					paper.degree()));
 		}
 		return Map.copyOf(views);
 	}

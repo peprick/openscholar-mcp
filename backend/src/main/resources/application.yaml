@@ -55,6 +55,10 @@ spring:
       fail-on-unknown-properties: true
 
 openscholar:
+  related-papers:
+    hybrid:
+      enabled: ${RELATED_PAPERS_HYBRID_ENABLED:false}
+      candidate-pool-size: ${RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE:100}
   embedding:
     backfill:
       enabled: ${EMBEDDING_BACKFILL_ENABLED:false}
@@ -79,6 +83,9 @@ openscholar:
       requests-per-window: ${MCP_RATE_LIMIT_REQUESTS:120}
       window: ${MCP_RATE_LIMIT_WINDOW:1m}
       maximum-tracked-clients: ${MCP_RATE_LIMIT_MAX_CLIENTS:10000}
+    payload:
+      max-request-bytes: ${MCP_MAX_REQUEST_BYTES:1048576}
+      max-tool-result-bytes: ${MCP_MAX_TOOL_RESULT_BYTES:1048576}
   access:
     cache-ttl: 24h
     force-refresh-cooldown: 5m

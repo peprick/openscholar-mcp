@@ -42,8 +42,21 @@ final class CslJsonCitationRenderer {
 					.map(author -> Map.of("literal", author))
 					.toList());
 		}
-		addVenue(output, item);
+		Map<String, Object> custom = new LinkedHashMap<>();
+		addVenue(output, custom, item);
+		put(output, "publisher", item.publisher() == null ? item.institution() : item.publisher());
+		put(custom, "openscholar-institution", item.institution());
+		put(output, "volume", item.volume());
+		put(output, "issue", item.issue());
+		put(output, "page", item.pages() == null ? item.articleNumber() : item.pages());
+		put(custom, "openscholar-article-number", item.articleNumber());
+		put(output, "edition", item.edition());
+		put(output, "ISBN", joined(item.isbn()));
+		put(output, "ISSN", joined(item.issn()));
 		addGenre(output, item);
+		if (!custom.isEmpty()) {
+			output.put("custom", custom);
+		}
 		if (item.publicationDate() != null) {
 			output.put("issued", Map.of("date-parts", List.of(List.of(
 					item.publicationDate().getYear(),
@@ -82,7 +95,8 @@ final class CslJsonCitationRenderer {
 		};
 	}
 
-	private static void addVenue(Map<String, Object> output, CitationItem item) {
+	private static void addVenue(
+			Map<String, Object> output, Map<String, Object> custom, CitationItem item) {
 		if (item.venueName() == null) {
 			return;
 		}
@@ -90,11 +104,15 @@ final class CslJsonCitationRenderer {
 			case ARTICLE, PREPRINT, CONFERENCE_PAPER, BOOK_CHAPTER ->
 					output.put("container-title", item.venueName());
 			case THESIS, DISSERTATION, BOOK, REPORT, DATASET, OTHER ->
-					output.put("custom", Map.of("openscholar-venue", item.venueName()));
+					custom.put("openscholar-venue", item.venueName());
 		}
 	}
 
 	private static void addGenre(Map<String, Object> output, CitationItem item) {
+		if (item.degree() != null) {
+			output.put("genre", item.degree());
+			return;
+		}
 		if (item.documentType() == com.openscholar.paper.DocumentType.PREPRINT) {
 			output.put("genre", "Preprint");
 		}
@@ -110,5 +128,15 @@ final class CslJsonCitationRenderer {
 		if (value != null) {
 			output.put(key, value);
 		}
+	}
+
+	private static String joined(List<String> values) {
+		if (values.isEmpty()) {
+			return null;
+		}
+		return values.stream()
+				.distinct()
+				.sorted()
+				.collect(java.util.stream.Collectors.joining(", "));
 	}
 }

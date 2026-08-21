@@ -16,7 +16,17 @@ public record CanonicalPaperCandidate(
 		Integer citationCount,
 		Instant citationCountAsOf,
 		List<PaperIdentifier> identifiers,
-		List<PaperAuthorCandidate> authors) {
+		List<PaperAuthorCandidate> authors,
+		String publisher,
+		String institution,
+		String volume,
+		String issue,
+		String pages,
+		String articleNumber,
+		String edition,
+		List<String> isbn,
+		List<String> issn,
+		String degree) {
 
 	public CanonicalPaperCandidate {
 		title = Objects.requireNonNull(title, "title").strip();
@@ -32,5 +42,37 @@ public record CanonicalPaperCandidate(
 		}
 		identifiers = identifiers == null ? List.of() : List.copyOf(identifiers);
 		authors = authors == null ? List.of() : List.copyOf(authors);
+		isbn = normalizedValues(isbn);
+		issn = normalizedValues(issn);
+	}
+
+	public CanonicalPaperCandidate(
+			String title,
+			String abstractText,
+			LocalDate publicationDate,
+			Integer publicationYear,
+			DocumentType documentType,
+			String language,
+			String venueName,
+			Integer citationCount,
+			Instant citationCountAsOf,
+			List<PaperIdentifier> identifiers,
+			List<PaperAuthorCandidate> authors) {
+		this(title, abstractText, publicationDate, publicationYear, documentType, language, venueName,
+				citationCount, citationCountAsOf, identifiers, authors, null, null, null, null, null, null,
+				null, List.of(), List.of(), null);
+	}
+
+	private static List<String> normalizedValues(List<String> values) {
+		if (values == null || values.isEmpty()) {
+			return List.of();
+		}
+		return values.stream()
+				.filter(java.util.Objects::nonNull)
+				.map(String::strip)
+				.filter(value -> !value.isEmpty())
+				.distinct()
+				.sorted()
+				.toList();
 	}
 }

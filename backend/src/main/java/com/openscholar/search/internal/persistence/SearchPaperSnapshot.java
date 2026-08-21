@@ -23,11 +23,23 @@ public record SearchPaperSnapshot(
 		Integer citationCount,
 		Instant citationCountAsOf,
 		List<PaperIdentifier> identifiers,
-		List<PaperAuthorView> authors) {
+		List<PaperAuthorView> authors,
+		String publisher,
+		String institution,
+		String volume,
+		String issue,
+		String pages,
+		String articleNumber,
+		String edition,
+		List<String> isbn,
+		List<String> issn,
+		String degree) {
 
 	public SearchPaperSnapshot {
 		identifiers = identifiers == null ? List.of() : List.copyOf(identifiers);
 		authors = authors == null ? List.of() : List.copyOf(authors);
+		isbn = isbn == null ? List.of() : List.copyOf(isbn);
+		issn = issn == null ? List.of() : List.copyOf(issn);
 	}
 
 	static SearchPaperSnapshot from(PaperView paper) {
@@ -43,7 +55,17 @@ public record SearchPaperSnapshot(
 				paper.citationCount(),
 				paper.citationCountAsOf(),
 				paper.identifiers(),
-				paper.authors());
+				paper.authors(),
+				paper.publisher(),
+				paper.institution(),
+				paper.volume(),
+				paper.issue(),
+				paper.pages(),
+				paper.articleNumber(),
+				paper.edition(),
+				paper.isbn(),
+				paper.issn(),
+				paper.degree());
 	}
 
 	PaperView toView() {
@@ -59,6 +81,16 @@ public record SearchPaperSnapshot(
 				citationCount,
 				citationCountAsOf,
 				identifiers,
-				authors);
+				authors,
+				publisher,
+				institution,
+				volume,
+				issue,
+				pages,
+				articleNumber,
+				edition,
+				isbn,
+				issn,
+				degree);
 	}
 }

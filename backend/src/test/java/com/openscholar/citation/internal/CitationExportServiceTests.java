@@ -81,6 +81,106 @@ class CitationExportServiceTests {
 	}
 
 	@Test
+	void rendersCleanedTypedPublicationMetadataInBibtexAndCslJson() throws Exception {
+		PaperView paper = new PaperView(
+				PAPER_ID,
+				"Metadata-rich dissertation",
+				null,
+				LocalDate.of(2025, 6, 7),
+				2024,
+				DocumentType.DISSERTATION,
+				"en",
+				" Graduate Research Series ",
+				null,
+				null,
+				List.of(),
+				List.of(),
+				" Academic Press ",
+				" Example\n University ",
+				" 42 ",
+				" 7 ",
+				" 101–119 ",
+				" e123 ",
+				" 2nd ",
+				List.of(" 978-1-4028-9462-6 ", "", "0-306-40615-2", "0-306-40615-2"),
+				List.of(" 2049-3630 ", "1234-5678", "\t"),
+				" Doctor of Philosophy ");
+		CitationExportService service = service(paper);
+
+		String bibtex = service.export(PAPER_ID, CitationFormat.BIBTEX).body();
+		assertThat(bibtex)
+				.contains("  publisher = {Academic Press},\n")
+				.contains("  school = {Example University},\n")
+				.contains("  volume = {42},\n")
+				.contains("  number = {7},\n")
+				.contains("  pages = {101–119},\n")
+				.contains("  eid = {e123},\n")
+				.contains("  edition = {2nd},\n")
+				.contains("  isbn = {0-306-40615-2, 978-1-4028-9462-6},\n")
+				.contains("  issn = {1234-5678, 2049-3630},\n")
+				.contains("  type = {Doctor of Philosophy},\n")
+				.doesNotContain("  institution = ");
+
+		JsonNode csl = OBJECT_MAPPER.readTree(service.export(PAPER_ID, CitationFormat.CSL_JSON).body()).get(0);
+		assertThat(csl.required("publisher").asString()).isEqualTo("Academic Press");
+		assertThat(csl.required("volume").asString()).isEqualTo("42");
+		assertThat(csl.required("issue").asString()).isEqualTo("7");
+		assertThat(csl.required("page").asString()).isEqualTo("101–119");
+		assertThat(csl.required("edition").asString()).isEqualTo("2nd");
+		assertThat(csl.required("ISBN").asString())
+				.isEqualTo("0-306-40615-2, 978-1-4028-9462-6");
+		assertThat(csl.required("ISSN").asString()).isEqualTo("1234-5678, 2049-3630");
+		assertThat(csl.required("genre").asString()).isEqualTo("Doctor of Philosophy");
+		assertThat(csl.required("custom").propertyNames()).containsExactly(
+				"openscholar-venue",
+				"openscholar-institution",
+				"openscholar-article-number");
+		assertThat(csl.at("/custom/openscholar-institution").asString())
+				.isEqualTo("Example University");
+		assertThat(csl.at("/custom/openscholar-article-number").asString()).isEqualTo("e123");
+	}
+
+	@Test
+	void usesInstitutionAndArticleNumberAsCslFallbacksWithoutLosingTheirTypedValues() throws Exception {
+		PaperView paper = new PaperView(
+				PAPER_ID,
+				"Institutional report",
+				null,
+				null,
+				2026,
+				DocumentType.REPORT,
+				null,
+				null,
+				null,
+				null,
+				List.of(),
+				List.of(),
+				null,
+				"Research Institute",
+				null,
+				null,
+				null,
+				"R-17",
+				null,
+				List.of(),
+				List.of(),
+				null);
+		CitationExportService service = service(paper);
+
+		assertThat(service.export(PAPER_ID, CitationFormat.BIBTEX).body())
+				.contains("  institution = {Research Institute},\n")
+				.contains("  eid = {R-17},\n")
+				.doesNotContain("  publisher = ");
+
+		JsonNode csl = OBJECT_MAPPER.readTree(service.export(PAPER_ID, CitationFormat.CSL_JSON).body()).get(0);
+		assertThat(csl.required("publisher").asString()).isEqualTo("Research Institute");
+		assertThat(csl.required("page").asString()).isEqualTo("R-17");
+		assertThat(csl.at("/custom/openscholar-institution").asString())
+				.isEqualTo("Research Institute");
+		assertThat(csl.at("/custom/openscholar-article-number").asString()).isEqualTo("R-17");
+	}
+
+	@Test
 	void mapsEveryDocumentTypeForBibtexAndCslJson() throws Exception {
 		Map<DocumentType, ExpectedMapping> mappings = Map.ofEntries(
 				Map.entry(DocumentType.ARTICLE,

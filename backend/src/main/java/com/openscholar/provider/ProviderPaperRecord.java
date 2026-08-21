@@ -33,7 +33,17 @@ public record ProviderPaperRecord(
 		Instant providerUpdatedAt,
 		Map<String, Object> metadataFragment,
 		List<PaperIdentifier> identifiers,
-		URI sourceUrl) {
+		URI sourceUrl,
+		String publisher,
+		String institution,
+		String volume,
+		String issue,
+		String pages,
+		String articleNumber,
+		String edition,
+		List<String> isbn,
+		List<String> issn,
+		String degree) {
 
 	public ProviderPaperRecord {
 		provider = Objects.requireNonNull(provider, "provider");
@@ -43,6 +53,36 @@ public record ProviderPaperRecord(
 		authors = authors == null ? List.of() : List.copyOf(authors);
 		metadataFragment = metadataFragment == null ? Map.of() : Map.copyOf(metadataFragment);
 		identifiers = normalizedIdentifiers(provider, providerRecordId, doi, arxivId, identifiers);
+		isbn = normalizedValues(isbn);
+		issn = normalizedValues(issn);
+	}
+
+	public ProviderPaperRecord(
+			ProviderId provider,
+			String providerRecordId,
+			String doi,
+			String arxivId,
+			String title,
+			String abstractText,
+			LocalDate publicationDate,
+			Integer publicationYear,
+			DocumentType documentType,
+			String language,
+			String venueName,
+			Integer citationCount,
+			List<ProviderAuthor> authors,
+			boolean reportedOpenAccess,
+			URI landingPageUrl,
+			URI pdfUrl,
+			Double relevanceScore,
+			Instant providerUpdatedAt,
+			Map<String, Object> metadataFragment,
+			List<PaperIdentifier> identifiers,
+			URI sourceUrl) {
+		this(provider, providerRecordId, doi, arxivId, title, abstractText, publicationDate, publicationYear,
+				documentType, language, venueName, citationCount, authors, reportedOpenAccess, landingPageUrl,
+				pdfUrl, relevanceScore, providerUpdatedAt, metadataFragment, identifiers, sourceUrl, null, null,
+				null, null, null, null, null, List.of(), List.of(), null);
 	}
 
 	/**
@@ -73,7 +113,8 @@ public record ProviderPaperRecord(
 		this(provider, providerRecordId, doi, arxivId, title, abstractText, publicationDate, publicationYear,
 				documentType, language, venueName, citationCount, authors, reportedOpenAccess, landingPageUrl,
 				pdfUrl, relevanceScore, providerUpdatedAt, metadataFragment, List.of(),
-				defaultSourceUrl(provider, providerRecordId));
+				defaultSourceUrl(provider, providerRecordId), null, null, null, null, null, null, null,
+				List.of(), List.of(), null);
 	}
 
 	private static List<PaperIdentifier> normalizedIdentifiers(
@@ -94,6 +135,9 @@ public record ProviderPaperRecord(
 		switch (provider) {
 			case OPENALEX -> addIdentifier(values, PaperIdentifierType.OPENALEX, "", providerRecordId);
 			case CORE -> addIdentifier(values, PaperIdentifierType.CORE, "", providerRecordId);
+			case DATACITE -> {
+				// DataCite's provider record identifier is the DOI already added above.
+			}
 		}
 		return List.copyOf(values.values());
 	}
@@ -109,6 +153,19 @@ public record ProviderPaperRecord(
 
 	private static String identifierKey(PaperIdentifier identifier) {
 		return identifier.type().name() + '\n' + identifier.namespace() + '\n' + identifier.value();
+	}
+
+	private static List<String> normalizedValues(List<String> values) {
+		if (values == null || values.isEmpty()) {
+			return List.of();
+		}
+		return values.stream()
+				.filter(Objects::nonNull)
+				.map(String::strip)
+				.filter(value -> !value.isEmpty())
+				.distinct()
+				.sorted()
+				.toList();
 	}
 
 	private static URI defaultSourceUrl(ProviderId provider, String providerRecordId) {

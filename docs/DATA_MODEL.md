@@ -139,7 +139,7 @@ The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Applicatio
 
 ### `embedding_profile`
 
-An immutable profile names one vector space and records provider, model, immutable model revision, `TITLE_ABSTRACT` content kind, input-policy version, dimensions, cosine distance, and creation time. Profile keys and definitions are unique. Dimensions are bounded to `1..2000`, which keeps a future FP32 HNSW index within pgvector's current limit. Database triggers reject profile updates and deletes: a model, artifact, dimension, distance, or input-policy change requires a new profile and a measured backfill.
+An immutable profile names one vector space and records provider, model, immutable model revision, `TITLE_ABSTRACT` content kind, input-policy version, dimensions, cosine distance, and creation time. Profile keys and definitions are unique. Dimensions are bounded to `1..2000`, which keeps FP32 HNSW indexes within pgvector's current limit. Database triggers reject profile updates and deletes: a model, artifact, dimension, distance, or input-policy change requires a new profile and a measured backfill.
 
 No production profile is seeded. The implemented local adapter registers a key of the form `paper-semantic-v1-<full-digest>-ollama-0-31-1` only after the exact configured Qwen3-Embedding-0.6B artifact and Ollama `0.31.1` runtime pass verification. The profile records 1024 dimensions and the immutable revision `sha256:<full-digest>;ollama:0.31.1`; a different artifact or runtime therefore creates a different vector space. An OpenAI `text-embedding-3-large` profile shortened to 1024 dimensions remains reserved for future opt-in evaluation, not automatic failover.
 
@@ -147,7 +147,9 @@ No production profile is seeded. The implemented local adapter registers a key o
 
 One row per paper/profile stores the profile dimension, lowercase SHA-256 checksum of the exact rendered input, variable-dimension pgvector value, and generation time. A composite foreign key carries the registered dimension into each row, while database checks verify `vector_dims(embedding)` and reject the zero vector. Deleting a paper cascades to its derived vectors; changing its canonical title or abstract invalidates all current embeddings for that paper.
 
-`PaperEmbeddingStore` supports immutable profile registration, deterministic source preparation, missing-vector cursor paging, checksum-guarded idempotent upsert, and exact same-profile cosine neighbors. It re-locks and re-renders the paper before saving so work generated from stale metadata is rejected. The disabled-by-default local adapter and explicit bounded backfill can populate rows, but there is deliberately no HNSW index, hybrid ranker, scheduler, or REST/MCP generation integration yet.
+`PaperEmbeddingStore` supports immutable profile registration, deterministic source preparation, missing-vector cursor paging, checksum-guarded idempotent upsert, exact same-profile cosine neighbors, a separately named pinned-profile HNSW lookup, and exact cosine values for a bounded candidate-ID set. It re-locks and re-renders the paper before saving so work generated from stale metadata is rejected. `V11` adds the pinned profile's partial/expression HNSW index without seeding vectors. The disabled-by-default local adapter and explicit bounded backfill populate rows; the interactive path never generates them.
+
+The default-off related-paper hybrid read unions bounded lexical and HNSW candidates. Every lexical candidate must have an exact stored cosine value or the complete response falls back to the lexical slice. The database schema remains provider-neutral, while the activated ANN query is deliberately restricted to the fully pinned profile and index policy.
 
 `TITLE_ABSTRACT` input-policy v1 renders `Title: <title>\nAbstract: <abstract or empty>`. Fields are stripped, line endings become LF, and Unicode is normalized to NFC. Inputs above 24 KiB of rendered UTF-8 are rejected instead of truncated; the checksum covers those exact rendered bytes. Changing any of these rules creates a new input-policy version.
 
@@ -170,7 +172,7 @@ One row per paper/profile stores the profile dimension, lowercase SHA-256 checks
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage without a backfill or HNSW index.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage; `V11` adds the pinned Qwen/Ollama profile's partial/expression HNSW index; `V12` adds typed publication metadata fields.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

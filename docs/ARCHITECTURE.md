@@ -45,7 +45,7 @@ com.openscholar
 └── persistence            # shared persistence configuration
 ```
 
-`security` currently contains a boundary placeholder. The `paper` module owns provider-neutral embedding-profile and vector-store primitives; `embedding` supplies a disabled-by-default local generator; and `jobs` supplies the explicit maintenance backfill. Semantic product ranking, recurring job scheduling, MCP resources, generated OpenAPI models, and hosted authentication remain planned. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
+`security` currently contains a boundary placeholder. The `paper` module owns provider-neutral embedding-profile and vector-store primitives plus the default-off related-paper hybrid read; `embedding` supplies a disabled-by-default local generator; and `jobs` supplies the explicit maintenance backfill. Related-topic semantic reuse, recurring job scheduling, MCP resources, generated OpenAPI models, and hosted authentication remain planned. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
 
 ## Search request flow
 
@@ -122,7 +122,7 @@ Current canonical data retains record-level provenance and identifies the provid
 
 ## Ranking
 
-The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path now provides the first local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, deterministic metadata tie-breakers stabilize the order, and the API reports `POSTGRES_FULL_TEXT`. It remains separate from immutable provider snapshots. The `V10` embedding foundation is not connected to this path. A planned hybrid ranker may add measured semantic similarity and additional feature weights only after comparison against the versioned relevance fixture.
+The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path provides the local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, and deterministic metadata tie-breakers stabilize the order. A default-off production-readiness mode unions bounded lexical candidates with bounded candidates from the pinned `V11` HNSW index, verifies exact vector coverage for every lexical candidate, and applies the frozen 50/50 lexical/clamped-cosine scorer. The API reports typed ranking mode, fallback reason, and feature values. This path remains separate from immutable provider snapshots.
 
 ## Embedding boundary
 
@@ -134,13 +134,13 @@ The first inference implementation is a direct Spring AI/Ollama adapter for the 
 
 `EmbeddingBackfillUseCase` is the only executable generation path. One invocation takes an exclusive cursor and a `1..500` limit, acquires a PostgreSQL session advisory lock scoped to the immutable profile, verifies/registers the generator, and processes one missing-vector page. The advisory lease consumes one pooled connection, so at least two are required. Source preparation and checksum-guarded storage use their own short transactions; model inference occurs without a database transaction. Retryable verification/generation failures and source-change races have a shared `1..3` attempt bound. Systemic provider or profile failures abort the run; deleted or oversized papers and permanent input-specific failures are reported per paper. The opt-in `ApplicationRunner` exists only in a non-web application, and a web-startup guard rejects an enabled backfill before generation. Lock contention or any reported paper failure makes the maintenance process exit nonzero after safe summary logs.
 
-The related-paper endpoint remains database-only. Future vector/hybrid reads may consume precomputed source and candidate vectors, but may not invoke an inference provider. Missing or invalidated vectors fall back to the current full-text result. This keeps local-provider availability and hosted credentials outside interactive-read correctness.
+The related-paper endpoint remains database-only. Its opt-in hybrid read consumes only precomputed pinned-profile vectors and never invokes an inference provider. A missing profile/source vector or incomplete lexical-candidate coverage returns the already-read full-text result with a typed reason; unrelated database or operational failures propagate. This keeps local-provider availability and hosted credentials outside interactive-read correctness.
 
 ## Persistence
 
 - Spring Data JPA for transactional aggregate persistence.
 - Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval.
-- Implemented provider-neutral pgvector profile/storage, missing-work paging, exact same-profile cosine operations, and an explicit offline population job; HNSW and product ranking remain planned.
+- Implemented provider-neutral pgvector profile/storage, missing-work paging, exact same-profile cosine operations, the pinned partial/expression HNSW index, exact scoring for bounded candidate IDs, an explicit offline population job, and a default-off hybrid related-paper read.
 - Flyway as the only production schema-change mechanism.
 - PostgreSQL session advisory lock for same-profile embedding backfill; durable/scheduled job leases remain planned.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.

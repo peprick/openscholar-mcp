@@ -19,7 +19,10 @@ import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperView;
 import com.openscholar.paper.ProviderRecordCandidate;
+import com.openscholar.paper.RelatedPaperFallbackReason;
 import com.openscholar.paper.RelatedPaperMatch;
+import com.openscholar.paper.RelatedPaperRankingFeature;
+import com.openscholar.paper.RelatedPaperRankingMode;
 import com.openscholar.paper.RelatedPaperUseCase;
 import com.openscholar.paper.RelatedPapersView;
 import org.junit.jupiter.api.Test;
@@ -67,6 +70,9 @@ class PostgresRelatedPaperServiceTests {
 		RelatedPapersView result = relatedPapers.findRelated(source.id(), 10);
 
 		assertThat(result.sourcePaperId()).isEqualTo(source.id());
+		assertThat(result.rankingMode()).isEqualTo(RelatedPaperRankingMode.LEXICAL);
+		assertThat(result.fallbackReason())
+			.isEqualTo(RelatedPaperFallbackReason.HYBRID_DISABLED);
 		assertThat(result.results()).extracting(match -> match.paper().id())
 				.containsExactly(titleMatch.id(), abstractMatch.id());
 		assertThat(result.results()).extracting(RelatedPaperMatch::rank)
@@ -74,8 +80,11 @@ class PostgresRelatedPaperServiceTests {
 		assertThat(result.results()).allSatisfy(match -> {
 			assertThat(match.paper().id()).isNotEqualTo(source.id());
 			assertThat(match.score()).isPositive();
-			assertThat(match.rankingReasons())
-					.containsExactly(RelatedPaperMatch.POSTGRES_FULL_TEXT_REASON);
+			assertThat(match.rankingReasons()).singleElement().satisfies(reason -> {
+				assertThat(reason.feature())
+						.isEqualTo(RelatedPaperRankingFeature.POSTGRES_FULL_TEXT);
+				assertThat(reason.value()).isEqualTo(match.score());
+			});
 		});
 		assertThat(result.results().getFirst().score())
 				.isGreaterThan(result.results().getLast().score());

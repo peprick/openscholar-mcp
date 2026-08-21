@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({McpSecurityProperties.class, McpRateLimitProperties.class})
+@EnableConfigurationProperties({McpSecurityProperties.class, McpRateLimitProperties.class,
+		McpPayloadProperties.class})
 class McpConfiguration {
 }

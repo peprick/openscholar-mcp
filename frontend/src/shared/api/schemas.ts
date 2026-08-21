@@ -216,16 +216,29 @@ export const paperDetailsResponseSchema = z.object({
 });
 
 const relatedPaperAuthorSchema = authorSchema.strict();
+const relatedPaperRankingModeSchema = z.enum(["LEXICAL", "HYBRID"]);
+const relatedPaperFallbackReasonSchema = z.enum([
+  "HYBRID_DISABLED",
+  "EMBEDDING_PROFILE_MISSING",
+  "SOURCE_VECTOR_MISSING",
+  "CANDIDATE_VECTOR_COVERAGE_INCOMPLETE",
+]);
+const relatedPaperRankingFeatureSchema = z.enum([
+  "POSTGRES_FULL_TEXT",
+  "CLAMPED_COSINE",
+]);
 const relatedPaperRankingReasonSchema = z
   .object({
-    feature: z.string(),
-    value: z.number().nullable(),
+    feature: relatedPaperRankingFeatureSchema,
+    value: z.number().finite().min(0).max(1),
   })
   .strict();
 
 export const relatedPapersResponseSchema = z
   .object({
     sourcePaperId: z.string().uuid(),
+    rankingMode: relatedPaperRankingModeSchema,
+    fallbackReason: relatedPaperFallbackReasonSchema.nullable(),
     results: z.array(
       z
         .object({

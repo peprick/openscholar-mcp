@@ -82,14 +82,17 @@ public class OpenScholarMcpTools {
 
 	private final CitationBatchExportUseCase citationExportUseCase;
 
+	private final McpToolResultBudget toolResultBudget;
+
 	public OpenScholarMcpTools(SearchResearchUseCase searchUseCase, PaperDetailsUseCase paperDetailsUseCase,
 			PaperAccessUseCase paperAccessUseCase, LibraryUseCase libraryUseCase,
-			CitationBatchExportUseCase citationExportUseCase) {
+			CitationBatchExportUseCase citationExportUseCase, McpToolResultBudget toolResultBudget) {
 		this.searchUseCase = searchUseCase;
 		this.paperDetailsUseCase = paperDetailsUseCase;
 		this.paperAccessUseCase = paperAccessUseCase;
 		this.libraryUseCase = libraryUseCase;
 		this.citationExportUseCase = citationExportUseCase;
+		this.toolResultBudget = toolResultBudget;
 	}
 
 	@McpTool(name = "search_research", title = "Search research",
@@ -213,6 +216,10 @@ public class OpenScholarMcpTools {
 		return value == null ? defaultValue : value;
 	}
 
+	private static <T> List<T> nonEmptyOrNull(List<T> values) {
+		return values == null || values.isEmpty() ? null : List.copyOf(values);
+	}
+
 	private static int boundedPageSize(Integer value, int defaultValue) {
 		int size = defaulted(value, defaultValue);
 		if (size < 1 || size > MAX_MCP_PAGE_SIZE) {
@@ -259,9 +266,9 @@ public class OpenScholarMcpTools {
 		return values.stream().map(value -> value.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
 	}
 
-	private static <T> T execute(String toolName, Supplier<T> action) {
+	private <T> T execute(String toolName, Supplier<T> action) {
 		try {
-			return action.get();
+			return toolResultBudget.requireWithinLimit(action.get());
 		}
 		catch (PaperNotFoundException exception) {
 			throw failure("PAPER_NOT_FOUND", exception);
@@ -299,6 +306,10 @@ public class OpenScholarMcpTools {
 		catch (AccessUnavailableException exception) {
 			throw new SafeMcpToolException("ACCESS_PROVIDERS_UNAVAILABLE: " + exception.getMessage()
 					+ retrySuffix(exception.retryable(), exception.retryAfter()));
+		}
+		catch (McpToolResultTooLargeException exception) {
+			throw new SafeMcpToolException(
+					"MCP_RESPONSE_TOO_LARGE: The tool result exceeds the configured response budget; retryable=false");
 		}
 		catch (IllegalArgumentException exception) {
 			throw failure("INVALID_REQUEST", exception);
@@ -364,6 +375,16 @@ public class OpenScholarMcpTools {
 			@JsonProperty(required = false) Integer publicationYear, DocumentType documentType,
 			@JsonProperty(required = false) String language,
 			@JsonProperty(required = false) String venueName,
+			@JsonProperty(required = false) String publisher,
+			@JsonProperty(required = false) String institution,
+			@JsonProperty(required = false) String volume,
+			@JsonProperty(required = false) String issue,
+			@JsonProperty(required = false) String pages,
+			@JsonProperty(required = false) String articleNumber,
+			@JsonProperty(required = false) String edition,
+			@JsonProperty(required = false) List<String> isbn,
+			@JsonProperty(required = false) List<String> issn,
+			@JsonProperty(required = false) String degree,
 			@JsonProperty(required = false) Integer citationCount,
 			@JsonProperty(required = false) Instant citationCountAsOf, List<PaperIdentifier> identifiers,
 			List<PaperAuthorToolResult> authors, boolean providerReportedOpenAccess,
@@ -376,7 +397,10 @@ public class OpenScholarMcpTools {
 			PaperView paper = result.paper();
 			return new SearchPaperToolResult(result.rank(), paper.id(), paper.title(), paper.abstractText(),
 					paper.publicationDate(), paper.publicationYear(), paper.documentType(), paper.language(),
-					paper.venueName(), paper.citationCount(), paper.citationCountAsOf(), paper.identifiers(),
+					paper.venueName(), paper.publisher(), paper.institution(), paper.volume(), paper.issue(),
+					paper.pages(), paper.articleNumber(), paper.edition(), nonEmptyOrNull(paper.isbn()),
+					nonEmptyOrNull(paper.issn()), paper.degree(), paper.citationCount(), paper.citationCountAsOf(),
+					paper.identifiers(),
 					paper.authors().stream().map(PaperAuthorToolResult::from).toList(), result.reportedOpenAccess(),
 					result.landingPageUrl(), result.pdfUrl(), result.score(),
 					result.rankingReasons().stream().map(RankingReasonToolResult::from).toList(), result.provider(),
@@ -386,6 +410,8 @@ public class OpenScholarMcpTools {
 		public SearchPaperToolResult {
 			identifiers = identifiers == null ? List.of() : List.copyOf(identifiers);
 			authors = authors == null ? List.of() : List.copyOf(authors);
+			isbn = isbn == null ? null : List.copyOf(isbn);
+			issn = issn == null ? null : List.copyOf(issn);
 			rankingReasons = rankingReasons == null ? List.of() : List.copyOf(rankingReasons);
 		}
 	}
@@ -434,6 +460,16 @@ public class OpenScholarMcpTools {
 			@JsonProperty(required = false) Integer publicationYear, DocumentType documentType,
 			@JsonProperty(required = false) String language,
 			@JsonProperty(required = false) String venueName,
+			@JsonProperty(required = false) String publisher,
+			@JsonProperty(required = false) String institution,
+			@JsonProperty(required = false) String volume,
+			@JsonProperty(required = false) String issue,
+			@JsonProperty(required = false) String pages,
+			@JsonProperty(required = false) String articleNumber,
+			@JsonProperty(required = false) String edition,
+			@JsonProperty(required = false) List<String> isbn,
+			@JsonProperty(required = false) List<String> issn,
+			@JsonProperty(required = false) String degree,
 			@JsonProperty(required = false) Integer citationCount,
 			@JsonProperty(required = false) Instant citationCountAsOf, List<PaperIdentifier> identifiers,
 			List<PaperAuthorToolResult> authors) {
@@ -441,13 +477,18 @@ public class OpenScholarMcpTools {
 		private static PaperToolResult from(PaperView paper) {
 			return new PaperToolResult(paper.id(), paper.title(), paper.abstractText(), paper.publicationDate(),
 					paper.publicationYear(), paper.documentType(), paper.language(), paper.venueName(),
-					paper.citationCount(), paper.citationCountAsOf(), paper.identifiers(),
+					paper.publisher(), paper.institution(), paper.volume(), paper.issue(), paper.pages(),
+					paper.articleNumber(), paper.edition(), nonEmptyOrNull(paper.isbn()),
+					nonEmptyOrNull(paper.issn()), paper.degree(), paper.citationCount(), paper.citationCountAsOf(),
+					paper.identifiers(),
 					paper.authors().stream().map(PaperAuthorToolResult::from).toList());
 		}
 
 		public PaperToolResult {
 			identifiers = identifiers == null ? List.of() : List.copyOf(identifiers);
 			authors = authors == null ? List.of() : List.copyOf(authors);
+			isbn = isbn == null ? null : List.copyOf(isbn);
+			issn = issn == null ? null : List.copyOf(issn);
 		}
 	}
 

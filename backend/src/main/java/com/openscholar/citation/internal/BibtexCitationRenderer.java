@@ -14,18 +14,22 @@ final class BibtexCitationRenderer {
 		}
 		fields.add(new Field("title", "{" + escape(item.title()) + "}"));
 		addVenue(fields, item);
+		add(fields, "publisher", item.publisher());
+		addInstitution(fields, item);
+		add(fields, "volume", item.volume());
+		add(fields, "number", item.issue());
+		add(fields, "pages", item.pages());
+		add(fields, "eid", item.articleNumber());
+		add(fields, "edition", item.edition());
+		add(fields, "isbn", joined(item.isbn()));
+		add(fields, "issn", joined(item.issn()));
 		if (item.effectiveYear() > 0) {
 			fields.add(new Field("year", Integer.toString(item.effectiveYear())));
 		}
 		if (item.publicationDate() != null) {
 			fields.add(Field.bare("month", month(item.publicationDate().getMonthValue())));
 		}
-		if (item.documentType() == com.openscholar.paper.DocumentType.THESIS) {
-			fields.add(new Field("type", "Thesis"));
-		}
-		if (item.documentType() == com.openscholar.paper.DocumentType.DISSERTATION) {
-			fields.add(new Field("type", "Dissertation"));
-		}
+		addThesisType(fields, item);
 		if (item.documentType() == com.openscholar.paper.DocumentType.PREPRINT) {
 			String note = item.arxivId() == null
 					? "Preprint"
@@ -67,6 +71,43 @@ final class BibtexCitationRenderer {
 			output.append(",\n");
 		}
 		return output.append("}\n").toString();
+	}
+
+	private static void add(List<Field> fields, String name, String value) {
+		if (value != null) {
+			fields.add(new Field(name, escape(value)));
+		}
+	}
+
+	private static void addInstitution(List<Field> fields, CitationItem item) {
+		if (item.institution() == null) {
+			return;
+		}
+		String field = switch (item.documentType()) {
+			case THESIS, DISSERTATION -> "school";
+			case ARTICLE, PREPRINT, CONFERENCE_PAPER, BOOK, BOOK_CHAPTER, REPORT, DATASET, OTHER ->
+					"institution";
+		};
+		add(fields, field, item.institution());
+	}
+
+	private static void addThesisType(List<Field> fields, CitationItem item) {
+		String type = switch (item.documentType()) {
+			case THESIS -> item.degree() == null ? "Thesis" : item.degree();
+			case DISSERTATION -> item.degree() == null ? "Dissertation" : item.degree();
+			case ARTICLE, PREPRINT, CONFERENCE_PAPER, BOOK, BOOK_CHAPTER, REPORT, DATASET, OTHER -> null;
+		};
+		add(fields, "type", type);
+	}
+
+	private static String joined(List<String> values) {
+		if (values.isEmpty()) {
+			return null;
+		}
+		return values.stream()
+				.distinct()
+				.sorted()
+				.collect(java.util.stream.Collectors.joining(", "));
 	}
 
 	private static String entryType(CitationItem item) {

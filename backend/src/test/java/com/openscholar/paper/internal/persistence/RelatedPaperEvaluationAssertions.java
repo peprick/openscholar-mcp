@@ -136,7 +136,10 @@ final class RelatedPaperEvaluationAssertions {
 		assertThat(first.results()).allSatisfy(match -> {
 			assertThat(Double.isFinite(match.score())).isTrue();
 			assertThat(match.score()).isPositive();
-			assertThat(match.rankingReasons()).containsExactly(rankingMethod);
+			assertThat(match.rankingReasons()).singleElement().satisfies(reason -> {
+				assertThat(reason.feature().name()).isEqualTo(rankingMethod);
+				assertThat(reason.value()).isEqualTo(match.score());
+			});
 		});
 		for (int index = 1; index < first.results().size(); index++) {
 			assertThat(first.results().get(index - 1).score())

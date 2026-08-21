@@ -1,14 +1,16 @@
 # HNSW Evaluation Protocol
 
-Status: frozen evaluation policy v1. This protocol does not activate approximate
-ranking in the search or related-paper orchestration paths.
+Status: frozen evaluation policy v1. Passing this protocol did not change any
+default; its pinned lookup is now consumed only by the separately configured,
+default-off related-paper hybrid path.
 
 ## Purpose and boundary
 
 The stage-1 baseline remains an exact pgvector cosine scan. Stage 2 adds a
 profile-specific HNSW index and a separately named store method so recall and
-latency can be measured without changing product results. A later decision must
-explicitly approve any caller migration to approximate search.
+latency can be measured without changing default product results. The later
+production-readiness decision permits only an explicit default-off hybrid caller;
+it does not replace the exact oracle or the default lexical endpoint.
 
 The machine-readable policy is
 `backend/src/test/resources/search/relevance/paper-embedding-hnsw-policy-v1.json`.

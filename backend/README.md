@@ -33,7 +33,7 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - Explicit, resumable offline embedding backfill with per-profile PostgreSQL locking
 - Java 21 virtual threads
 
-The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Semantic generation is an offline maintenance capability; the related-paper API remains database-only and still uses its measured lexical implementation until vector and hybrid quality pass the evaluation gates.
+The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Semantic generation is an offline maintenance capability. The related-paper API remains database-only and lexical by default; a measured hybrid read over precomputed pinned-profile vectors is available only through an explicit default-off feature flag.
 
 ## Run locally
 
@@ -191,7 +191,17 @@ The adapter accepts only a numeric loopback HTTP root URL, bypasses system proxi
 
 Leave `EMBEDDING_BACKFILL_PROFILE_KEY` empty when Ollama is the sole enabled generator; the runner selects it and logs the exact derived key. An exact key is required only if multiple generators are enabled. Each cursor belongs to that exact profile identity. Each invocation scans at most 500 canonical papers and logs a `nextCursor` when another page exists. Resume with `EMBEDDING_BACKFILL_AFTER_EXCLUSIVE=<nextCursor>`. A PostgreSQL session advisory lock prevents two runs for the same profile; lock identities for different profiles remain independent. Run only one maintenance invocation per backend process so its leased lock connection cannot compete with another local job for the pool. Retryable provider failures and source changes share a bounded `EMBEDDING_BACKFILL_MAX_ATTEMPTS` budget (`1..3`). The runner logs all isolated failures and then exits nonzero; lock contention and systemic provider/profile failures also exit nonzero. A cursor advances past per-paper failures, deletions, and newly invalidated work below it, so complete the paged run and then start a fresh sweep with an empty cursor to catch any still-missing vectors.
 
-Maintenance mode requires `spring.main.web-application-type=none`; startup fails if backfill is enabled in a web application. This command performs generation only. `GET /api/v1/papers/{paperId}/related` never invokes Ollama and continues to return lexical results while semantic ranking remains under evaluation.
+Maintenance mode requires `spring.main.web-application-type=none`; startup fails if backfill is enabled in a web application. This command performs generation only. `GET /api/v1/papers/{paperId}/related` never invokes Ollama. It returns the existing lexical result by default.
+
+After the pinned profile has been fully populated and reviewed, the default-off production-readiness path can be enabled for a backend process with:
+
+```bash
+RELATED_PAPERS_HYBRID_ENABLED=true \
+RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE=100 \
+./mvnw spring-boot:run
+```
+
+The pool must be in `25..100`. The hybrid path unions that bounded lexical pool with a bounded pinned HNSW pool, verifies exact cosine coverage for every lexical candidate, and applies the frozen 50/50 lexical/clamped-cosine formula. Missing profile/source vectors or incomplete lexical-candidate coverage return the unchanged lexical order with a typed fallback reason. Operational/database failures are not converted into fallbacks. This setting reads stored vectors only; it does not enable the Ollama adapter or backfill runner.
 
 ### Evaluate exact vector and hybrid quality
 
@@ -219,7 +229,7 @@ OLLAMA_QWEN3_EMBEDDING_DIGEST='ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50
 ./mvnw -Dtest=MetadataHybridHoldoutEvaluationTests test
 ```
 
-This run also requires the local `qwen3-embedding:0.6b` tag to resolve to that full digest under Ollama `0.31.1`; it never pulls a model or touches a development database. The completed run passed every frozen gate. Macro lexical results were Recall 0.857, nDCG 0.648, Precision@1 0.286, and MRR 0.571; exact vector produced 1.000, 0.893, 1.000, and 1.000; the frozen hybrid produced 1.000, 0.917, 0.857, and 0.929. Five query groups strictly improved nDCG and none regressed. Passing this holdout does not enable hybrid ranking: the live related-paper endpoint remains lexical pending HNSW and production-readiness gates.
+This run also requires the local `qwen3-embedding:0.6b` tag to resolve to that full digest under Ollama `0.31.1`; it never pulls a model or touches a development database. The completed run passed every frozen gate. Macro lexical results were Recall 0.857, nDCG 0.648, Precision@1 0.286, and MRR 0.571; exact vector produced 1.000, 0.893, 1.000, and 1.000; the frozen hybrid produced 1.000, 0.917, 0.857, and 0.929. Five query groups strictly improved nDCG and none regressed. The later pinned HNSW mechanics run also passed, but hybrid ranking remains an explicit default-off operator choice.
 
 ## Legal-access behavior
 

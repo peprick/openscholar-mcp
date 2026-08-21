@@ -1,0 +1,9 @@
+package com.openscholar.paper;
+
+public enum RelatedPaperFallbackReason {
+
+	HYBRID_DISABLED,
+	EMBEDDING_PROFILE_MISSING,
+	SOURCE_VECTOR_MISSING,
+	CANDIDATE_VECTOR_COVERAGE_INCOMPLETE
+}

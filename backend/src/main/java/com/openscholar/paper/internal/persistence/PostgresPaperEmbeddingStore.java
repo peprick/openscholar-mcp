@@ -4,10 +4,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.openscholar.paper.EmbeddingContentKind;
 import com.openscholar.paper.EmbeddingDistanceMetric;
@@ -32,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 
 	private static final int MAX_NEAREST_RESULTS = 100;
+	private static final int MAX_EXACT_CANDIDATES = 100;
 	private static final int MAX_MISSING_RESULTS = 500;
 
 	private static final String INSERT_PROFILE_SQL = """
@@ -171,6 +175,28 @@ class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 				PaperEmbeddingAnnPolicy.DIMENSIONS,
 				PaperEmbeddingAnnPolicy.PROFILE_KEY,
 				PaperEmbeddingAnnPolicy.DIMENSIONS);
+
+	private static final String FIND_EXACT_SIMILARITIES_SQL = """
+			with source as (
+			    select paper_id, profile_key, embedding
+			    from paper_embedding
+			    where paper_id = ?
+			      and profile_key = ?
+			), requested(paper_id) as (
+			    values %s
+			)
+			select
+			    source.paper_id as source_paper_id,
+			    requested.paper_id as requested_paper_id,
+			    candidate.paper_id,
+			    1.0 - (candidate.embedding <=> source.embedding) as cosine_similarity
+			from source
+			cross join requested
+			left join paper_embedding candidate
+			  on candidate.paper_id = requested.paper_id
+			 and candidate.profile_key = source.profile_key
+			order by cosine_similarity desc nulls last, requested.paper_id
+			""";
 
 	private static final String READ_EXACT_PLANNER_SETTINGS_SQL = """
 			select current_setting('enable_indexscan') as enable_indexscan
@@ -367,6 +393,49 @@ class PostgresPaperEmbeddingStore implements PaperEmbeddingStore {
 		finally {
 			restoreApproximatePlannerSettings(previousSettings);
 		}
+		return toMatches(sourcePaperId, profile.profileKey(), rows);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<PaperEmbeddingMatch> findExactSimilarities(
+			UUID sourcePaperId, String profileKey, List<UUID> candidatePaperIds) {
+		Objects.requireNonNull(sourcePaperId, "sourcePaperId");
+		List<UUID> candidates = List.copyOf(
+				Objects.requireNonNull(candidatePaperIds, "candidatePaperIds"));
+		if (candidates.isEmpty() || candidates.size() > MAX_EXACT_CANDIDATES) {
+			throw new IllegalArgumentException(
+					"Exact-similarity candidates must contain between 1 and "
+							+ MAX_EXACT_CANDIDATES + " paper IDs");
+		}
+		if (candidates.stream().anyMatch(Objects::isNull)) {
+			throw new IllegalArgumentException(
+					"Exact-similarity candidate paper IDs must not contain null");
+		}
+		Set<UUID> distinctCandidates = new HashSet<>(candidates);
+		if (distinctCandidates.size() != candidates.size()) {
+			throw new IllegalArgumentException(
+					"Exact-similarity candidate paper IDs must be unique");
+		}
+		if (distinctCandidates.contains(sourcePaperId)) {
+			throw new IllegalArgumentException(
+					"Exact-similarity candidates must not contain the source paper");
+		}
+		EmbeddingProfile profile = validateNearestRequest(
+				sourcePaperId, profileKey, candidates.size());
+		String requestedRows = candidates.stream()
+			.map(ignored -> "(cast(? as uuid))")
+			.collect(Collectors.joining(", "));
+		List<Object> arguments = new ArrayList<>(candidates.size() + 2);
+		arguments.add(sourcePaperId);
+		arguments.add(profile.profileKey());
+		arguments.addAll(candidates);
+		List<ScoredEmbedding> rows = jdbcTemplate.query(
+				FIND_EXACT_SIMILARITIES_SQL.formatted(requestedRows),
+				(resultSet, rowNumber) -> new ScoredEmbedding(
+						resultSet.getObject("paper_id", UUID.class),
+						resultSet.getObject("cosine_similarity", Double.class)),
+				arguments.toArray());
 		return toMatches(sourcePaperId, profile.profileKey(), rows);
 	}
 
