@@ -117,6 +117,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
+          limit-severities-for-sarif: true
           output: security-reports/trivy-results.sarif
           exit-code: "1"
 
@@ -190,6 +191,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
+          limit-severities-for-sarif: true
           output: security-reports/backend-image.sarif
           exit-code: "1"
 
@@ -204,6 +206,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
+          limit-severities-for-sarif: true
           output: security-reports/frontend-image.sarif
           exit-code: "1"
 
@@ -332,6 +335,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
+          limit-severities-for-sarif: true
           output: security-reports/${{ matrix.name }}-hardened.sarif
           exit-code: "1"
 
@@ -436,6 +440,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
+          limit-severities-for-sarif: true
           output: security-reports/${{ matrix.name }}.sarif
           exit-code: "1"
 

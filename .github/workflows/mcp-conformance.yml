@@ -61,7 +61,7 @@ jobs:
       - name: Wait for backend readiness
         run: >-
           curl --fail --silent --show-error
-          --retry 30 --retry-delay 2 --retry-connrefused
+          --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors
           http://127.0.0.1:8080/actuator/health/readiness
 
       - name: Run supported conformance scenarios

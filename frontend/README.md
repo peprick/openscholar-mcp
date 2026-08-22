@@ -68,6 +68,11 @@ provider-neutral Authorization Code + PKCE BFF flow. Register the exact
 the authorization, token, JWKS, and optional end-session endpoints explicitly;
 the frontend does not infer or silently rewrite provider endpoints.
 
+The container entrypoint starts directly in the default `local` mode. In
+`oidc` mode it fails closed unless `/run/secrets/OPENSCHOLAR_AUTH_SESSION_SECRET`
+and `/run/secrets/OPENSCHOLAR_OIDC_CLIENT_SECRET` are both readable and
+non-empty; unknown authentication modes are rejected.
+
 Generate the cookie-encryption key outside source control:
 
 ```bash

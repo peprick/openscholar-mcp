@@ -17,13 +17,14 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:docker-entrypoint": "sh scripts/test-docker-entrypoint.sh",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:compose": "playwright test --config playwright.compose.config.ts",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
     "e2e:fixture": "node e2e/support/fixture-server.mjs",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm test:docker-entrypoint && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "next": "16.3.1",

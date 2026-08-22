@@ -159,6 +159,14 @@ expect_failure \
 
 reset_fixture
 perl -0pi -e \
+  's/\n[[:space:]]+limit-severities-for-sarif: true//' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "SARIF scans cannot broaden their effective severity gate" \
+  "every SARIF scan must limit output and exit status to its declared severity gate"
+
+reset_fixture
+perl -0pi -e \
   's#postgres\|exact\|pgvector/pgvector:[^\n]+#postgres|exact|postgres:latest#' \
   "${fixture}/deploy/production-images.lock"
 expect_failure \

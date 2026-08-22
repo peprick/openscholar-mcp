@@ -21,6 +21,7 @@ For a real service, managed PostgreSQL with point-in-time recovery is preferred.
 ## Host prerequisites
 
 - A supported `linux/amd64` host with Docker Engine and Docker Compose v2.
+- `jq` for the production wrapper's service-bound image and platform validation.
 - `age` for backup encryption plus `sha256sum` or `shasum` for integrity sidecars.
 - A dedicated DNS name. Public ACME issuance requires correct DNS plus inbound TCP 80/443.
 - A registry containing reviewed backend, frontend, Caddy, and blackbox-exporter images. Use immutable digest references after build, publication, and registry-digest rescan.
@@ -77,7 +78,7 @@ Register MCP clients against the same canonical HTTPS resource URI ending in `/m
 
 ## Secrets and provider configuration
 
-The PostgreSQL password enters Spring Boot through its `configtree` import. The frontend image contains its reviewed, mode-`0555` entrypoint; Compose invokes that baked script directly instead of injecting executable code with a bind mount. The entrypoint reads the AES-256-GCM session key and confidential-client secret from their mode-`0400` files and exports them only to the Next.js process. Hosted mode does not use or mount the local `MCP_LOCAL_API_KEY`. None of these secrets belongs in command-line flags, image layers, or public frontend variables. The Caddy ACME email and database name/user are not credentials.
+The PostgreSQL password enters Spring Boot through its `configtree` import. The frontend image contains its reviewed, mode-`0555` entrypoint; Compose invokes that baked script directly instead of injecting executable code with a bind mount. Local authentication mode starts without production secret mounts. The production template hard-codes `oidc`, where the entrypoint fails closed unless it can read the AES-256-GCM session key and confidential-client secret from their mode-`0400` files, then exports them only to the Next.js process. Hosted mode does not use or mount the local `MCP_LOCAL_API_KEY`. None of these secrets belongs in command-line flags, image layers, or public frontend variables. The Caddy ACME email and database name/user are not credentials.
 
 For hosted environments, prefer a cloud secret manager, Vault, or an equivalent audited service. Materialize secrets into a root-only or service-owned in-memory filesystem at deploy time, restrict read access to the intended workload identity, and keep secret values out of Compose files, CI logs, GitHub variables that are not marked secret, shell history, and support bundles.
 

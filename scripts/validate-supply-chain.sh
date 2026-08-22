@@ -300,8 +300,8 @@ validate_production_image_preflight() {
     || report_failure "${wrapper}: preflight must resolve every profiled service"
   grep -Fq -- '--profile observability config --format json' "${wrapper}" \
     || report_failure "${wrapper}: preflight must render the resolved service model as JSON"
-  if ! grep -Fq -- '--arg service "${service}"' "${wrapper}" \
-    || ! grep -Fq -- '.services[$service].image' "${wrapper}"; then
+  if ! grep -Fq -- "--arg service \"\${service}\"" "${wrapper}" \
+    || ! grep -Fq -- ".services[\$service].image" "${wrapper}"; then
     report_failure "${wrapper}: preflight must extract each service image from the resolved JSON model"
   fi
   if grep -Fq -- 'config --images' "${wrapper}"; then
@@ -327,6 +327,16 @@ validate_runtime_scan_coverage() {
       report_failure "${security_workflow}: production runtime image lacks a digest-matched Trivy scan: ${reference}"
     fi
   done < deploy/compose.production.yaml
+}
+
+validate_sarif_severity_gates() {
+  local security_workflow='.github/workflows/security.yml'
+  local sarif_count limited_count
+
+  sarif_count="$(grep -Ec '^[[:space:]]+format:[[:space:]]+sarif([[:space:]#].*)?$' "${security_workflow}")"
+  limited_count="$(grep -Ec '^[[:space:]]+limit-severities-for-sarif:[[:space:]]+true([[:space:]#].*)?$' "${security_workflow}")"
+  [[ "${sarif_count}" -gt 0 && "${limited_count}" -eq "${sarif_count}" ]] \
+    || report_failure "${security_workflow}: every SARIF scan must limit output and exit status to its declared severity gate"
 }
 
 validate_production_platform_policy() {
@@ -360,7 +370,7 @@ validate_production_platform_policy() {
     || report_failure "${security_workflow}: application and hardened builds must target linux/amd64 explicitly"
   [[ "$(grep -Fc -- 'TRIVY_PLATFORM: linux/amd64' "${security_workflow}")" -eq 3 ]] \
     || report_failure "${security_workflow}: every runtime scan job must target linux/amd64 explicitly"
-  grep -Fq -- 'docker build --platform linux/amd64 --file "${HARDENED_CONTEXT}/Dockerfile"' "${security_workflow}" \
+  grep -Fq -- "docker build --platform linux/amd64 --file \"\${HARDENED_CONTEXT}/Dockerfile\"" "${security_workflow}" \
     || report_failure "${security_workflow}: hardened runtime builds must select linux/amd64 explicitly"
 }
 
@@ -398,7 +408,7 @@ deploy/images/caddy|openscholar-caddy:security|10001:10001|RUN go test -count=1 
 deploy/images/blackbox-exporter|openscholar-blackbox-exporter:security|65534:65534|RUN go test -count=1 ./...
 EOF
 
-  grep -Fq -- 'image-ref: ${{ matrix.local_ref }}' "${security_workflow}" \
+  grep -Fq -- "image-ref: \${{ matrix.local_ref }}" "${security_workflow}" \
     || report_failure "${security_workflow}: hardened local images are not passed to Trivy"
   grep -Fq -- 'id: hardened_image_scan' "${security_workflow}" \
     || report_failure "${security_workflow}: hardened scan outcome gate is missing"
@@ -406,9 +416,9 @@ EOF
     report_failure "${security_workflow}: vulnerable upstream edge/probe images must not remain production scan targets"
   fi
 
-  grep -Fq -- 'docker build --file "${repository_directory}/deploy/images/caddy/Dockerfile" --tag "${caddy_image}" "${repository_directory}/deploy/images/caddy"' "${operations_validator}" \
+  grep -Fq -- "docker build --file \"\${repository_directory}/deploy/images/caddy/Dockerfile\" --tag \"\${caddy_image}\" \"\${repository_directory}/deploy/images/caddy\"" "${operations_validator}" \
     || report_failure "${operations_validator}: operations validation must build the checked-in hardened Caddy image"
-  grep -Fq -- 'docker build --file "${repository_directory}/deploy/images/blackbox-exporter/Dockerfile" --tag "${blackbox_image}" "${repository_directory}/deploy/images/blackbox-exporter"' "${operations_validator}" \
+  grep -Fq -- "docker build --file \"\${repository_directory}/deploy/images/blackbox-exporter/Dockerfile\" --tag \"\${blackbox_image}\" \"\${repository_directory}/deploy/images/blackbox-exporter\"" "${operations_validator}" \
     || report_failure "${operations_validator}: operations validation must build the checked-in hardened blackbox-exporter image"
   if grep -Eq '(^|[="[:space:]])(caddy:|prom/blackbox-exporter:)' "${operations_validator}"; then
     report_failure "${operations_validator}: vulnerable upstream edge/probe images must not remain validation fallbacks"
@@ -428,6 +438,7 @@ validate_maven_wrapper
 validate_locked_mcp_conformance_cli
 validate_production_image_preflight
 validate_runtime_scan_coverage
+validate_sarif_severity_gates
 validate_production_platform_policy
 validate_hardened_runtime_builds
 scripts/validate-vulnerability-exceptions.sh

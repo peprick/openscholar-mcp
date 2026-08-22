@@ -155,12 +155,19 @@ describe("LibraryDashboard", () => {
       />,
     );
 
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: /Select Graph neural networks.+from Thesis foundations/,
+      }),
+    );
     await user.type(screen.getByLabelText("Collection name"), "New review queue");
     await user.click(screen.getByRole("button", { name: "Create collection" }));
 
     expect(await screen.findByText("Created “New review queue”.")).toBeInTheDocument();
     expect(screen.getByText("2 of 2 shown")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "New review queue" })).toBeInTheDocument();
-    expect(navigation.refresh).toHaveBeenCalledOnce();
+    expect(screen.getByText("1", { selector: ".batchExportBar strong" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export BibTeX" })).toBeEnabled();
+    expect(navigation.refresh).not.toHaveBeenCalled();
   });
 });

@@ -6,7 +6,7 @@
 
 - GitHub dependency review rejects newly introduced dependencies with known high/critical severity on pull requests.
 - CodeQL analyzes Java/Kotlin and JavaScript/TypeScript and publishes code-scanning findings.
-- Trivy scans the repository dependency manifests, lockfiles, secrets, and configuration; it uploads SARIF and retains a CycloneDX JSON source SBOM for 30 days.
+- Trivy scans the repository dependency manifests, lockfiles, secrets, and configuration; it uploads severity-limited SARIF and retains a CycloneDX JSON source SBOM for 30 days. The static supply-chain gate requires every SARIF scan to keep the action's output and exit status constrained to its declared high/critical policy.
 - On pull requests, main-branch pushes, the weekly schedule, and manual runs, CI builds and scans the final backend, frontend, project-owned Caddy, and project-owned blackbox-exporter runtime stages. It separately scans the exact digest-pinned PostgreSQL, Prometheus, and Alertmanager images. It generates a CycloneDX SBOM for every image, retains/uploads findings outside pull requests, and enforces the checked-in high/critical Trivy policy in every lane.
 
 `.github/workflows/operations-validation.yml` runs `scripts/validate-supply-chain.sh` whenever workflows, Dockerfiles, Compose/deployment image references, the Maven Wrapper distribution, or validator scripts change. The portable static gate requires:

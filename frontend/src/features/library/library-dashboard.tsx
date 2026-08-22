@@ -128,8 +128,6 @@ export function LibraryDashboard({
       setCreateMessage(`Created “${parsed.data.name}”.`);
       if (initialCollections.page > 0) {
         router.push(collectionPageHref(query, 0));
-      } else {
-        router.refresh();
       }
     } catch {
       setCreateMessage("OpenScholar could not reach the library service.");

@@ -16,6 +16,15 @@ read_secret() {
 	export "$variable_name=$secret_value"
 }
 
+auth_mode=${OPENSCHOLAR_AUTH_MODE:-local}
+if [ "$auth_mode" = "local" ]; then
+	exec "$@"
+fi
+if [ "$auth_mode" != "oidc" ]; then
+	echo "OPENSCHOLAR_AUTH_MODE must be local or oidc." >&2
+	exit 1
+fi
+
 read_secret /run/secrets/OPENSCHOLAR_AUTH_SESSION_SECRET OPENSCHOLAR_AUTH_SESSION_SECRET
 read_secret /run/secrets/OPENSCHOLAR_OIDC_CLIENT_SECRET OPENSCHOLAR_OIDC_CLIENT_SECRET
 
