@@ -16,13 +16,34 @@ These screenshots come from the deterministic isolated Compose workflow, not fro
 
 ## Reproduce
 
-With the isolated E2E Compose stack running on the documented ports:
+From the repository root, build and start the disposable deterministic stack on its isolated ports:
+
+```bash
+COMPOSE_PROJECT_NAME=openscholar-portfolio \
+POSTGRES_PORT=55432 BACKEND_PORT=8180 FRONTEND_PORT=3300 \
+docker compose -f compose.yaml -f deploy/compose.e2e.yaml \
+  up --build --detach --wait --wait-timeout 180
+```
+
+Then capture the three checked-in views:
 
 ```bash
 cd frontend
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 PORTFOLIO_SCREENSHOT_DIR=../docs/images \
 PLAYWRIGHT_COMPOSE_ORIGIN=http://127.0.0.1:3300 \
 pnpm test:e2e:compose
 ```
 
-The screenshot hook is disabled unless `PORTFOLIO_SCREENSHOT_DIR` is set, so normal CI runs do not modify the checkout. The fixture contains synthetic metadata and no PDF document bytes.
+Return to the repository root and remove only that disposable project and volume:
+
+```bash
+cd ..
+COMPOSE_PROJECT_NAME=openscholar-portfolio \
+POSTGRES_PORT=55432 BACKEND_PORT=8180 FRONTEND_PORT=3300 \
+docker compose -f compose.yaml -f deploy/compose.e2e.yaml \
+  down --volumes --remove-orphans
+```
+
+The screenshot hook is disabled unless `PORTFOLIO_SCREENSHOT_DIR` is set, so normal CI runs do not modify the checkout. The fixture contains synthetic metadata and no PDF document bytes. The separate offline Playwright suite is the executable evidence for provider-warning partial failure, a restricted-paper detail state, and the supported PDF.js reader/keyboard flow; those states are not represented by the three static screenshots above.

@@ -175,10 +175,19 @@ verbose "Couldn't find MAVEN_HOME, downloading and installing it ..."
 verbose "Downloading from: $distributionUrl"
 verbose "Downloading to: $TMP_DOWNLOAD_DIR/$distributionUrlName"
 
-# select .zip or .tar.gz
+# Select an extractor without changing the checksum-protected archive. JDK images
+# often omit unzip but include jar; switching to the tarball would incorrectly
+# verify different bytes against distributionSha256Sum for the configured ZIP.
+mavenArchiveExtractor=unzip
 if ! command -v unzip >/dev/null; then
-  distributionUrl="${distributionUrl%.zip}.tar.gz"
-  distributionUrlName="${distributionUrl##*/}"
+  if jarCommand=$(command -v jar); then
+    mavenArchiveExtractor=jar
+  else
+    [ -z "${distributionSha256Sum-}" ] || die "cannot validate the configured Maven ZIP: neither unzip nor jar is available"
+    distributionUrl="${distributionUrl%.zip}.tar.gz"
+    distributionUrlName="${distributionUrl##*/}"
+    mavenArchiveExtractor=tar
+  fi
 fi
 
 # verbose opt
@@ -249,9 +258,14 @@ if [ -n "${distributionSha256Sum-}" ]; then
   fi
 fi
 
-# unzip and move
-if command -v unzip >/dev/null; then
+# Extract and move.
+if [ "$mavenArchiveExtractor" = unzip ]; then
   unzip ${__MVNW_QUIET_UNZIP:+"$__MVNW_QUIET_UNZIP"} "$TMP_DOWNLOAD_DIR/$distributionUrlName" -d "$TMP_DOWNLOAD_DIR" || die "failed to unzip"
+elif [ "$mavenArchiveExtractor" = jar ]; then
+  (
+    cd "$TMP_DOWNLOAD_DIR" || exit 1
+    "$jarCommand" xf "$distributionUrlName"
+  ) || die "failed to extract Maven ZIP with jar"
 else
   tar xzf${__MVNW_QUIET_TAR:+"$__MVNW_QUIET_TAR"} "$TMP_DOWNLOAD_DIR/$distributionUrlName" -C "$TMP_DOWNLOAD_DIR" || die "failed to untar"
 fi
@@ -288,6 +302,10 @@ if [ -z "$actualDistributionDir" ]; then
 fi
 
 verbose "Found extracted Maven distribution directory: $actualDistributionDir"
+if [ "$mavenArchiveExtractor" = jar ]; then
+  chmod 0755 "$TMP_DOWNLOAD_DIR/$actualDistributionDir/bin/$MVN_CMD" \
+    || die "failed to restore executable permission on Maven launcher"
+fi
 printf %s\\n "$distributionUrl" >"$TMP_DOWNLOAD_DIR/$actualDistributionDir/mvnw.url"
 mv -- "$TMP_DOWNLOAD_DIR/$actualDistributionDir" "$MAVEN_HOME" || [ -d "$MAVEN_HOME" ] || die "fail to move MAVEN_HOME"
 

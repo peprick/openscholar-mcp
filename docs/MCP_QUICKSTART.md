@@ -146,7 +146,7 @@ A search call uses the same endpoint:
 
 ## Compatibility and safety
 
-The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration. The production template exposes the Prometheus registry only on the backend's private `9091` management listener and monitoring network; Caddy does not route it publicly.
+The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration. The production template exposes the Prometheus registry on the backend's un-published private `9091` management listener; Prometheus reaches it over the monitoring network and Caddy does not route it publicly. Docker bridge membership is not a per-port firewall, so deployments that require monitoring-only reachability need the additional boundary described in the deployment guide.
 
 The local shared-key/fixed-user mode is for loopback development, and its address-based limiter intentionally ignores forwarding headers. Hosted JWT authorization and owner propagation are implemented, but a target deployment still needs trusted-edge review and aggregate controls. In both modes, provider deadlines and the 18-second search application deadline bound their own layers; client disconnects and MCP `notifications/cancelled` do not currently cancel the tool worker. Durable REST/UI refresh jobs are not MCP Tasks or MCP job handles.
 
@@ -159,16 +159,18 @@ MCP_LOCAL_API_KEY="${MCP_LOCAL_API_KEY}" \
   node scripts/mcp-conformance-proxy.mjs
 ```
 
-In another shell, run the two production-surface scenarios supported by OpenScholar:
+In another shell, install the checked-in conformance tool with lifecycle scripts disabled and its registry integrity enforced by the frozen lockfile, then run the two production-surface scenarios supported by OpenScholar:
 
 ```bash
-npx @modelcontextprotocol/conformance@0.1.16 server \
+pnpm --dir tools/mcp-conformance install --frozen-lockfile --ignore-scripts
+
+pnpm --dir tools/mcp-conformance exec conformance server \
   --url http://127.0.0.1:6277/mcp \
   --scenario server-initialize \
   --spec-version 2025-11-25 \
   --verbose
 
-npx @modelcontextprotocol/conformance@0.1.16 server \
+pnpm --dir tools/mcp-conformance exec conformance server \
   --url http://127.0.0.1:6277/mcp \
   --scenario tools-list \
   --spec-version 2025-11-25 \
@@ -177,6 +179,6 @@ npx @modelcontextprotocol/conformance@0.1.16 server \
 
 Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, resources, prompts, sampling, and elicitation that this five-tool domain server intentionally does not advertise; failing those fixture scenarios would not indicate a production contract failure. Do not use the `server-stateless` scenario, which targets a later protocol revision.
 
-Both commands were verified against the Compose image with conformance `0.1.16`: each passed `1/1` with no warnings, and `tools-list` discovered exactly the five documented tools.
+Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings, and `tools-list` discovered exactly the five documented tools.
 
-The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, and workflow changes. It starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.
+The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, tooling-lock, and workflow changes. It installs the same frozen CLI with scripts disabled, starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.

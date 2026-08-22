@@ -102,26 +102,25 @@ The versioned `related-metadata-baseline-v1.json` development corpus contains on
 ## Performance tests
 
 - A checked-in loopback-safe harness measures one forced cold search, repeated exact-cache searches, repeated paper-detail reads, cache-hit ratio, and Prometheus provider error rate. Its 40-sample synthetic Compose reference run passed at 6.944 ms cached-search p95 and 7.305 ms paper-detail p95; see [Local performance evidence](PERFORMANCE_EVIDENCE.md).
+- Deterministic provider tests already exercise concurrent fan-out, partial failure, and pre-header/partial-body stalls under configured deadlines. Raw-wire MCP tests enforce inbound-body and structured-result size limits without leaking oversized content.
 - Cached search throughput and concurrent-client capacity remain deployment tests.
-- Provider fan-out with simulated delays.
-- Connection-pool saturation.
-- Large normalization/persistence batches.
-- Full-text/vector query latency at realistic scale.
-- MCP serialization and response limits.
+- Connection-pool saturation, large normalization/persistence batches, and full-text/vector query latency at realistic scale remain target-environment stress tests.
+- MCP framework-serialization throughput and socket-lifetime behavior remain transport/deployment tests; application result-size enforcement is already covered.
 
 Use synthetic metadata; commit no copyrighted corpus.
 
 ## CI gates
 
-The list below is the target release gate. Unit/integration/frontend checks, container builds, MCP conformance, dependency review, CodeQL, Trivy, secret scanning, SBOM generation, an offline Playwright workflow, and a deterministic Compose-backed Playwright workflow have checked-in workflows. A checked-in workflow is not evidence that an unpushed revision passed on GitHub; local results are reported separately.
+The list below is the target release gate. Unit/integration/frontend checks, controller-inventory-checked OpenAPI, container builds, lockfile-backed MCP conformance, dependency review, CodeQL, Trivy, secret scanning, SBOM generation, immutable-reference/image-policy/VEX validation, deployment/backup guard validation, an offline Playwright workflow, and a deterministic Compose-backed Playwright workflow have checked-in automation. A checked-in workflow is not evidence that a particular revision passed on GitHub; local results are reported separately.
 
-1. Formatting and static checks.
-2. Backend unit/slice/integration tests.
-3. Frontend tests.
-4. ArchUnit boundary checks.
-5. Container build.
-6. Playwright smoke tests against Compose.
-7. Dependency/secret scanning.
+1. Formatting, static, immutable-reference, frozen-tooling, production image-policy, current scoped-VEX, and deployment-configuration checks.
+2. Backend unit/slice/integration, OpenAPI inventory, and ArchUnit boundary tests.
+3. Frontend unit/contract/security-header tests and production build.
+4. Backend, frontend, Caddy, and blackbox-exporter project-owned final-runtime builds and scans; a release additionally rescans their returned registry digests.
+5. Offline and Compose-backed Playwright workflows with WCAG 2.2 axe checks.
+6. Raw-wire MCP tests plus the production-applicable conformance subset.
+7. Dependency, secret, CodeQL, Trivy, and source/runtime SBOM gates.
+8. Guarded backup/restore behavior tests and monitoring configuration/rule validation.
 
 Conformance and performance suites may run on main/nightly when unsuitable for every pull request.
 

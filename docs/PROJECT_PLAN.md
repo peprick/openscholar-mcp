@@ -12,7 +12,7 @@ The target workflow is:
 4. Normalize and deduplicate records from different providers.
 5. Resolve and verify legal full-text locations.
 6. Explain ranking and provenance.
-7. Save reusable papers, searches, collections, and notes.
+7. Save reusable papers, searches, and collections, with personal notes as a later increment.
 8. Offer the same capabilities through REST and MCP.
 
 ## 2. Scope
@@ -42,7 +42,7 @@ The original local MVP is implemented. The project has since added typed publica
 - Versioned abstract/title embeddings plus a default-off, independently evaluated hybrid related-paper read.
 - OIDC issuer+subject identities, private libraries/search snapshots, and privacy export/account deletion.
 - Durable operational metadata/access refresh jobs, optional scheduling, UI inspection, and manual retry.
-- Hosted OIDC resource-server and browser-BFF code plus single-host deployment, blackbox monitoring, and backup/restore templates.
+- Hosted OIDC resource-server and browser-BFF code plus image-gated single-host deployment, project-owned hardened Caddy/blackbox-exporter builds, private application/blackbox monitoring, and backup/restore templates.
 
 ### Deferred or external scope
 
@@ -51,7 +51,7 @@ The original local MVP is implemented. The project has since added typed publica
 - Optional summaries and question answering over user-selected documents.
 - Object storage for documents that are legally permitted to be retained.
 - Personalized recommendations and research-gap exploration.
-- Real IdP/provider registrations, cloud deployment, managed data/secret services, and launch evidence.
+- Published, registry-digest-rescanned, signed/attested project runtime images; real IdP/provider registrations; cloud deployment; managed data/secret services; and launch evidence.
 
 ### Explicit non-goals
 
@@ -70,7 +70,7 @@ Searches a topic, filters for open-access material, opens a paper, saves it, and
 
 ### Student or researcher
 
-Builds a structured reading list, exports citations, adds notes, and compares papers while retaining traceable sources.
+Builds a structured reading list and exports citations while retaining traceable sources; planned later increments add notes and paper comparison.
 
 ### AI-agent user
 
@@ -102,7 +102,7 @@ Inspects provider errors, stale links, ingestion runs, cache effectiveness, and 
 - Cache normalized paper metadata independent of individual search caches.
 - Store query fingerprints, filters, result order, and freshness timestamps.
 - Associate papers with later topics; versioned title/abstract embedding storage already exists as an opt-in offline path.
-- Preserve user collections, notes, and reading state until the user deletes them.
+- Preserve user collections and reading state until the user deletes them; personal notes remain planned.
 
 ### Reader and library
 
@@ -156,7 +156,7 @@ Each milestone must satisfy:
 
 ## 8. Public portfolio definition of done
 
-These remain release gates; repository artifacts alone do not satisfy them.
+The repository contains local evidence for the documentation, contract, automated-check, measurement, and screenshot items below. The deterministic browser suites cover successful/cached discovery, provider-warning partial failure, restricted access, and supported PDF reading without committing document bytes. Clean-clone reproducibility and the no-secret/no-unlicensed-file check must still be rerun for every exact release revision; checked-in artifacts do not replace remote required checks or target-environment launch evidence.
 
 - Reproducible setup from a clean clone.
 - Public architecture, security, and data-source documentation.

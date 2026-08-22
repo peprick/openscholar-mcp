@@ -36,7 +36,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - Provider deadlines/body limits, concurrent fan-out, partial failures, reciprocal-rank fusion, and durable leased-job retry. Resilience4j circuit breakers/bulkheads remain a possible later addition, not a current dependency.
 - Flyway migration discipline.
 - Spring Security OAuth 2.0 JWT resource-server validation, route scopes, issuer+subject ownership, protected-resource metadata, and local MCP-key authentication.
-- Micrometer/OpenTelemetry instrumentation and ArchUnit boundaries.
+- Micrometer instrumentation, the planned OpenTelemetry tracing boundary, and ArchUnit boundaries.
 
 ## Frontend knowledge
 
@@ -86,7 +86,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 
 - An external OIDC authorization server with a confidential browser client, MCP-client grants, JWT access tokens for the configured API audience, approved `openscholar.*` scopes, explicit authorization/token/JWKS/logout endpoints, and tested rotation/revocation.
 - A 32-byte-base64 browser session-sealing secret and confidential OIDC client secret, preferably delivered by a managed secret system.
-- DNS/TLS/ingress, reviewed container registry/digests/signing, database/PITR/backup decisions, and a working alert route. The checked-in files are templates, not provisioned services.
+- DNS/TLS/ingress; a reviewed registry and CI identity capable of building, scanning, publishing, registry-digest-rescanning, signing/attesting, and pinning the backend, frontend, Caddy, and blackbox-exporter images; database/PITR/backup decisions; and a working alert route. The checked-in image definitions and deployment files are gated templates, not published or provisioned services.
 
 ### Optional later
 
@@ -104,4 +104,4 @@ All credentials belong in ignored environment files or deployment secrets. `.env
 - Spring AI 2.0 manages official MCP Java SDK 2.0 transitively.
 - Java SDK 2.0 supports MCP revision `2025-11-25`; newer protocol-only features remain deferred until official Java support.
 
-Versions will be pinned and updated deliberately, never left as floating ranges.
+Application dependencies are versioned through the Maven and pnpm manifests/lockfiles, and the official MCP conformance CLI has a separate frozen, integrity-bearing tooling lockfile. The Maven distribution has a checked SHA-256, third-party Actions use full commit SHAs, and Dockerfile/Compose/validation images use tag-plus-digest references enforced by `scripts/validate-supply-chain.sh`; update each human-readable version and immutable reference deliberately together.

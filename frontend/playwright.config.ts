@@ -19,6 +19,7 @@ const appCommand = process.env.CI
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "compose-workflow.spec.ts",
   outputDir: "test-results/playwright",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

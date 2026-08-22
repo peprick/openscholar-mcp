@@ -9,6 +9,7 @@
 
 backend/target/
 frontend/node_modules/
+tools/mcp-conformance/node_modules/
 frontend/.next/
 frontend/out/
 frontend/coverage/

@@ -9,7 +9,7 @@ Estimated effort: 2–4 days.
 Status: complete. Backend, Next.js client, pnpm lockfile, local connectivity, and the root full-stack Compose profile are implemented.
 
 - Generate Spring Boot 4.1/Java 21 Maven project.
-- Implemented: Next.js 16.2 App Router project with strict TypeScript.
+- Implemented: Next.js 16.3.1/React 19.2.8 App Router project with strict TypeScript.
 - Add Maven wrapper and pnpm lockfile.
 - Implemented: standalone backend PostgreSQL Compose and root PostgreSQL/backend/frontend stack.
 - Configure Flyway, Actuator, formatting, CI, and environment examples.
@@ -21,7 +21,7 @@ Exit: clean clone starts through documented commands and CI passes.
 
 Estimated effort: 1–2 weeks.
 
-Status: the search application pipeline, owner-scoped immutable result snapshots, multi-provider continuation UI, canonical paper-details UI, and typed publication metadata are complete. Transport-lifecycle cancellation and final hardening remain.
+Status: complete for the cached multi-provider search slice. The application pipeline, owner-scoped immutable result snapshots, continuation UI, canonical paper-details UI, and typed publication metadata meet this milestone's exit condition. Transport-lifecycle cancellation remains a separately documented SDK/transport limitation rather than an incomplete cache/search contract.
 
 - Canonical paper/search domain models and initial Flyway migrations.
 - OpenAlex adapter with rate limits and resilience.
@@ -90,7 +90,7 @@ Exit: an MCP client discovers/calls tools with the same policies as REST.
 
 Estimated effort: 1–2 weeks.
 
-Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, bounded offline backfill, opt-in exact-vector evaluation, exploratory hybrid sensitivity sweep, frozen independent holdout validation, pinned `V11` HNSW gate, and default-off production-readiness hybrid path are implemented. Generation remains opt-in and no model is downloaded by the project.
+Status: complete for the current default-off related-paper evaluation and read scope. A versioned synthetic relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, bounded offline backfill, opt-in exact-vector evaluation, exploratory hybrid sensitivity sweep, frozen independent holdout validation, pinned `V11` HNSW gate, and default-off production-readiness hybrid path are implemented. Generation remains opt-in and no model is downloaded by the project; broader evaluation remains a prerequisite only for a future default change.
 
 - Implemented: the related-paper relevance sets plus a separate frozen exact-identifier deduplication fixture covering DOI/arXiv/OpenAlex normalization, provider replay, common-title false positives, DOI-less theses, and separate preprint/published records.
 - Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
@@ -128,14 +128,14 @@ Exit: improved coverage with isolated partial failures.
 
 Estimated effort: 1–2 weeks.
 
-Status: the application and single-host deployment artifacts are implemented and tested locally/synthetically, but there is no live cloud deployment and the public-release evidence gate remains open.
+Status: the application and single-host deployment artifacts are implemented and tested locally/synthetically, but the production image gate, live cloud deployment, and public-release evidence gate remain open.
 
 - Implemented: Spring Security OIDC resource server, issuer/audience/scope validation, issuer+subject-owned searches/libraries, and a Next.js authorization-code/PKCE BFF with encrypted HttpOnly sessions.
 - Implemented: hosted MCP authorization challenges/scopes and protected-resource metadata.
 - Implemented: no-store privacy export and confirmed account deletion with documented shared-catalog/reprovision semantics.
-- Implemented as templates: hardened single-host Compose/Caddy topology, blackbox monitoring, guarded checksum/encryption-capable PostgreSQL backup/restore, threat model, and supply-chain workflow.
+- Implemented as templates: hardened single-host Compose/Caddy topology, checked-in project-owned Caddy and blackbox-exporter scratch-runtime builds, private application metrics plus blackbox monitoring, guarded checksum/encryption-capable PostgreSQL backup/restore, threat model, and supply-chain workflow with immutable third-party Action/container references, locked conformance tooling, a resolved-image policy preflight, and expiring component-scoped VEX validation.
 - Implemented locally: deterministic Compose-backed Playwright coverage, WCAG 2.2 axe checks, a frozen exact-identifier deduplication gate, and a reproducible loopback performance harness with passing synthetic reference evidence.
-- External: real IdP registration/interoperability/rotation, public DNS/TLS/ingress, immutable signed images, managed PostgreSQL/PITR/HA decision, secret manager, off-host backups/restore drills, and an actual deployment.
+- Release/external gate: CI-build, scan, publish, registry-digest rescan, sign/attest, and pin all four project-owned runtime images (backend, frontend, Caddy, and blackbox-exporter); then prove real IdP interoperability/rotation, public DNS/TLS/ingress, managed PostgreSQL/PITR/HA decisions, secret management, off-host backups/restore drills, and an actual deployment. Reviewed third-party images and Actions are already immutable, but their evidence must remain current.
 - External: working alerts/on-call, privacy/licence/provider approval, target-environment assistive-technology/load/penetration/disaster-recovery evidence.
 - Implemented locally: reproducible search/paper/collection portfolio screenshots and an evidence page. An optional video and public architecture/results publication remain external presentation work.
 

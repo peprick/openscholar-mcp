@@ -19,4 +19,4 @@ read_secret() {
 read_secret /run/secrets/OPENSCHOLAR_AUTH_SESSION_SECRET OPENSCHOLAR_AUTH_SESSION_SECRET
 read_secret /run/secrets/OPENSCHOLAR_OIDC_CLIENT_SECRET OPENSCHOLAR_OIDC_CLIENT_SECRET
 
-exec node server.js
+exec "$@"

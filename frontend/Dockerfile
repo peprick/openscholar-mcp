@@ -24,13 +24,24 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs
+    && adduser --system --uid 1001 nextjs \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f \
+      /usr/local/bin/corepack \
+      /usr/local/bin/npm \
+      /usr/local/bin/npx \
+      /usr/local/bin/pnpm \
+      /usr/local/bin/pnpx \
+      /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg
 
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
+COPY --chmod=0555 docker-entrypoint.sh /usr/local/bin/openscholar-frontend-entrypoint
 
 USER nextjs
 EXPOSE 3000
 
+ENTRYPOINT ["/usr/local/bin/openscholar-frontend-entrypoint"]
 CMD ["node", "server.js"]

@@ -19,7 +19,7 @@ flowchart LR
     S --> CO["CORE (licensed opt-in)"]
     S --> UW["Unpaywall"]
     S --> AX["arXiv"]
-    S --> MO["Additional open repositories"]
+    S --> MO["Additional open repositories (planned)"]
     C --> E["Optional local Ollama (offline backfill only)"]
 ```
 
@@ -136,7 +136,7 @@ Current canonical data retains record-level provenance and identifies the provid
 
 ## Ranking
 
-The current OpenAlex slice persists the provider relevance score and returns an `OPENALEX_RELEVANCE` reason. A separate live related-paper path provides the local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, and deterministic metadata tie-breakers stabilize the order. A default-off production-readiness mode unions bounded lexical candidates with bounded candidates from the pinned `V11` HNSW index, verifies exact vector coverage for every lexical candidate, and applies the frozen 50/50 lexical/clamped-cosine scorer. The API reports typed ranking mode, fallback reason, and feature values. This path remains separate from immutable provider snapshots.
+Single-provider discovery pages retain their provider ranking signal; OpenAlex records expose `OPENALEX_RELEVANCE`. When more than one discovery provider succeeds, deterministic reciprocal-rank fusion orders the exact-identifier-merged page and preserves each provider contribution. A separate live related-paper path provides the local PostgreSQL full-text baseline: title, abstract, and venue receive A/B/C weights, `ts_rank_cd` supplies the score, and deterministic metadata tie-breakers stabilize the order. A default-off production-readiness mode unions bounded lexical candidates with bounded candidates from the pinned `V11` HNSW index, verifies exact vector coverage for every lexical candidate, and applies the frozen 50/50 lexical/clamped-cosine scorer. The API reports typed ranking mode, fallback reason, and feature values. This path remains separate from immutable provider snapshots.
 
 ## Embedding boundary
 
@@ -182,10 +182,10 @@ Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions th
 
 ### Hosted portfolio deployment
 
-- The repository contains a hardened single-host Compose template with PostgreSQL/pgvector, backend, Next.js, Caddy TLS edge, isolated networks, file-backed secrets, non-root/read-only services, resource/log bounds, and an optional blackbox Prometheus/Alertmanager profile.
-- Production Compose is fail-closed on OIDC configuration. Spring Boot is the JWT resource server; Next.js is an authorization-code/PKCE BFF that validates ID tokens and keeps encrypted access/refresh/ID-token state in `__Host-` HttpOnly cookies before forwarding access tokens server-to-server.
+- The repository contains a hardened single-host Compose template with PostgreSQL/pgvector, backend, Next.js, Caddy TLS edge, segmented internal networks, file-backed secrets, non-root/read-only services, resource/log bounds, and an optional Prometheus/Alertmanager/blackbox-exporter observability profile. Checked-in scratch-runtime builds replace the vulnerable official Caddy and blackbox-exporter runtime images. A checked image-policy wrapper validates every resolved profiled service immediately before deployment commands.
+- Production Compose is fail-closed on OIDC configuration. Spring Boot is the JWT resource server; Next.js is an authorization-code/PKCE BFF that validates ID tokens and keeps encrypted access/refresh/ID-token state in `__Host-` HttpOnly cookies before forwarding access tokens server-to-server. The secret-reading frontend entrypoint is executable content baked into the application image, not a deployment bind mount.
 - Guarded PostgreSQL custom-format backup and restore scripts provide checksum validation and optional `age` encryption; they do not upload, rotate, or prove restore success automatically.
-- These are deployable artifacts, not evidence of a running cloud service. Managed PostgreSQL/PITR, registry/signing, public DNS/ingress, identity-provider registration, a real alert receiver, secret management, and operational evidence remain deployment decisions.
+- These are deployment artifacts, not evidence of a running cloud service. The example deliberately blocks deployment until backend, frontend, Caddy, and blackbox-exporter are CI-built, pushed to their approved project repositories, rescanned by registry digest, signed/attested, and pinned. Managed PostgreSQL/PITR, public DNS/ingress, identity-provider registration, a real alert receiver, secret management, and operational evidence remain deployment decisions.
 - No object-storage service or PDF retention path exists.
 
 Extract ingestion workers only when background work measurably competes with interactive latency or requires independent scaling.

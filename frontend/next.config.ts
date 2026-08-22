@@ -47,7 +47,13 @@ export function securityHeaders(
 }
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/**/*",
+    ],
+  },
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,

@@ -1,6 +1,6 @@
 # OpenScholar Frontend
 
-Next.js App Router and strict TypeScript web client for OpenScholar MCP.
+Next.js 16.3.1/React 19.2.8 App Router and strict TypeScript web client for OpenScholar MCP.
 
 Node.js 22.13 or newer is required; Node.js 24 LTS is recommended. The pinned
 PDF.js package requires that baseline.
@@ -34,6 +34,14 @@ pnpm check
 
 This runs ESLint, strict TypeScript, Vitest, and a production Next.js build.
 
+After installing Chromium once with `pnpm exec playwright install chromium`, run the deterministic offline browser suite with:
+
+```bash
+pnpm test:e2e
+```
+
+That suite blocks unexpected external traffic and covers search/cache/provenance, provider warnings, verified and restricted access, PDF.js reader keyboard/text behavior, collections, tags/status, and citation downloads with WCAG 2.2 axe checks. The separate `pnpm test:e2e:compose` lane requires the disposable Spring Boot/PostgreSQL/OpenAlex-fixture stack; use the complete commands in the [portfolio evidence guide](../docs/PORTFOLIO_DEMO.md#reproduce).
+
 ## Current flow
 
 - Search OpenAlex-backed research with bounded filters.
@@ -48,6 +56,8 @@ This runs ESLint, strict TypeScript, Vitest, and a production Next.js build.
 - Inspect durable metadata/access refresh jobs and retry terminal failures.
 
 Provider-reported PDF URLs from search results are never rendered as verified downloads. Legal-access actions use only the backend `/versions` contract. The reader does not proxy or retain document bytes: the browser requests a selected, fresh verified source directly. Sources that do not permit cross-origin reading fail closed to the external-link fallback.
+
+Every frontend response carries an enforced Content Security Policy and related safety headers. The production Caddy policy mirrors the exact checked-in Next.js value, with a regression test that fails on drift; its documented `unsafe-inline` and PDF.js-specific `wasm-unsafe-eval` allowances are bounded residual risks rather than an absence of CSP.
 
 ## Optional hosted OIDC mode
 

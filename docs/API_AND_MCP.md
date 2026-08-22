@@ -252,5 +252,5 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 
 - The pinned official runner's production-applicable `server-initialize` and `tools-list` scenarios pass with `--spec-version 2025-11-25`; its remaining scenarios require a synthetic fixture surface and are not run against the domain server.
 - Track the canonical frozen `2025-11-25` requirements set as the official conformance runner evolves.
-- Tool discovery, calls, invalid schemas, cancellation, authentication, timeouts, partial results, and shutdown.
-- Supported protocol revision recorded in `/actuator/info` and release notes.
+- Tool discovery, calls, invalid schemas, authentication, application deadline/interruption behavior, partial results, and shutdown are test targets. Client-disconnect and MCP `notifications/cancelled` propagation remain deferred with the transport limitation above.
+- The supported protocol revision is recorded in `/actuator/info`; repeat it in release notes when a release artifact or tag is created.

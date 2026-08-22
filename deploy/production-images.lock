@@ -1,0 +1,13 @@
+# service|policy|reviewed value
+#
+# `exact` entries are the only third-party image references permitted after
+# Docker Compose resolves defaults, the explicit environment file, and ambient
+# shell overrides. `repository` entries permit release tags/digests from only
+# the project's four reviewed runtime-image repositories.
+postgres|exact|pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+backend|repository|ghcr.io/peprick/openscholar-backend
+frontend|repository|ghcr.io/peprick/openscholar-frontend
+proxy|repository|ghcr.io/peprick/openscholar-caddy
+blackbox-exporter|repository|ghcr.io/peprick/openscholar-blackbox-exporter
+alertmanager|exact|prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
+prometheus|exact|prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0

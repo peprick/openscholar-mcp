@@ -24,9 +24,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Reject vulnerable dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           show-openssf-scorecard: true
@@ -50,6 +52,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Set up Java 21
         if: matrix.language == 'java-kotlin'
@@ -86,6 +90,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate scoped vulnerability exceptions
+        run: scripts/validate-vulnerability-exceptions.sh
 
       - name: Prepare report directory
         run: mkdir -p security-reports
@@ -129,7 +138,6 @@ jobs:
 
   container-security:
     name: Runtime image scans and SBOMs
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -137,9 +145,13 @@ jobs:
       security-events: write
     env:
       DOCKER_BUILDKIT: "1"
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+      TRIVY_PLATFORM: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
       - name: Build final runtime images
         run: |
@@ -196,14 +208,14 @@ jobs:
           exit-code: "1"
 
       - name: Upload backend image findings
-        if: always() && hashFiles('security-reports/backend-image.sarif') != ''
+        if: always() && github.event_name != 'pull_request' && hashFiles('security-reports/backend-image.sarif') != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: security-reports/backend-image.sarif
           category: trivy-backend-image
 
       - name: Upload frontend image findings
-        if: always() && hashFiles('security-reports/frontend-image.sarif') != ''
+        if: always() && github.event_name != 'pull_request' && hashFiles('security-reports/frontend-image.sarif') != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: security-reports/frontend-image.sarif
@@ -229,29 +241,157 @@ jobs:
             exit 1
           fi
 
+  hardened-runtime-security:
+    name: Hardened runtime scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      DOCKER_DEFAULT_PLATFORM: linux/amd64
+      TRIVY_PLATFORM: linux/amd64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: caddy
+            context: deploy/images/caddy
+            local_ref: openscholar-caddy:security
+          - name: blackbox-exporter
+            context: deploy/images/blackbox-exporter
+            local_ref: openscholar-blackbox-exporter:security
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare report directory
+        run: mkdir -p security-reports
+
+      - name: Build tested hardened runtime
+        env:
+          HARDENED_CONTEXT: ${{ matrix.context }}
+          HARDENED_LOCAL_REF: ${{ matrix.local_ref }}
+        run: docker build --platform linux/amd64 --file "${HARDENED_CONTEXT}/Dockerfile" --tag "${HARDENED_LOCAL_REF}" "${HARDENED_CONTEXT}"
+
+      - name: Validate hardened Caddy configuration
+        if: matrix.name == 'caddy'
+        env:
+          HARDENED_LOCAL_REF: ${{ matrix.local_ref }}
+        run: |
+          docker run --rm \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001,mode=1770 \
+            --env PUBLIC_HOST=research.example.invalid \
+            --env ACME_EMAIL=ops@example.invalid \
+            --env XDG_CONFIG_HOME=/tmp/caddy-config \
+            --env XDG_DATA_HOME=/tmp/caddy-data \
+            --volume "${PWD}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${HARDENED_LOCAL_REF}" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Validate hardened blackbox-exporter configuration
+        if: matrix.name == 'blackbox-exporter'
+        env:
+          HARDENED_LOCAL_REF: ${{ matrix.local_ref }}
+        run: |
+          docker run --rm \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --user 65534:65534 \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m,uid=65534,gid=65534,mode=1770 \
+            --volume "${PWD}/deploy/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro" \
+            "${HARDENED_LOCAL_REF}" \
+            --config.file=/etc/blackbox_exporter/config.yml \
+            --config.check
+
+      - name: Generate hardened runtime SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.local_ref }}
+          format: cyclonedx
+          output: security-reports/${{ matrix.name }}-hardened.cdx.json
+
+      - name: Scan hardened runtime image
+        id: hardened_image_scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.local_ref }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: security-reports/${{ matrix.name }}-hardened.sarif
+          exit-code: "1"
+
+      - name: Upload hardened runtime findings
+        if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}-hardened.sarif', matrix.name)) != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: security-reports/${{ matrix.name }}-hardened.sarif
+          category: trivy-hardened-${{ matrix.name }}
+
+      - name: Retain hardened runtime SBOM and scan report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: hardened-${{ matrix.name }}-security-reports-${{ github.run_attempt }}
+          path: security-reports/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce hardened runtime vulnerability gate
+        if: always()
+        env:
+          IMAGE_SCAN_OUTCOME: ${{ steps.hardened_image_scan.outcome }}
+        run: |
+          if [[ "${IMAGE_SCAN_OUTCOME}" != "success" ]]; then
+            echo "${{ matrix.name }} contains an unapproved high/critical finding." >&2
+            exit 1
+          fi
+
   third-party-runtime-security:
     name: Third-party runtime scan (${{ matrix.name }})
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       security-events: write
+    env:
+      TRIVY_PLATFORM: linux/amd64
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: postgres
             image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
-          - name: caddy
-            image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
-          - name: blackbox-exporter
-            image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+            vex: security/vex/pgvector-gosu.openvex.json
           - name: alertmanager
-            image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
+            image: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
+            vex: security/vex/alertmanager-amtool.openvex.json
           - name: prometheus
-            image: prom/prometheus:v3.5.5@sha256:332c2f43e7e389d74d3893b55bb02fbbd684208e681eeb604641d5d769c0fe2a
+            image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+            vex: ""
     steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate scoped vulnerability exceptions
+        run: scripts/validate-vulnerability-exceptions.sh
+
       - name: Prepare report directory
         run: mkdir -p security-reports
 
@@ -263,10 +403,32 @@ jobs:
           format: cyclonedx
           output: security-reports/${{ matrix.name }}.cdx.json
 
+      - name: Capture unsuppressed exception scope
+        if: matrix.vex != ''
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: json
+          output: security-reports/${{ matrix.name }}-pre-vex.json
+          exit-code: "0"
+
+      - name: Verify exception artifact and unsuppressed findings
+        if: matrix.vex != ''
+        env:
+          SCANNED_REFERENCE: ${{ matrix.image }}
+          PRE_VEX_REPORT: security-reports/${{ matrix.name }}-pre-vex.json
+        run: scripts/verify-vulnerability-exception-runtime.sh "${SCANNED_REFERENCE}" "${PRE_VEX_REPORT}"
+
       - name: Scan third-party runtime image
         id: third_party_image_scan
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_VEX: ${{ matrix.vex }}
         with:
           scan-type: image
           image-ref: ${{ matrix.image }}
@@ -278,7 +440,7 @@ jobs:
           exit-code: "1"
 
       - name: Upload third-party image findings
-        if: always() && hashFiles(format('security-reports/{0}.sarif', matrix.name)) != ''
+        if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}.sarif', matrix.name)) != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: security-reports/${{ matrix.name }}.sarif

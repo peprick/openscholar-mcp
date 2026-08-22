@@ -2,13 +2,15 @@
 
 ## Status and hard gate
 
-`deploy/compose.production.yaml` is a hardened, single-host portfolio deployment template. It is not evidence of a running service or a claim that OpenScholar is ready for anonymous Internet exposure. Production Compose is fail-closed on hosted OIDC configuration. The backend JWT resource server, audience/scope checks, issuer+subject ownership, privacy export/deletion, protected-resource metadata, frontend OIDC BFF, and negative authorization tests are implemented. Keep `PUBLIC_BIND_ADDRESS` on loopback until a real identity-provider registration and the remaining launch gates below have been exercised in the target environment.
+`deploy/compose.production.yaml` is a hardened, single-host portfolio deployment template. It is not evidence of a running service or a claim that OpenScholar is ready for anonymous Internet exposure. Production Compose is fail-closed on hosted OIDC configuration and on four project-owned runtime image identities. The example environment deliberately contains non-deployable `replace-me` digest placeholders for backend, frontend, Caddy, and blackbox-exporter. Do not run the stack until CI has built those four checked-in image definitions, scanned the exact outputs, pushed them to the approved GHCR repositories, rescanned the registry digests, signed/attested them, and placed their reviewed `tag@sha256` references in the ignored `deploy/production.env`.
 
-The template is useful for local production-mode verification and, after identity-provider interoperability is proven, a reviewed private preview. Public launch also requires the legal and provider decisions in `SECURITY_AND_LEGAL.md`.
+The backend JWT resource server, audience/scope checks, issuer+subject ownership, privacy export/deletion, protected-resource metadata, frontend OIDC BFF, and negative authorization tests are implemented. Keep `PUBLIC_BIND_ADDRESS` on loopback until a real identity-provider registration and the remaining launch gates below have been exercised in the target environment.
+
+After the image gate is satisfied, the template is useful for local production-mode verification and, after identity-provider interoperability is proven, a reviewed private preview. Public launch also requires the legal and provider decisions in `SECURITY_AND_LEGAL.md`.
 
 ## Topology
 
-Only Caddy publishes host ports. PostgreSQL, Spring Boot, Next.js, Prometheus, Alertmanager, and the blackbox exporter have no host port. Separate internal networks isolate application, database, and monitoring traffic. The backend has egress for providers and issuer JWKS, the frontend has a dedicated identity-egress network for server-side token/JWKS calls, the blackbox exporter has probe egress, Alertmanager has notification egress, and Caddy has edge egress for ACME. These ordinary bridge networks express workload intent but are not destination allowlists; enforce approved external destinations with the target host or platform's egress policy.
+Only Caddy publishes host ports. PostgreSQL, Spring Boot, Next.js, Prometheus, Alertmanager, and the blackbox exporter have no host port. The reviewed production target is explicitly `linux/amd64`; this matches the image scans and scoped VEX evidence even when an image reference points to a multi-platform index. Separate internal networks segment intended application, database, and monitoring connectivity, but multi-homed services necessarily bridge some of those segments. The backend has egress for providers and issuer JWKS, the frontend has a dedicated identity-egress network for server-side token/JWKS calls, the blackbox exporter has probe egress, Alertmanager has notification egress, and Caddy has edge egress for ACME. These ordinary bridge networks express workload intent but are neither per-port firewalls nor destination allowlists; enforce the required east-west and external-destination policy with target-host or platform controls.
 
 The backend and frontend retain the non-root users in their images. Caddy runs as numeric UID `10001` and uses a container-local unprivileged-port sysctl so all capabilities can be dropped. The writable surfaces are deliberately narrow: PostgreSQL data, Caddy certificate state, Prometheus/Alertmanager state, and bounded temporary filesystems. All other container filesystems are read-only and use `no-new-privileges`.
 
@@ -18,10 +20,10 @@ For a real service, managed PostgreSQL with point-in-time recovery is preferred.
 
 ## Host prerequisites
 
-- A supported Linux host with Docker Engine and Docker Compose v2.
+- A supported `linux/amd64` host with Docker Engine and Docker Compose v2.
 - `age` for backup encryption plus `sha256sum` or `shasum` for integrity sidecars.
 - A dedicated DNS name. Public ACME issuance requires correct DNS plus inbound TCP 80/443.
-- A registry containing reviewed backend/frontend images. Use immutable digest references after build and scan.
+- A registry containing reviewed backend, frontend, Caddy, and blackbox-exporter images. Use immutable digest references after build, publication, and registry-digest rescan.
 - Encrypted storage for database and backup data.
 - An approved OIDC authorization server with separate registrations for the browser BFF and MCP clients before any public bind.
 - An outbound policy that permits only required scholarly-provider, identity-provider, alert-receiver, public-probe, and ACME endpoints where the platform supports destination filtering.
@@ -59,7 +61,11 @@ chmod 0400 deploy/secrets/postgres_password \
 
 Compose file-backed secrets preserve host-file constraints differently across runtimes. Verify that PostgreSQL and the non-root backend can read only the mounted database-password target and that the non-root frontend can read only its session and OIDC-client-secret targets. Verify that none is readable to unrelated host users. If the runtime cannot preserve the required ownership, use its native secret store or a reviewed secret-init mechanism instead of loosening host permissions.
 
-The two application images are intentionally not built by the production file. Build in CI, scan the final images, push to an access-controlled registry, record their digests, and set `BACKEND_IMAGE`/`FRONTEND_IMAGE` to those digest references. Pin Caddy and monitoring images by digest as part of the same release review; the example tags are updateable placeholders.
+The production file intentionally builds no image. Backend, frontend, Caddy, and blackbox-exporter are four project-owned release artifacts: build their checked-in definitions in CI, scan the exact local outputs, push them to the approved `ghcr.io/peprick/openscholar-*` repositories, rescan the registry digests, sign/publish provenance, and set all four image variables to those `tag@sha256` references. The [hardened image build notes](../deploy/images/README.md) record the proxy/prober input and provenance boundaries. The official Caddy and blackbox-exporter runtime images are not production fallbacks because their current findings fail this repository's high/critical gate.
+
+PostgreSQL, Prometheus, and Alertmanager remain reviewed third-party images pinned by tag plus manifest digest. `deploy/production-images.lock` constrains those exact third-party references and the approved repository for each project-owned artifact. The wrapper rejects every example placeholder, floating tag, digest-only reference, wrong repository, and ambient override. Review and update each tag, digest, policy entry, scan result, signature, and attestation together.
+
+The hardened blackbox-exporter build checksum-pins its upstream input, but the upstream project does not publish a detached signature for that input. A checksum detects drift after the value is reviewed; it is not independent proof of publisher identity. Record that provenance limitation in release approval, retain the fetched-source checksum/evidence, and prefer a verifiable signed upstream release if one becomes available.
 
 ## Identity-provider registration
 
@@ -71,7 +77,7 @@ Register MCP clients against the same canonical HTTPS resource URI ending in `/m
 
 ## Secrets and provider configuration
 
-The PostgreSQL password enters Spring Boot through its `configtree` import. The frontend entrypoint reads the AES-256-GCM session key and confidential-client secret from their mode-`0400` files and exports them only to the Next.js process. Hosted mode does not use or mount the local `MCP_LOCAL_API_KEY`. None of these secrets belongs in command-line flags, image layers, or public frontend variables. The Caddy ACME email and database name/user are not credentials.
+The PostgreSQL password enters Spring Boot through its `configtree` import. The frontend image contains its reviewed, mode-`0555` entrypoint; Compose invokes that baked script directly instead of injecting executable code with a bind mount. The entrypoint reads the AES-256-GCM session key and confidential-client secret from their mode-`0400` files and exports them only to the Next.js process. Hosted mode does not use or mount the local `MCP_LOCAL_API_KEY`. None of these secrets belongs in command-line flags, image layers, or public frontend variables. The Caddy ACME email and database name/user are not credentials.
 
 For hosted environments, prefer a cloud secret manager, Vault, or an equivalent audited service. Materialize secrets into a root-only or service-owned in-memory filesystem at deploy time, restrict read access to the intended workload identity, and keep secret values out of Compose files, CI logs, GitHub variables that are not marked secret, shell history, and support bundles.
 
@@ -83,27 +89,25 @@ Before enabling CORE, record the applicable licence/authorization review and ret
 
 ## Validate and start
 
-Render the exact deployment before changing state:
+The commands in this section apply only after all four project-owned registry refs have cleared the image gate above. Use the checked-in production wrapper for every deployment Compose command. It resolves the observability profile as well as the minimum stack, requires `linux/amd64` on every service, rejects missing/extra services, mutable or digest-only image references, and Compose-global file/environment/project overrides, then checks every resolved service image against `deploy/production-images.lock` immediately before delegating an allowlisted command. This also catches unreviewed ambient shell image overrides. The wrapper refuses `down -v` and `down --volumes`. Validate without changing state:
 
 ```bash
-docker compose --env-file deploy/production.env \
-  -f deploy/compose.production.yaml config --quiet
+scripts/production-compose.sh deploy/production.env --check
 ```
 
 Start the minimum stack, then inspect status and logs:
 
 ```bash
-docker compose --env-file deploy/production.env \
-  -f deploy/compose.production.yaml up -d postgres backend frontend proxy
-docker compose --env-file deploy/production.env \
-  -f deploy/compose.production.yaml ps
+scripts/production-compose.sh deploy/production.env \
+  up -d postgres backend frontend proxy
+scripts/production-compose.sh deploy/production.env ps
 ```
 
-Enable the optional monitoring profile only after configuring an actual Alertmanager receiver:
+Enable the optional monitoring profile only after the blackbox-exporter release ref is approved and an actual Alertmanager receiver is configured:
 
 ```bash
-docker compose --env-file deploy/production.env \
-  -f deploy/compose.production.yaml --profile observability up -d
+scripts/production-compose.sh deploy/production.env \
+  --profile observability up -d
 ```
 
 Verify from outside the container networks:
@@ -124,7 +128,7 @@ The template bounds Docker JSON logs to five compressed 10 MiB files per service
 
 ## Monitoring boundary
 
-The backend includes the Prometheus registry. Production Compose moves Actuator to a separate `backend:9091` management listener that is reachable only on the internal monitoring network; Prometheus scrapes `/actuator/prometheus` there. Application alerts cover missing backend metrics, provider failure rate/p95, terminal refresh-job failures, MCP rejections, and sustained HTTP 5xx responses. Blackbox probes independently cover readiness, frontend availability, PostgreSQL TCP, public TLS/HTTP, probe duration, certificate expiry, and the monitoring pipeline.
+The backend includes the Prometheus registry. Production Compose moves Actuator to a separate, un-published `backend:9091` management listener, and Prometheus reaches `/actuator/prometheus` over the internal monitoring network. Caddy has no route to that listener. Docker bridge membership is not a per-port firewall, so workloads sharing one of the backend's other private networks may also reach port 9091; use a platform network policy, host firewall, or separately authenticated management boundary if the target environment requires monitoring-only reachability. Application alerts cover missing backend metrics, provider failure rate/p95, terminal refresh-job failures, MCP rejections, and sustained HTTP 5xx responses. Blackbox probes independently cover readiness, frontend availability, PostgreSQL TCP, public TLS/HTTP, probe duration, certificate expiry, and the monitoring pipeline.
 
 Do not add `/actuator/prometheus` or any other Actuator route to Caddy. If the topology changes, preserve a private or separately authenticated management boundary and test that no public edge path reaches it.
 
@@ -134,17 +138,18 @@ Alertmanager's checked-in receiver is intentionally a no-op placeholder. Its `mo
 
 Use immutable image digests and record the database migration version in every release. Back up and restore-test before any migration. Flyway migrations are forward-only; a container rollback is safe only when the previous application is compatible with the migrated schema. When compatibility is unknown, restore a verified backup into a new database and validate it before switching traffic.
 
-Do not run `docker compose down --volumes` in production. That flag deletes the named PostgreSQL volume.
+Do not bypass `scripts/production-compose.sh` for a deployment command, and do not run `down --volumes` through either the wrapper or raw Docker Compose in production. That flag deletes the named PostgreSQL volume.
 
 ## External decisions still required
 
 - Public versus private-preview exposure and the acceptable abuse model.
 - Real OIDC issuer/client registration, scope grants, interoperability evidence, signing-key/client-secret rotation, and administrator access policy. The application-side resource server and BFF are implemented, not provider-provisioned.
 - Domain, DNS, firewall, access gateway/WAF, trusted proxy chain, and rate-limit identity.
-- Container registry, application-image build/release digests, signing/attestation policy, and vulnerability exception process. Checked-in third-party images/actions are immutable; release-built backend/frontend images still need registry identities and signatures.
+- Container registry plus CI build/publication, registry-digest rescan, signing/attestation, and deployment-time verification for all four project-owned runtime images (backend, frontend, Caddy, and blackbox-exporter). The checked-in `replace-me` values are an intentional deployment block, not configuration examples that may be left in place.
+- Approval/renewal ownership for the checked-in vulnerability-exception process. Reviewed third-party images/actions are immutable, but every release still requires current scan and exception evidence.
 - Managed PostgreSQL versus single-host database, region, encryption key, PITR, RPO, RTO, and restore owner.
 - Secret manager, workload identity, rotation schedule, and emergency revocation owner.
 - Alert receiver, on-call owner, escalation timing, log/metric retention, and service objectives.
 - Provider licences/quotas/attribution, privacy notice and retention policy, and qualified legal review. Export/deletion mechanics exist but do not by themselves establish regulatory compliance.
 - Target-environment assistive-technology accessibility, load, penetration, and disaster-recovery evidence before launch. Local WCAG 2.2 axe and performance evidence are not substitutes for these exercises.
-- A full target-host Docker smoke test. The selected pinned Caddy image and configuration are validated locally, but that is not runtime evidence for the eventual host/network.
+- A full target-host Docker smoke test after the approved project-owned Caddy image is published and pinned. Local Dockerfile/configuration tests and scratch-image scans are not runtime evidence for the eventual registry artifact, host, or network.

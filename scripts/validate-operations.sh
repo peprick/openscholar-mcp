@@ -8,10 +8,10 @@ repository_directory="$(cd -- "${script_directory}/.." && pwd)"
 
 shellcheck_image="${SHELLCHECK_IMAGE:-koalaman/shellcheck-alpine:v0.11.0@sha256:9955be09ea7f0dbf7ae942ac1f2094355bb30d96fffba0ec09f5432207544002}"
 actionlint_image="${ACTIONLINT_IMAGE:-rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667}"
-caddy_image="${CADDY_VALIDATION_IMAGE:-caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}"
-prometheus_image="${PROMETHEUS_VALIDATION_IMAGE:-prom/prometheus:v3.5.5@sha256:332c2f43e7e389d74d3893b55bb02fbbd684208e681eeb604641d5d769c0fe2a}"
-alertmanager_image="${ALERTMANAGER_VALIDATION_IMAGE:-prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286}"
-blackbox_image="${BLACKBOX_VALIDATION_IMAGE:-prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc}"
+caddy_image='openscholar-caddy:operations-validation'
+prometheus_image="${PROMETHEUS_VALIDATION_IMAGE:-prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0}"
+alertmanager_image="${ALERTMANAGER_VALIDATION_IMAGE:-prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d}"
+blackbox_image='openscholar-blackbox-exporter:operations-validation'
 
 fail() {
   printf 'operations-validation: %s\n' "$*" >&2
@@ -80,6 +80,10 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 
 cd -- "${repository_directory}"
 
+printf 'Building tested hardened Caddy and blackbox-exporter validators...\n'
+docker build --file "${repository_directory}/deploy/images/caddy/Dockerfile" --tag "${caddy_image}" "${repository_directory}/deploy/images/caddy"
+docker build --file "${repository_directory}/deploy/images/blackbox-exporter/Dockerfile" --tag "${blackbox_image}" "${repository_directory}/deploy/images/blackbox-exporter"
+
 shell_files=()
 while IFS= read -r shell_file; do
   shell_files+=("${shell_file}")
@@ -109,6 +113,7 @@ printf 'Validating the Caddy configuration...\n'
 docker run --rm \
   --network none \
   --read-only \
+  --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:size=16m,mode=1777 \
   --env PUBLIC_HOST=research.example.com \
@@ -121,6 +126,7 @@ docker run --rm \
 
 printf 'Validating Prometheus configuration and alert rules...\n'
 prometheus_validation_directory="$(mktemp -d)"
+chmod 0755 "${prometheus_validation_directory}"
 cp -R "${repository_directory}/deploy/prometheus/." "${prometheus_validation_directory}/"
 cp \
   "${prometheus_validation_directory}/targets/public-endpoints.example.json" \

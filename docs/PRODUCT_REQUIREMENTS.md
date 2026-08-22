@@ -82,7 +82,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ### Accessibility and privacy
 
-- Target WCAG 2.2 AA and keyboard-operable controls.
+- Target WCAG 2.2 AA and keyboard-operable controls. Offline and Compose-backed Playwright scenarios exercise keyboard/reader flows and reject serious or critical axe findings under WCAG 2.2 tags; this local automated evidence is not a complete conformance audit or target-environment assistive-technology review.
 - Local mode runs without analytics and uses one fixed bootstrap owner.
 - Hosted OIDC mode isolates libraries and search snapshots by the internal user derived from validated issuer+subject. Notes remain planned.
 - No-store personal-data export and confirmed account deletion are implemented. Shared canonical/provider/access records remain, and a later valid token reprovisions an empty internal user.
@@ -112,6 +112,7 @@ Given a valid `search_research` tool call, the server returns structured results
 
 ## Deferred or external decisions
 
+- CI publication, registry-digest rescan, signing/attestation, and deployment pinning for the project-owned backend, frontend, Caddy, and blackbox-exporter images. Checked-in builds and local scans do not satisfy this release gate.
 - Real hosted OIDC provider/client registration, grants, interoperability, and key rotation. The application-side resource server and BFF are implemented.
 - Whether to evaluate a hosted embedding provider; the current default-off local Qwen/Ollama profile is already pinned and implemented.
 - Commercial versus non-commercial deployment.

@@ -1,6 +1,7 @@
 name: openscholar-production
 
 x-locked-down-service: &locked-down-service
+  platform: linux/amd64
   restart: unless-stopped
   init: true
   read_only: true
@@ -18,6 +19,7 @@ x-locked-down-service: &locked-down-service
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f}
+    platform: linux/amd64
     restart: unless-stopped
     read_only: true
     security_opt:
@@ -146,7 +148,7 @@ services:
       OPENSCHOLAR_OIDC_POST_LOGOUT_REDIRECT_URI: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}/
       OPENSCHOLAR_OIDC_SCOPES: ${OPENSCHOLAR_OIDC_SCOPES:-openid profile openscholar.search openscholar.library openscholar.jobs openscholar.privacy}
       OPENSCHOLAR_OIDC_ID_TOKEN_ALGS: ${OPENSCHOLAR_OIDC_ID_TOKEN_ALGS:-RS256}
-    entrypoint: ["/bin/sh", "/usr/local/bin/openscholar-frontend-entrypoint"]
+    entrypoint: ["/usr/local/bin/openscholar-frontend-entrypoint"]
     secrets:
       - source: auth_session_secret
         target: OPENSCHOLAR_AUTH_SESSION_SECRET
@@ -158,8 +160,6 @@ services:
         uid: "1001"
         gid: "1001"
         mode: 0400
-    volumes:
-      - ./frontend-entrypoint.sh:/usr/local/bin/openscholar-frontend-entrypoint:ro
     expose:
       - "3000"
     depends_on:
@@ -187,7 +187,7 @@ services:
 
   proxy:
     <<: *locked-down-service
-    image: ${CADDY_IMAGE:-caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}
+    image: ${CADDY_IMAGE:?Set CADDY_IMAGE to the hardened project image:tag@sha256:<64-hex-digest> reference}
     user: "10001:10001"
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST}
@@ -221,7 +221,7 @@ services:
   blackbox-exporter:
     <<: *locked-down-service
     profiles: [observability]
-    image: ${BLACKBOX_EXPORTER_IMAGE:-prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc}
+    image: ${BLACKBOX_EXPORTER_IMAGE:?Set BLACKBOX_EXPORTER_IMAGE to the hardened project image:tag@sha256:<64-hex-digest> reference}
     user: "65534:65534"
     command: ["--config.file=/etc/blackbox_exporter/config.yml"]
     volumes:
@@ -240,7 +240,7 @@ services:
   alertmanager:
     <<: *locked-down-service
     profiles: [observability]
-    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286}
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d}
     user: "65534:65534"
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
@@ -260,7 +260,7 @@ services:
   prometheus:
     <<: *locked-down-service
     profiles: [observability]
-    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.5@sha256:332c2f43e7e389d74d3893b55bb02fbbd684208e681eeb604641d5d769c0fe2a}
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0}
     user: "65534:65534"
     command:
       - --config.file=/etc/prometheus/prometheus.yml

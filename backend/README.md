@@ -8,9 +8,11 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - PostgreSQL persistence through Spring Data JPA
 - Flyway-managed schema
 - OpenAlex topic search with bounded filters and opaque cursor paging
+- Disabled-by-default DataCite thesis/dissertation discovery with keyless, metadata-only mapping
 - Disabled-by-default DOAJ v4 article discovery with keyless, metadata/link-only mapping
 - Licence-gated, disabled-by-default CORE API v3 metadata discovery
-- Canonical DOI/OpenAlex deduplication, authors, and provider provenance
+- Concurrent provider fan-out, isolated partial failures, exact-identifier merging, reciprocal-rank fusion, and combined cursors
+- Canonical DOI/arXiv/OpenAlex/provider-record deduplication, authors, and provider provenance
 - Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
 - Paper-specific credited author names and publication date/year integrity enforced by Flyway
 - Immutable 24-hour search snapshots with exact-cache hits, stale fallback, bounded same-instance coordination waits, and an 18-second application execution deadline
@@ -20,13 +22,17 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - SSRF-resistant PDF/landing-link verification with bounded requests and manually checked redirects
 - Link-only paper-version persistence; the backend never proxies or stores complete PDF documents
 - Deterministic single-paper BibTeX and CSL-JSON citation downloads from canonical metadata
-- Owner-scoped local collections with persisted reading status and normalized tags
+- Owner-scoped local or OIDC collections/search snapshots with persisted reading status and normalized tags
 - Literal-safe saved-library search across papers, authors, venues, and collection names
 - Ordered, bounded multi-paper BibTeX and CSL-JSON citation downloads
 - Five typed, non-destructive, read-oriented MCP tools over stateless Streamable HTTP
 - Local MCP bearer-key authentication, exact Origin validation, per-address rate limiting, request IDs, and Micrometer request metrics
+- Hosted OIDC issuer/audience/scope validation, issuer+subject ownership, protected-resource metadata, and principal rate limiting
+- Durable metadata/access refresh jobs with leased claims, bounded retry, optional scheduling, REST inspection, and manual retry
+- No-store personal-data export and confirmed owner-data deletion
 - RFC 9457 validation, not-found, and provider-failure responses
-- Spring Boot Actuator
+- Spring Boot Actuator health/info plus a Prometheus registry; production uses a private management listener
+- A checked-in OpenAPI 3.1 contract whose REST method/path inventory is verified against controllers
 - Spring Modulith boundary verification
 - Testcontainers integration tests
 - Docker Compose PostgreSQL/pgvector service
@@ -51,6 +57,7 @@ Spring Boot detects `compose.yaml`, starts PostgreSQL when required, runs Flyway
 - Create/reuse a search: `POST http://localhost:8080/api/v1/searches`
 - Retrieve a saved snapshot: `GET http://localhost:8080/api/v1/searches/{searchId}`
 - Read canonical paper details: `GET http://localhost:8080/api/v1/papers/{paperId}`
+- Read related canonical papers: `GET http://localhost:8080/api/v1/papers/{paperId}/related`
 - Read stored access versions: `GET http://localhost:8080/api/v1/papers/{paperId}/versions`
 - Resolve or refresh legal access: `POST http://localhost:8080/api/v1/papers/{paperId}/access/verify`
 - Download a citation: `GET http://localhost:8080/api/v1/papers/{paperId}/citation?format=bibtex`
@@ -58,9 +65,16 @@ Spring Boot detects `compose.yaml`, starts PostgreSQL when required, runs Flyway
 - Manage one collection: `GET|PATCH|DELETE http://localhost:8080/api/v1/collections/{collectionId}`
 - Search saved papers: `GET http://localhost:8080/api/v1/library/papers`
 - Export a citation batch: `POST http://localhost:8080/api/v1/citations/export`
+- Enqueue/list durable refresh jobs: `POST|GET http://localhost:8080/api/v1/refresh-jobs`
+- Inspect/retry a refresh job: `GET http://localhost:8080/api/v1/refresh-jobs/{jobId}` and `POST http://localhost:8080/api/v1/refresh-jobs/{jobId}/retry`
+- Export current-owner data: `GET http://localhost:8080/api/v1/privacy/export`
+- Delete current-owner data with confirmation: `DELETE http://localhost:8080/api/v1/privacy/account`
 - MCP endpoint: `POST http://localhost:8080/mcp`
 - Actuator health: `http://localhost:8080/actuator/health`
 - Actuator info: `http://localhost:8080/actuator/info`
+- Actuator Prometheus registry: `http://localhost:8080/actuator/prometheus`
+
+The complete REST schema is [the checked-in OpenAPI 3.1 document](../docs/openapi.yaml). Hosted scope and deployment behavior are documented in [REST and MCP contracts](../docs/API_AND_MCP.md) and [the deployment template](../docs/DEPLOYMENT.md).
 
 The server binds to `127.0.0.1` by default. Set `SERVER_ADDRESS=0.0.0.0` only in a container or deployment that also supplies the appropriate network and authentication controls.
 
@@ -120,7 +134,7 @@ curl --remote-header-name --remote-name \
 
 BibTeX is the default format. Both responses are raw importable documents with deterministic UUID-based citation keys and attachment filenames. Exports omit unavailable fields; author names remain literal display names because the current catalog does not safely distinguish given, family, particle, suffix, and organization names.
 
-The local library seeds one fixed development user. Every collection lookup and mutation is owner-scoped so the storage boundary can later be replaced by an authenticated principal without changing the public use case. A saved paper stores only its canonical paper reference, collection membership, reading status, and up to ten normalized tags; it does not copy or retain the PDF.
+Local mode seeds one fixed development user. Hosted mode lazily resolves an internal owner from the validated OIDC issuer+subject, and every collection/search lookup and mutation enforces that owner rather than trusting a caller-supplied user ID. A saved paper stores only its canonical paper reference, collection membership, reading status, and up to ten normalized tags; it does not copy or retain the PDF.
 
 ## Verify
 
@@ -139,6 +153,8 @@ OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
 ```
 
 OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
+
+DataCite discovery is opt-in. Set `DATACITE_ENABLED=true` to add keyless thesis/dissertation metadata search through the DOI API; `DATACITE_CONTACT_EMAIL` is an optional backend-owned contact identity. The adapter accepts controlled and legacy thesis/dissertation types, owns its bounded cursor paging, emits canonical DOI landing links, skips `openAccessOnly` queries, and deliberately makes no discovery PDF or open-access claim. It never downloads a deposited work. Deployment bounds can be adjusted with positive `DATACITE_CONNECT_TIMEOUT`, `DATACITE_REQUEST_TIMEOUT`, and `DATACITE_MAX_RESPONSE_BYTES`; `DATACITE_BASE_URL` is for controlled tests and approved mirrors.
 
 DOAJ discovery is opt-in. Set `DOAJ_ENABLED=true` to add the public, keyless DOAJ v4 article-search adapter; `DOAJ_CONTACT_EMAIL` is optional and is used only in the backend-owned `User-Agent`. The adapter searches DOAJ's open-access article index, maps typed metadata plus reported landing/PDF links, and never downloads or stores article bytes. DOAJ's collection status is retained only as a source-reported open-access claim; normal access verification still determines whether a link is currently usable and does not infer retention or redistribution rights. Citation thresholds and language filters cause this adapter to skip a query because its article-search result does not provide citation counts and its journal language is not a defensible article-language field. A document-type filter that excludes `ARTICLE` also skips it. Requests use an adapter-owned opaque page cursor, a 10-second whole-exchange deadline, a 100-record page cap, DOAJ's public 1,000-result window, and an 8 MiB streamed response limit. Override those deployment bounds with the positive `DOAJ_CONNECT_TIMEOUT`, `DOAJ_REQUEST_TIMEOUT`, and `DOAJ_MAX_RESPONSE_BYTES` settings; `DOAJ_BASE_URL` exists for controlled tests and mirrors.
 

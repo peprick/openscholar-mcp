@@ -1,0 +1,164 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/peprick/openscholar-mcp/security/vex/pgvector-gosu-2026-08-22",
+  "author": "OpenScholar maintainers",
+  "role": "Project maintainers",
+  "timestamp": "2026-08-22T15:45:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": { "name": "CVE-2025-61726" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact /usr/local/bin/gosu (SHA-256 52c8749d0142edd234e9d6bd5237dff2d81e71f43537e2f4f66f75dd4b243dd0) has no vulnerable symbol path under upstream binary-mode govulncheck v1.1.4. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2025-61729" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2025-68121" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-25679" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-27145" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-32280" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-32281" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-32283" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-33811" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-33814" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-33818" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-39820" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-39821" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-39822" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary imports the affected os package but calls no vulnerable symbol under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-39836" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-42499" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-42504" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-56853" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-56858" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-56859" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-56860" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    },
+    {
+      "vulnerability": { "name": "CVE-2026-56862" },
+      "products": [{ "@id": "pkg:oci/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f?arch=amd64&repository_url=index.docker.io%2Fpgvector%2Fpgvector", "subcomponents": [{ "@id": "pkg:golang/stdlib@v1.24.6" }] }],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The exact gosu binary has no vulnerable symbol path under the recorded upstream binary-mode govulncheck evidence. Reassess by 2026-09-22."
+    }
+  ]
+}
