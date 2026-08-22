@@ -40,9 +40,6 @@ export default async function CollectionPage({
         <Link className="backLink" href={"/library" as Route}>
           <span aria-hidden="true">←</span> Research library
         </Link>
-        <code className="recordId">
-          Collection {collection.collectionId.slice(0, 8)}
-        </code>
       </div>
       {!parsedPage.success ? (
         <div className="warningPanel" role="alert">

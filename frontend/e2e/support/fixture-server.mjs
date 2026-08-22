@@ -191,7 +191,7 @@ function searchResponse(searchId, nextPage = false) {
         totalMatches: 0,
       },
     ],
-    warnings: ["Crossref fixture intentionally reports degraded coverage."],
+    warnings: ["CROSSREF_SYNTHETIC_FAILURE"],
     results: [
       nextPage
         ? searchResult({
@@ -365,6 +365,16 @@ function relatedPapers(paperId) {
               documentType: "CONFERENCE_PAPER",
               language: "en",
               venue: "Molecular Learning Conference",
+              publisher: "OpenScholar Press",
+              institution: null,
+              volume: "7",
+              issue: "2",
+              pages: "18-29",
+              articleNumber: null,
+              edition: null,
+              isbn: [],
+              issn: ["2049-3630"],
+              degree: null,
               citationCount: 18,
               identifiers: {
                 doi: "10.5555/openscholar.2024.18",

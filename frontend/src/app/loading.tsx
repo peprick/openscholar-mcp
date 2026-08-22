@@ -5,7 +5,7 @@ export default function Loading(): React.JSX.Element {
         <span className="loadingPulse" aria-hidden="true" />
         <div>
           <strong>Loading research</strong>
-          <p>Reading the saved OpenScholar snapshot…</p>
+          <p>Loading your research view…</p>
         </div>
       </div>
     </main>

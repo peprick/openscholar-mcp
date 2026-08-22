@@ -9,11 +9,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "OpenScholar — Research with provenance",
+    default: "OpenScholar — Research with sources",
     template: "%s — OpenScholar",
   },
   description:
-    "Discover scholarly work, inspect its provenance, and find independently verified legal versions.",
+    "Discover scholarly work, see where paper details come from, and find checked free full-text links.",
 };
 
 export default function RootLayout({
@@ -31,15 +31,6 @@ export default function RootLayout({
             <nav aria-label="Primary navigation">
               <Link href="/">Search research</Link>
               <Link href={"/library" as Route}>My library</Link>
-              <Link href={"/jobs" as Route}>Refresh jobs</Link>
-              <a
-                className="aboutMcpLink"
-                href="https://modelcontextprotocol.io"
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                About MCP<span className="srOnly"> (opens in a new tab)</span>
-              </a>
               <AuthNavigation />
             </nav>
           </div>
@@ -48,12 +39,12 @@ export default function RootLayout({
         <footer className="siteFooter">
           <div className="shell footerInner">
             <p>
-              OpenScholar surfaces legal links and provenance. It never bypasses
-              publisher access controls.
+              OpenScholar shows where paper details come from and checks free
+              full-text links. It never bypasses publisher access controls.
             </p>
             <p>
-              Built with Spring Boot, PostgreSQL, and Next.js. Collections,
-              citation exports, and the legal-link reader are available.
+              Save papers into collections, export citations, and read checked
+              open versions without storing source PDFs.
             </p>
           </div>
         </footer>

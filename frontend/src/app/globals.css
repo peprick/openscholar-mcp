@@ -34,6 +34,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 96px;
 }
 
 body {
@@ -70,9 +71,8 @@ button:disabled {
 }
 
 :focus-visible {
-  border-radius: 4px;
-  outline: 3px solid #a84420;
-  outline-offset: 3px;
+  outline: 2px solid var(--green-dark);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -114,6 +114,10 @@ button:disabled {
   top: 16px;
 }
 
+#main-content {
+  scroll-margin-top: 96px;
+}
+
 .siteHeader {
   background: rgb(244 241 232 / 92%);
   border-bottom: 1px solid rgb(23 35 29 / 10%);
@@ -126,6 +130,7 @@ button:disabled {
 .headerInner {
   align-items: center;
   display: flex;
+  gap: 24px;
   justify-content: space-between;
   min-height: 76px;
 }
@@ -171,7 +176,9 @@ button:disabled {
 .siteHeader nav {
   align-items: center;
   display: flex;
-  gap: 28px;
+  gap: 24px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .siteHeader nav a {
@@ -206,7 +213,7 @@ button:disabled {
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: 0.82rem;
-  margin-top: 96px;
+  margin-top: 72px;
 }
 
 .footerInner {
@@ -674,7 +681,7 @@ button:disabled {
   align-items: center;
   border-bottom: 1px solid var(--line);
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   margin-bottom: 45px;
   padding-bottom: 17px;
 }
@@ -690,17 +697,8 @@ button:disabled {
   margin-right: 6px;
 }
 
-.recordId {
-  color: var(--ink-faint);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-}
-
 .searchSummary {
-  align-items: end;
-  display: grid;
-  gap: 40px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: block;
   margin-bottom: 34px;
 }
 
@@ -721,18 +719,6 @@ button:disabled {
 .searchSummary > div:first-child > p {
   color: var(--ink-soft);
   margin: 0;
-}
-
-.snapshotFacts {
-  align-items: flex-end;
-  display: grid;
-  gap: 6px;
-  justify-items: end;
-}
-
-.snapshotFacts > span:not(:first-child) {
-  color: var(--ink-faint);
-  font-size: 0.7rem;
 }
 
 .badge {
@@ -783,53 +769,12 @@ button:disabled {
   padding-left: 19px;
 }
 
+.warningPanel p {
+  margin: 5px 0 0;
+}
+
 .warningPanel--compact {
   margin: 16px 0;
-}
-
-.coverageBar {
-  align-items: center;
-  background: rgb(255 253 248 / 62%);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-bottom: 26px;
-  padding: 14px 17px;
-}
-
-.coverageBar > div {
-  align-items: center;
-  display: grid;
-  gap: 1px 10px;
-  grid-template-columns: auto auto;
-}
-
-.coverageBar span,
-.coverageBar strong {
-  font-size: 0.72rem;
-}
-
-.coverageBar span {
-  color: var(--green);
-  font-weight: 800;
-}
-
-.coverageBar strong {
-  color: var(--ink-soft);
-}
-
-.coverageBar small {
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  grid-column: 1 / -1;
-}
-
-.coverageBar > p {
-  color: var(--ink-faint);
-  font-size: 0.72rem;
-  margin: 0 0 0 auto;
 }
 
 .resultList {
@@ -838,17 +783,7 @@ button:disabled {
 
 .resultCard {
   border-bottom: 1px solid var(--line);
-  display: grid;
-  gap: 25px;
-  grid-template-columns: 48px minmax(0, 1fr);
   padding: 38px 0 40px;
-}
-
-.rankMarker {
-  color: var(--orange);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.86rem;
-  padding-top: 7px;
 }
 
 .resultBadges {
@@ -972,15 +907,13 @@ button:disabled {
   text-decoration: underline;
 }
 
-.rankingDetails,
-.providerDetails {
+.rankingDetails {
   color: var(--ink-faint);
   font-size: 0.72rem;
   margin-top: 16px;
 }
 
-.rankingDetails summary,
-.providerDetails summary {
+.rankingDetails summary {
   font-weight: 720;
   width: max-content;
 }
@@ -1201,16 +1134,7 @@ button:disabled {
 
 .relatedPaperHeading {
   align-items: flex-start;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 30px minmax(0, 1fr);
-}
-
-.relatedPaperRank {
-  color: var(--orange);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.76rem;
-  padding-top: 5px;
+  display: block;
 }
 
 .relatedPaperHeading h3 {
@@ -1235,7 +1159,7 @@ button:disabled {
 .relatedPaperList .authorLine,
 .relatedPaperFacts,
 .relatedPaperReason {
-  margin-left: 42px;
+  margin-left: 0;
 }
 
 .relatedPaperFacts {
@@ -1305,32 +1229,17 @@ button:disabled {
   top: 104px;
 }
 
-.completeness {
-  background: var(--green-dark);
-  border-radius: var(--radius) var(--radius) 0 0;
-  color: white;
-  padding: 20px;
+.metadataCardHeader {
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px 16px;
 }
 
-.completeness > div {
-  align-items: center;
-  display: flex;
-  font-size: 0.75rem;
-  justify-content: space-between;
-}
-
-.completeness strong {
+.metadataCardHeader h2 {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.45rem;
+  font-size: 1.35rem;
   font-weight: 400;
-}
-
-.completeness progress {
-  accent-color: var(--lime);
-  display: block;
-  height: 8px;
-  margin-top: 13px;
-  width: 100%;
+  letter-spacing: -0.025em;
+  margin: 4px 0 0;
 }
 
 .metadataList {
@@ -1419,42 +1328,12 @@ button:disabled {
   max-width: 650px;
 }
 
-.accessStateRow {
-  border-bottom: 1px solid var(--line);
-  border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 28px 0 22px;
-}
-
-.accessStateRow > div {
-  padding: 14px 18px;
-}
-
-.accessStateRow > div + div {
-  border-left: 1px solid var(--line);
-}
-
-.accessStateRow span {
-  color: var(--ink-faint);
-  display: block;
-  font-size: 0.66rem;
-  font-weight: 760;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.accessStateRow strong {
-  display: block;
-  font-size: 0.8rem;
-  margin-top: 3px;
-}
-
 .accessActions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
+  margin-top: 24px;
 }
 
 .accessMessage {
@@ -1463,26 +1342,6 @@ button:disabled {
   font-size: 0.78rem;
   margin: 5px 0 0;
   min-height: 1.2em;
-}
-
-.providerDetails {
-  border-top: 1px solid var(--line);
-  margin-top: 22px;
-  padding-top: 16px;
-}
-
-.providerDetails ul {
-  display: grid;
-  gap: 7px;
-  list-style: none;
-  margin: 11px 0 0;
-  padding: 0;
-}
-
-.providerDetails li {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 110px 1fr auto;
 }
 
 .accessLocationList {
@@ -1520,7 +1379,7 @@ button:disabled {
 .accessFacts {
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: 18px 0;
 }
 
@@ -2085,7 +1944,7 @@ button:disabled {
 .libraryIntro,
 .collectionHeader {
   border-bottom: 1px solid var(--line);
-  padding: 10px 0 48px;
+  padding: 10px 0 28px;
 }
 
 .libraryIntro h1,
@@ -2104,14 +1963,14 @@ button:disabled {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.06rem;
   line-height: 1.7;
-  margin: 0 0 20px;
+  margin: 0;
   max-width: 780px;
 }
 
 .libraryGrid {
   display: grid;
-  gap: 82px;
-  padding-top: 58px;
+  gap: 58px;
+  padding-top: 32px;
 }
 
 .librarySectionHeader {
@@ -2165,7 +2024,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 230px;
+  min-height: 205px;
   padding: 22px;
 }
 
@@ -2430,6 +2289,15 @@ button:disabled {
 }
 
 @media (max-width: 1000px) {
+  .collectionCreateForm {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .collectionCreateForm .button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
   .collectionCardGrid {
     grid-template-columns: 1fr 1fr;
   }
@@ -2479,6 +2347,10 @@ button:disabled {
 
   .batchExportBar {
     display: flex;
+  }
+
+  .librarySectionHeader .badge {
+    align-self: flex-start;
   }
 
   .batchExportBar .buttonGroup,
@@ -2543,9 +2415,8 @@ button:disabled {
     position: static;
   }
 
-  .completeness {
-    border-radius: var(--radius) 0 0 0;
-    grid-row: 1 / 3;
+  .metadataCardHeader {
+    grid-column: 1 / -1;
   }
 
   .accessLocationList {
@@ -2563,6 +2434,14 @@ button:disabled {
 }
 
 @media (max-width: 680px) {
+  html {
+    scroll-padding-top: 82px;
+  }
+
+  #main-content {
+    scroll-margin-top: 82px;
+  }
+
   .shell {
     padding-inline: 18px;
   }
@@ -2577,7 +2456,12 @@ button:disabled {
   }
 
   .siteHeader nav {
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .siteHeader nav a,
+  .authNavForm button {
+    font-size: 0.78rem;
   }
 
   .heroInner {
@@ -2651,20 +2535,6 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .snapshotFacts {
-    align-items: flex-start;
-    justify-items: start;
-  }
-
-  .coverageBar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .coverageBar > p {
-    margin-left: 0;
-  }
-
   .resultCard {
     gap: 10px;
     grid-template-columns: 1fr;
@@ -2719,31 +2589,13 @@ button:disabled {
     display: block;
   }
 
-  .completeness {
-    border-radius: var(--radius) var(--radius) 0 0;
-  }
-
   .accessPanelHeader,
   .citationActions {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .accessStateRow {
-    grid-template-columns: 1fr;
-  }
-
-  .accessStateRow > div + div {
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-
   .accessFacts {
-    grid-template-columns: 1fr;
-  }
-
-  .providerDetails li {
-    gap: 3px;
     grid-template-columns: 1fr;
   }
 
@@ -2784,6 +2636,12 @@ button:disabled {
     border-radius: var(--radius);
     min-height: 58vh;
     padding: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand > span {
+    display: none;
   }
 }
 

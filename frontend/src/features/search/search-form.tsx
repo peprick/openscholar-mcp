@@ -37,7 +37,7 @@ function requestFrom(form: HTMLFormElement): unknown {
       languages: language === "" ? [] : [language],
     },
     pageSize: 20,
-    forceRefresh: formData.get("forceRefresh") === "on",
+    forceRefresh: false,
   };
 }
 
@@ -126,14 +126,12 @@ export function SearchForm({
 
       const search = searchResponseSchema.safeParse(body);
       if (!search.success) {
-        setErrorMessage("The backend returned an unexpected search response.");
+        setErrorMessage("OpenScholar received an unexpected response. Please try again.");
         return;
       }
       router.push(`/searches/${search.data.searchId}` as Route);
     } catch {
-      setErrorMessage(
-        "OpenScholar could not reach the search service. Check the backend and retry.",
-      );
+      setErrorMessage("Search is temporarily unavailable. Please try again.");
     } finally {
       setPending(false);
     }
@@ -191,7 +189,7 @@ export function SearchForm({
       <details className="filterPanel">
         <summary>
           Refine search
-          <span>Year, type, language, citations, and cache</span>
+          <span>Year, type, language, and citations</span>
         </summary>
         <div className="filterGrid">
           <div className="fieldGroup fieldGroup--years">
@@ -286,19 +284,15 @@ export function SearchForm({
         <div className="optionRow">
           <label className="checkControl">
             <input name="openAccessOnly" type="checkbox" />
-            <span>Provider-reported open access only</span>
-          </label>
-          <label className="checkControl">
-            <input name="forceRefresh" type="checkbox" />
-            <span>Refresh provider results instead of reusing a fresh cache</span>
+            <span>Show papers marked as open access</span>
           </label>
         </div>
       </details>
 
       <p aria-live="polite" className="formStatus">
         {pending
-          ? "Searching cached snapshots and configured scholarly providers."
-          : "Searches are normalized, deduplicated, and saved for reuse."}
+          ? "Searching trusted research sources."
+          : "OpenScholar combines duplicate records and checks full-text access separately."}
       </p>
     </form>
   );

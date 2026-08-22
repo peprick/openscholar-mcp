@@ -14,10 +14,7 @@ import {
   type PaperAccessLocation,
   type PaperAccessResponse,
 } from "@/shared/api/schemas";
-import {
-  formatInstant,
-  humanizeEnum,
-} from "@/shared/formatting/display";
+import { humanizeEnum } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 import { ExternalLink } from "@/shared/ui/external-link";
 
@@ -36,6 +33,35 @@ function statusTone(
     return "warning";
   }
   return "neutral";
+}
+
+function accessStatusLabel(status: PaperAccessResponse["status"]): string {
+  switch (status) {
+    case "OPEN_PDF":
+      return "Free PDF";
+    case "OPEN_LANDING_PAGE":
+      return "Free full-text page";
+    case "REPOSITORY_COPY":
+      return "Repository copy";
+    case "PREPRINT":
+      return "Preprint available";
+    case "ABSTRACT_ONLY":
+      return "Abstract only";
+    case "RESTRICTED":
+      return "May require access";
+    case "UNKNOWN":
+      return "Not checked";
+    case "UNAVAILABLE":
+      return "No free version";
+  }
+}
+
+function verificationLabel(
+  status: PaperAccessLocation["verificationStatus"],
+): string {
+  if (status === "VERIFIED") return "Link checked";
+  if (status === "FAILED") return "Link unavailable";
+  return "Not checked";
 }
 
 function verifiedLocationHref(location: PaperAccessLocation): string | null {
@@ -60,12 +86,12 @@ function AccessLocation({
       <div className="accessLocationHeader">
         <div>
           <span className="eyebrow">
-            {canonicalBest ? "Best verified location" : "Alternative location"}
+            {canonicalBest ? "Recommended source" : "Another source"}
           </span>
           <h3>{location.hostDomain ?? humanizeEnum(location.hostType)}</h3>
         </div>
         <Badge tone={location.verificationStatus === "VERIFIED" ? "positive" : "warning"}>
-          {humanizeEnum(location.verificationStatus)}
+          {verificationLabel(location.verificationStatus)}
         </Badge>
       </div>
       <dl className="accessFacts">
@@ -74,23 +100,19 @@ function AccessLocation({
           <dd>{humanizeEnum(location.versionType)}</dd>
         </div>
         <div>
-          <dt>Source</dt>
+          <dt>Found through</dt>
           <dd>{location.source}</dd>
         </div>
         <div>
           <dt>License</dt>
           <dd>{location.license ?? "Not reported"}</dd>
         </div>
-        <div>
-          <dt>Verified</dt>
-          <dd>{formatInstant(location.verifiedAt)}</dd>
-        </div>
       </dl>
       {href !== null ? (
         <div className="buttonGroup accessLocationActions">
           {readerHref !== null ? (
             <Link className="button button--primary" href={readerHref}>
-              Read in OpenScholar
+              Read here
             </Link>
           ) : null}
           <ExternalLink
@@ -102,13 +124,13 @@ function AccessLocation({
             href={href}
           >
             {location.pdfUrl !== null
-              ? "Open verified PDF externally"
-              : "Open verified repository page"}
+              ? "Open PDF in a new tab"
+              : "Open full-text page"}
           </ExternalLink>
         </div>
       ) : (
         <p className="inlineNotice">
-          No independently verified external link is available for this record.
+          This source does not currently have a link OpenScholar can safely open.
         </p>
       )}
       {location.verificationStatus === "VERIFIED" &&
@@ -116,11 +138,11 @@ function AccessLocation({
       location.pdfUrl !== null &&
       readerHref === null ? (
         <p className="inlineNotice">
-          In-app reading requires a fresh, verified HTTPS PDF source.
+          Check access again to open this PDF in the reader.
         </p>
       ) : null}
       <p className="linkOnlyNote">
-        Direct source access · OpenScholar does not proxy or retain this document.
+        Opens from the original source. OpenScholar does not store this document.
       </p>
     </article>
   );
@@ -143,10 +165,9 @@ export function AccessPanel({
     baselineTick: null as number | null,
     baselineTime: Date.parse(initialNow),
   });
-  const [pendingAction, setPendingAction] = useState<"check" | "refresh" | null>(
-    null,
-  );
+  const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const hasResolved = access.cacheDisposition !== "NOT_YET_RESOLVED";
 
   function logicalNow(): number {
     const clock = logicalClockRef.current;
@@ -159,8 +180,8 @@ export function AccessPanel({
     );
   }
 
-  async function verify(forceRefresh: boolean): Promise<void> {
-    setPendingAction(forceRefresh ? "refresh" : "check");
+  async function verify(): Promise<void> {
+    setChecking(true);
     setMessage(null);
     try {
       const response = await fetch(
@@ -168,7 +189,7 @@ export function AccessPanel({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ forceRefresh }),
+          body: JSON.stringify({ forceRefresh: hasResolved }),
         },
       );
       const body: unknown = await response.json();
@@ -178,31 +199,31 @@ export function AccessPanel({
           const retry = problem.data.retryAfterSeconds;
           setMessage(
             retry === undefined
-              ? problem.data.detail
-              : `${problem.data.detail} Try again in ${retry} seconds.`,
+              ? "Access could not be checked right now. Please try again."
+              : `Access could not be checked right now. Try again in ${retry} seconds.`,
           );
         } else {
-          setMessage("Access providers could not complete this request.");
+          setMessage("Access could not be checked right now. Please try again.");
         }
         return;
       }
 
       const parsed = paperAccessResponseSchema.safeParse(body);
       if (!parsed.success || parsed.data.paperId !== paperId) {
-        setMessage("The backend returned an unexpected access response.");
+        setMessage("OpenScholar received an unexpected response. Please try again.");
         return;
       }
       setReaderSelectionTime(new Date(logicalNow()));
       setAccess(parsed.data);
       setMessage(
         parsed.data.locations.length > 0
-          ? "Legal-access information is ready."
-          : "The check completed, but no verified open location was found.",
+          ? "Free full-text options are ready."
+          : null,
       );
     } catch {
-      setMessage("OpenScholar could not reach the access service. Please retry.");
+      setMessage("Access could not be checked right now. Please try again.");
     } finally {
-      setPendingAction(null);
+      setChecking(false);
     }
   }
 
@@ -234,90 +255,37 @@ export function AccessPanel({
     return () => window.clearTimeout(timeout);
   }, [access.cacheDisposition, access.freshUntil, readerSelectionTime]);
 
-  const hasResolved = access.cacheDisposition !== "NOT_YET_RESOLVED";
-
   return (
     <section className="accessPanel" aria-labelledby="access-heading">
       <div className="accessPanelHeader">
         <div>
-          <span className="eyebrow">Independent access check</span>
-          <h2 id="access-heading">Legal versions</h2>
+          <span className="eyebrow">Free full-text access</span>
+          <h2 id="access-heading">Full-text options</h2>
           <p>
-            Links here come only from backend verification, never from an
-            unverified search-result PDF field.
+            OpenScholar checks free full-text links from scholarly sources before
+            showing them here.
           </p>
         </div>
-        <Badge tone={statusTone(access.status)}>{humanizeEnum(access.status)}</Badge>
+        <Badge tone={statusTone(access.status)}>{accessStatusLabel(access.status)}</Badge>
       </div>
-
-      <div className="accessStateRow">
-        <div>
-          <span>Cache state</span>
-          <strong>{humanizeEnum(access.cacheDisposition)}</strong>
-        </div>
-        <div>
-          <span>Checked</span>
-          <strong>{formatInstant(access.checkedAt)}</strong>
-        </div>
-        <div>
-          <span>Locations</span>
-          <strong>{access.locations.length}</strong>
-        </div>
-      </div>
-
-      {access.warnings.length > 0 ? (
-        <div className="warningPanel warningPanel--compact">
-          <strong>Access warnings</strong>
-          <ul>
-            {access.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       <div className="accessActions">
         <button
           className="button button--primary"
-          disabled={pendingAction !== null}
-          onClick={() => void verify(false)}
+          disabled={checking}
+          onClick={() => void verify()}
           type="button"
         >
-          {pendingAction === "check"
+          {checking
             ? "Checking…"
             : hasResolved
-              ? "Check cached access"
-              : "Check legal access"}
+              ? "Check again"
+              : "Check for free full text"}
         </button>
-        {hasResolved ? (
-          <button
-            className="button button--ghost"
-            disabled={pendingAction !== null}
-            onClick={() => void verify(true)}
-            type="button"
-          >
-            {pendingAction === "refresh" ? "Refreshing…" : "Refresh providers"}
-          </button>
-        ) : null}
         <p aria-live="polite" className="accessMessage" role="status">
           {message}
         </p>
       </div>
-
-      {access.providerCoverage.length > 0 ? (
-        <details className="providerDetails">
-          <summary>Access provider coverage</summary>
-          <ul>
-            {access.providerCoverage.map((provider) => (
-              <li key={provider.provider}>
-                <strong>{provider.provider}</strong>
-                <span>{humanizeEnum(provider.status)}</span>
-                <span>{provider.candidateCount} candidates</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
 
       {access.locations.length > 0 ? (
         <div className="accessLocationList">
@@ -341,10 +309,17 @@ export function AccessPanel({
         </div>
       ) : (
         <div className="noAccessLocation">
-          <strong>No verified location stored yet.</strong>
+          <strong>
+            {!hasResolved
+              ? "Full text has not been checked yet."
+              : "No free full text found yet."}
+          </strong>
           <p>
-            Run an access check to query the providers supported by this paper’s
-            DOI or arXiv identifier.
+            {access.cacheDisposition === "NO_SUPPORTED_IDENTIFIER"
+              ? "This paper does not have a DOI or arXiv ID that OpenScholar can check."
+              : !hasResolved
+                ? "Check trusted research sources for a free copy you can read."
+                : "OpenScholar only shows links it can check. You can try again later."}
           </p>
         </div>
       )}

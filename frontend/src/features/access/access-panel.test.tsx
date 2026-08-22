@@ -58,7 +58,7 @@ describe("AccessPanel", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "No independently verified external link is available for this record.",
+        "This source does not currently have a link OpenScholar can safely open.",
       ),
     ).toBeVisible();
     expect(document.querySelector(`[href="${unverifiedPdf}"]`)).toBeNull();
@@ -79,7 +79,7 @@ describe("AccessPanel", () => {
     );
 
     const readerLink = screen.getByRole("link", {
-      name: "Read in OpenScholar",
+      name: "Read here",
     });
     expect(readerLink).toHaveAttribute(
       "href",
@@ -88,7 +88,7 @@ describe("AccessPanel", () => {
     expect(readerLink).not.toHaveAttribute("target");
 
     const externalLink = screen.getByRole("link", {
-      name: /Open verified PDF externally/,
+      name: /Open PDF in a new tab/,
     });
     expect(externalLink).toHaveAttribute("href", verifiedPdf);
     expect(externalLink).toHaveAttribute("target", "_blank");
@@ -115,10 +115,10 @@ describe("AccessPanel", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+      screen.queryByRole("link", { name: "Read here" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open verified repository page/ }),
+      screen.getByRole("link", { name: /Open full-text page/ }),
     ).toBeVisible();
   });
 
@@ -138,15 +138,38 @@ describe("AccessPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Unavailable")).toBeVisible();
-    expect(screen.getByText("No verified location stored yet.")).toBeVisible();
+    expect(screen.getByText("No free version")).toBeVisible();
+    expect(screen.getByText("No free full text found yet.")).toBeVisible();
     expect(
-      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+      screen.queryByRole("link", { name: "Read here" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Check cached access" }),
+      screen.getByRole("button", { name: "Check again" }),
     ).toBeVisible();
+  });
+
+  it("keeps provider diagnostics and raw warning codes out of the reader view", () => {
+    render(
+      <AccessPanel
+        initialAccess={paperAccessResponseFixture({
+          bestLocationId: null,
+          locations: [],
+          providerCoverage: [
+            { provider: "UNPAYWALL", status: "NOT_CONFIGURED", candidateCount: 0 },
+          ],
+          warnings: ["UNPAYWALL_NOT_CONFIGURED"],
+        })}
+        initialNow={initialNow}
+        paperId={testIds.paper}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Full-text options" })).toBeVisible();
+    expect(screen.queryByText("UNPAYWALL_NOT_CONFIGURED")).not.toBeInTheDocument();
+    expect(screen.queryByText("Access provider coverage")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cache state")).not.toBeInTheDocument();
+    expect(screen.queryByText(/candidates/i)).not.toBeInTheDocument();
   });
 
   it("keeps a stale verified PDF external-only until access is refreshed", () => {
@@ -164,14 +187,14 @@ describe("AccessPanel", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+      screen.queryByRole("link", { name: "Read here" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open verified PDF externally/ }),
+      screen.getByRole("link", { name: /Open PDF in a new tab/ }),
     ).toBeVisible();
     expect(
       screen.getByText(
-        "In-app reading requires a fresh, verified HTTPS PDF source.",
+        "Check access again to open this PDF in the reader.",
       ),
     ).toBeVisible();
   });
@@ -191,16 +214,16 @@ describe("AccessPanel", () => {
       />,
     );
     expect(
-      screen.getByRole("link", { name: "Read in OpenScholar" }),
+      screen.getByRole("link", { name: "Read here" }),
     ).toBeVisible();
 
     await act(async () => vi.advanceTimersByTimeAsync(1_001));
 
     expect(
-      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+      screen.queryByRole("link", { name: "Read here" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open verified PDF externally/ }),
+      screen.getByRole("link", { name: /Open PDF in a new tab/ }),
     ).toBeVisible();
   });
 
@@ -223,11 +246,11 @@ describe("AccessPanel", () => {
       />,
     );
     await user.click(
-      screen.getByRole("button", { name: "Check legal access" }),
+      screen.getByRole("button", { name: "Check for free full text" }),
     );
 
     expect(
-      await screen.findByRole("link", { name: "Read in OpenScholar" }),
+      await screen.findByRole("link", { name: "Read here" }),
     ).toHaveAttribute(
       "href",
       `/papers/${testIds.paper}/read/${testIds.location}`,
@@ -260,16 +283,16 @@ describe("AccessPanel", () => {
       />,
     );
     await user.click(
-      screen.getByRole("button", { name: "Check legal access" }),
+      screen.getByRole("button", { name: "Check for free full text" }),
     );
 
     expect(
       await screen.findByText(
-        "The backend returned an unexpected access response.",
+        "OpenScholar received an unexpected response. Please try again.",
       ),
     ).toBeVisible();
     expect(
-      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+      screen.queryByRole("link", { name: "Read here" }),
     ).not.toBeInTheDocument();
   });
 

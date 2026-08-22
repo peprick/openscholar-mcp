@@ -78,7 +78,7 @@ describe("SearchPagination", () => {
 
     expect(
       await screen.findByText(
-        "This search snapshot has no additional provider page.",
+        "More results could not be loaded right now. Please try again.",
       ),
     ).toBeVisible();
     expect(navigation.push).not.toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe("SearchPagination", () => {
 
     expect(
       await screen.findByText(
-        "The backend returned an unexpected search response.",
+        "OpenScholar received an unexpected response. Please try again.",
       ),
     ).toBeVisible();
     expect(navigation.push).not.toHaveBeenCalled();

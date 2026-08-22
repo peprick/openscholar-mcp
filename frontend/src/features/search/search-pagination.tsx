@@ -4,10 +4,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import {
-  apiProblemSchema,
-  searchResponseSchema,
-} from "@/shared/api/schemas";
+import { searchResponseSchema } from "@/shared/api/schemas";
 
 export function SearchPagination({
   searchId,
@@ -28,25 +25,18 @@ export function SearchPagination({
       );
       const body: unknown = await response.json();
       if (!response.ok) {
-        const problem = apiProblemSchema.safeParse(body);
-        setMessage(
-          problem.success
-            ? problem.data.detail
-            : "The next page of results could not be loaded.",
-        );
+        setMessage("More results could not be loaded right now. Please try again.");
         return;
       }
 
       const nextPage = searchResponseSchema.safeParse(body);
       if (!nextPage.success || nextPage.data.searchId === searchId) {
-        setMessage("The backend returned an unexpected search response.");
+        setMessage("OpenScholar received an unexpected response. Please try again.");
         return;
       }
       router.push(`/searches/${nextPage.data.searchId}` as Route);
     } catch {
-      setMessage(
-        "OpenScholar could not reach the search service. Please retry.",
-      );
+      setMessage("More results could not be loaded right now. Please try again.");
     } finally {
       setPending(false);
     }

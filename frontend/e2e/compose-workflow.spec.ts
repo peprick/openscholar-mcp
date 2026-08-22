@@ -74,7 +74,6 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   if (collectionHref === null) throw new Error("Created collection link has no href");
 
   await page.goto("/");
-  await expect(page.getByText("Backend connected")).toBeVisible();
   await page.getByRole("searchbox", { name: "Research topic" }).fill(topic);
   const coldSearchResponse = page.waitForResponse(
     (response) =>
@@ -89,15 +88,14 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   });
 
   await expect(page.getByRole("heading", { level: 1, name: topic })).toBeVisible();
-  await expect(page.getByText("Exact Hit", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Compose-backed graph retrieval study" }),
   ).toHaveCount(1);
   await expect(
     page.getByRole("link", { name: "Compose-backed restricted benchmark" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Provider coverage")).toContainText("3 returned");
-  await expect(page.getByLabel("Provider coverage")).toContainText("3 matches");
+  await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Provider coverage")).toHaveCount(0);
   const firstSearchUrl = page.url();
   await expectNoSeriousAccessibilityViolations(page);
   await capturePortfolioScreenshot(page, "search-results.png");
@@ -115,7 +113,7 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   await expect(cachedSearch.json()).resolves.toMatchObject({
     cacheDisposition: "EXACT_HIT",
   });
-  await expect(page.getByText("Exact Hit", { exact: true })).toBeVisible();
+  await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);
   expect(page.url()).toBe(firstSearchUrl);
 
   await page
@@ -127,7 +125,7 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
       name: "Compose-backed graph retrieval study",
     }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Provenance" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible();
   await page.getByRole("button", { name: "Save to collection" }).click();
   await page
     .getByLabel("Collection", { exact: true })

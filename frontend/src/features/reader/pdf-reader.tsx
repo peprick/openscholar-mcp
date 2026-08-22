@@ -11,7 +11,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { startPdfLoad } from "@/features/reader/pdfjs-loader";
 import type { ReaderSource } from "@/features/reader/reader-source";
-import { formatInstant, humanizeEnum } from "@/shared/formatting/display";
+import { humanizeEnum } from "@/shared/formatting/display";
 import { ExternalLink } from "@/shared/ui/external-link";
 
 const MIN_ZOOM = 0.75;
@@ -478,7 +478,7 @@ function PdfReaderSession({
         </div>
         <div className="readerExternalActions">
           <ExternalLink className="button button--primary" href={source.pdfUrl}>
-            Open verified PDF externally
+            Open PDF in a new tab
           </ExternalLink>
           {source.landingPageUrl !== null &&
           source.landingPageUrl !== source.pdfUrl ? (
@@ -494,16 +494,16 @@ function PdfReaderSession({
 
       <dl className="readerProvenance">
         <div>
-          <dt>Verified</dt>
-          <dd>{formatInstant(source.verifiedAt)}</dd>
+          <dt>Link status</dt>
+          <dd>Checked by OpenScholar</dd>
         </div>
         <div>
-          <dt>Licence</dt>
+          <dt>License</dt>
           <dd>{source.license ?? "Not reported"}</dd>
         </div>
         <div>
-          <dt>Handling</dt>
-          <dd>Direct, link-only browser load</dd>
+          <dt>Document source</dt>
+          <dd>{source.hostDomain}</dd>
         </div>
       </dl>
 
@@ -677,9 +677,8 @@ function PdfReaderSession({
             <span className="eyebrow">External fallback ready</span>
             <h2>This PDF cannot be displayed inside OpenScholar.</h2>
             <p>
-              The source may block cross-origin reading, require browser access,
-              or have changed since verification. Open the same verified URL
-              externally, or retry the direct browser load.
+              Some sources do not allow their PDFs to appear on other sites, or
+              the file may have moved. Open it in a new tab or try the reader again.
             </p>
             <div className="buttonGroup">
               <button
@@ -693,7 +692,7 @@ function PdfReaderSession({
                 className="button button--primary"
                 href={source.pdfUrl}
               >
-                Open verified PDF externally
+                Open PDF in a new tab
               </ExternalLink>
             </div>
           </div>
@@ -727,10 +726,8 @@ function PdfReaderSession({
       ) : null}
 
       <p className="readerPolicyNote">
-        PDF.js requests this document directly from the verified host. OpenScholar
-        does not proxy, persist, or redistribute its bytes. A bounded page-text
-        representation is exposed to assistive technology when extraction is
-        available. Use Show page text to make that extraction visible, or use an
+        This document loads from its original source and is not stored by
+        OpenScholar. Page text is available when the source allows it; use an
         external PDF reader for document search and native controls.
       </p>
     </section>

@@ -96,11 +96,17 @@ test.afterEach(async ({ page }) => {
   expect(unexpectedExternalRequests.get(page) ?? []).toEqual([]);
 });
 
-test("search exposes cache state, provider coverage, and immutable next-page context", async ({
+test("search keeps diagnostics private while preserving useful next-page context", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(page.getByText("Backend connected")).toBeVisible();
+  const primaryNavigation = page.getByRole("navigation", {
+    name: "Primary navigation",
+  });
+  await expect(primaryNavigation.getByRole("link", { name: "Search research" })).toBeVisible();
+  await expect(primaryNavigation.getByRole("link", { name: "My library" })).toBeVisible();
+  await expect(primaryNavigation.getByRole("link", { name: "Refresh jobs" })).toHaveCount(0);
+  await expect(primaryNavigation.getByRole("link", { name: "About MCP" })).toHaveCount(0);
 
   await page
     .getByRole("searchbox", { name: "Research topic" })
@@ -114,18 +120,17 @@ test("search exposes cache state, provider coverage, and immutable next-page con
       name: "graph neural networks for drug discovery",
     }),
   ).toBeVisible();
-  await expect(page.getByText("Exact Hit", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Provider coverage")).toContainText(
-    "OPENALEX",
+  await expect(page.getByLabel("Search notice")).toContainText(
+    "Some research sources could not be reached.",
   );
-  await expect(page.getByLabel("Provider coverage")).toContainText("SUCCESS");
-  await expect(page.getByLabel("Search warnings")).toContainText(
-    "Crossref fixture intentionally reports degraded coverage.",
-  );
+  await expect(page.getByText("CROSSREF_SYNTHETIC_FAILURE")).toHaveCount(0);
+  await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Provider coverage")).toHaveCount(0);
 
-  await page.getByText("Why this result?").click();
-  await expect(page.getByText(/Record from OPENALEX/)).toBeVisible();
-  await expect(page.getByText(/provider-reported/)).toBeVisible();
+  await page.getByText("Why it matched").click();
+  await expect(page.getByText(/Metadata from OPENALEX/)).toBeVisible();
+  await expect(page.getByText(/OpenScholar checks links/)).toBeVisible();
+  await expect(page.getByText(/Score:/)).toHaveCount(0);
   await expectNoSeriousAccessibilityViolations(page);
 
   await page.getByRole("button", { name: "Next results" }).click();
@@ -135,10 +140,10 @@ test("search exposes cache state, provider coverage, and immutable next-page con
       name: "A publisher-restricted molecular benchmark",
     }),
   ).toBeVisible();
-  await expect(page.getByText("Miss Fetched", { exact: true })).toBeVisible();
+  await expect(page.getByText("Miss Fetched", { exact: true })).toHaveCount(0);
 });
 
-test("paper provenance distinguishes verified reading from restricted access", async ({
+test("paper sources distinguish readable links from restricted access", async ({
   page,
 }) => {
   await page.goto(`/papers/${ids.verifiedPaper}`);
@@ -148,11 +153,11 @@ test("paper provenance distinguishes verified reading from restricted access", a
       name: "Graph neural networks for molecular property prediction",
     }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Provenance" })).toBeVisible();
-  await expect(page.getByText("Authorship source")).toBeVisible();
-  await expect(page.getByText("Open Pdf", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible();
+  await expect(page.getByText("Author details")).toBeVisible();
+  await expect(page.getByText("Free PDF", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read in OpenScholar" }),
+    page.getByRole("link", { name: "Read here" }),
   ).toBeVisible();
   await expect(page.getByText("CC-BY-4.0")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
@@ -164,16 +169,18 @@ test("paper provenance distinguishes verified reading from restricted access", a
       name: "A publisher-restricted molecular benchmark",
     }),
   ).toBeVisible();
-  await expect(page.getByText("Restricted", { exact: true })).toBeVisible();
-  await expect(page.getByText("Failed", { exact: true })).toBeVisible();
+  await expect(page.getByText("May require access", { exact: true })).toBeVisible();
+  await expect(page.getByText("Link unavailable", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
-      "No independently verified external link is available for this record.",
+      "This source does not currently have a link OpenScholar can safely open.",
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read in OpenScholar" }),
+    page.getByRole("link", { name: "Read here" }),
   ).toHaveCount(0);
+  await expect(page.getByText("Cache state")).toHaveCount(0);
+  await expect(page.getByText("Access provider coverage")).toHaveCount(0);
   await expectNoSeriousAccessibilityViolations(page);
 });
 

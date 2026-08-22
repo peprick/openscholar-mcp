@@ -70,27 +70,26 @@ export default async function ReaderPage({
         <Link className="backLink" href={paperRoute}>
           <span aria-hidden="true">←</span> Paper details
         </Link>
-        <code className="recordId">Verified source</code>
       </div>
 
       {source === null ? (
         <section className="readerUnavailable" aria-labelledby="reader-unavailable-heading">
-          <span className="eyebrow">Fresh verification required</span>
-          <h1 id="reader-unavailable-heading">Reader access has expired.</h1>
+          <span className="eyebrow">Access check needed</span>
+          <h1 id="reader-unavailable-heading">This reader link has expired.</h1>
           <p>
             OpenScholar will not automatically load a stale document URL. Return
-            to the paper, refresh its legal-access providers, or open the last
-            verified HTTPS location externally.
+            to the paper to check access again, or open the last verified source
+            directly.
           </p>
           <div className="buttonGroup">
             <Link className="button button--primary" href={paperRoute}>
-              Refresh on paper details
+              Check access on paper page
             </Link>
             <ExternalLink
               className="button button--ghost"
               href={verifiedLocation.pdfUrl}
             >
-              Open last verified PDF externally
+              Open PDF in a new tab
             </ExternalLink>
           </div>
         </section>

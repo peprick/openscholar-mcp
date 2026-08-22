@@ -252,6 +252,16 @@ export const relatedPapersResponseSchema = z
           documentType: documentTypeSchema,
           language: z.string().nullable(),
           venue: z.string().nullable(),
+          publisher: z.string().nullable(),
+          institution: z.string().nullable(),
+          volume: z.string().nullable(),
+          issue: z.string().nullable(),
+          pages: z.string().nullable(),
+          articleNumber: z.string().nullable(),
+          edition: z.string().nullable(),
+          isbn: z.array(z.string()),
+          issn: z.array(z.string()),
+          degree: z.string().nullable(),
           citationCount: z.number().int().nonnegative().nullable(),
           identifiers: z
             .object({

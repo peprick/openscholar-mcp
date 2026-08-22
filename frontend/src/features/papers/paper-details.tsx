@@ -3,9 +3,7 @@ import type {
   RelatedPapersResponse,
 } from "@/shared/api/schemas";
 import {
-  formatInstant,
   formatInteger,
-  formatPercent,
   formatPublicationDate,
   humanizeEnum,
   identifierHref,
@@ -49,7 +47,7 @@ export function PaperDetails({
       <div className="paperLayout">
         <div className="paperMain">
           <section className="paperSection" aria-labelledby="abstract-heading">
-            <span className="eyebrow">Canonical metadata</span>
+            <span className="eyebrow">Paper overview</span>
             <h2 id="abstract-heading">Abstract</h2>
             {paper.abstractText !== null ? (
               <p className="abstractText">{paper.abstractText}</p>
@@ -69,12 +67,11 @@ export function PaperDetails({
                       <strong>{author.name}</strong>
                       {author.corresponding ? <Badge tone="info">Corresponding</Badge> : null}
                     </div>
+                    {author.orcid !== null ? (
                     <div className="authorIdentifiers">
                       {author.orcid !== null ? <code>ORCID {author.orcid}</code> : null}
-                      {author.openAlexId !== null ? (
-                        <code>OpenAlex {author.openAlexId}</code>
-                      ) : null}
                     </div>
+                    ) : null}
                   </li>
                 ))}
               </ol>
@@ -86,12 +83,10 @@ export function PaperDetails({
           <RelatedPapers related={related} unavailable={relatedUnavailable} />
 
           <section className="paperSection" aria-labelledby="provenance-heading">
-            <span className="eyebrow">Record-level evidence</span>
-            <h2 id="provenance-heading">Provenance</h2>
+            <span className="eyebrow">Where this came from</span>
+            <h2 id="provenance-heading">Sources</h2>
             <p className="sectionDescription">
-              These records contributed to the canonical paper. The authorship
-              marker identifies the source used for the ordered credited names;
-              it is not field-by-field attribution.
+              OpenScholar combines trusted research databases into one paper record.
             </p>
             <div className="provenanceList">
               {paper.provenance.map((record) => (
@@ -99,20 +94,9 @@ export function PaperDetails({
                   <div>
                     <strong>{record.provider}</strong>
                     {record.authorshipSource ? (
-                      <Badge tone="info">Authorship source</Badge>
+                      <Badge tone="info">Author details</Badge>
                     ) : null}
                   </div>
-                  <code>{record.providerRecordId}</code>
-                  <dl>
-                    <div>
-                      <dt>Retrieved</dt>
-                      <dd>{formatInstant(record.retrievedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Provider updated</dt>
-                      <dd>{formatInstant(record.providerUpdatedAt)}</dd>
-                    </div>
-                  </dl>
                   {record.sourceUrl !== null ? (
                     <ExternalLink className="textLink" href={record.sourceUrl}>
                       View source record
@@ -125,14 +109,9 @@ export function PaperDetails({
         </div>
 
         <aside className="metadataCard" aria-label="Paper metadata">
-          <div className="completeness">
-            <div>
-              <span>Metadata completeness</span>
-              <strong>{formatPercent(paper.metadataCompleteness)}</strong>
-            </div>
-            <progress max="1" value={paper.metadataCompleteness}>
-              {formatPercent(paper.metadataCompleteness)}
-            </progress>
+          <div className="metadataCardHeader">
+            <span className="eyebrow">At a glance</span>
+            <h2>Paper details</h2>
           </div>
           <dl className="metadataList">
             <div>
@@ -146,12 +125,12 @@ export function PaperDetails({
               </dd>
             </div>
             <div>
-              <dt>Citation count as of</dt>
-              <dd>{formatInstant(paper.citationCountAsOf)}</dd>
+              <dt>Venue</dt>
+              <dd>{paper.venueName ?? "Not available"}</dd>
             </div>
             <div>
-              <dt>Metadata updated</dt>
-              <dd>{formatInstant(paper.metadataUpdatedAt)}</dd>
+              <dt>Language</dt>
+              <dd>{paper.language?.toUpperCase() ?? "Not available"}</dd>
             </div>
           </dl>
           <div className="identifierPanel">

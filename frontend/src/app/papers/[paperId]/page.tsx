@@ -70,7 +70,6 @@ export default async function PaperPage({
         <Link className="backLink" href="/">
           <span aria-hidden="true">←</span> Search research
         </Link>
-        <code className="recordId">Paper {paper.paperId.slice(0, 8)}</code>
       </div>
       <PaperDetails
         paper={paper}

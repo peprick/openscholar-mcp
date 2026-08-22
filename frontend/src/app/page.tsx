@@ -38,8 +38,8 @@ export default async function HomePage({
             <em>Trace the evidence.</em>
           </h1>
           <p className="heroLead">
-            Search scholarly indexes, revisit cached results, and open only legal
-            versions that OpenScholar has independently checked.
+            Search research papers, save what matters, and find free full-text
+            versions from trusted scholarly sources.
           </p>
           <SearchForm initialQuery={initialQuery} />
           <div className="topicSuggestions" aria-label="Example research topics">
@@ -55,32 +55,31 @@ export default async function HomePage({
 
       <section className="shell trustSection" aria-labelledby="trust-heading">
         <div className="sectionIntro">
-          <span className="eyebrow">A research trail you can inspect</span>
-          <h2 id="trust-heading">Useful results without hiding their origin.</h2>
+          <span className="eyebrow">Research you can trust</span>
+          <h2 id="trust-heading">Useful results with their sources in view.</h2>
         </div>
         <div className="valueGrid">
           <article>
             <span className="valueNumber">01</span>
-            <h3>Canonical records</h3>
+            <h3>Clear paper records</h3>
             <p>
-              Duplicate provider records become one stable paper with ordered
-              credited authors and identifiers.
+              Duplicate listings are combined so each paper is easier to understand
+              and save.
             </p>
           </article>
           <article>
             <span className="valueNumber">02</span>
-            <h3>Visible provenance</h3>
+            <h3>Sources you can see</h3>
             <p>
-              Every detail page exposes its source records, retrieval dates, and
-              canonical authorship source.
+              Paper pages show which research databases supplied the information.
             </p>
           </article>
           <article>
             <span className="valueNumber">03</span>
-            <h3>Verified access</h3>
+            <h3>Links checked before opening</h3>
             <p>
-              Provider-reported claims stay distinct from links independently
-              checked through Unpaywall or arXiv.
+              OpenScholar checks free links from sources such as Unpaywall and arXiv
+              before showing them.
             </p>
           </article>
         </div>

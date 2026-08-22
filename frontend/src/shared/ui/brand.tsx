@@ -15,7 +15,7 @@ export function Brand(): React.JSX.Element {
       </svg>
       <span>
         <strong>OpenScholar</strong>
-        <small>Research, with provenance</small>
+        <small>Research, with sources</small>
       </span>
     </Link>
   );

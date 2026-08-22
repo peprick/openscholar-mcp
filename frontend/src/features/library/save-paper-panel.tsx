@@ -144,7 +144,7 @@ export function SavePaperPanel({
         <span className="eyebrow">Build your reading list</span>
         <h2 id="save-paper-heading">Save to your library</h2>
         <p>
-          Keep the canonical paper reference, reading progress, and personal tags.
+          Keep the paper, your reading progress, and personal tags together.
           OpenScholar does not save the source PDF.
         </p>
       </div>

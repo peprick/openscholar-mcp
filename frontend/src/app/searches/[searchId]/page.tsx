@@ -38,7 +38,6 @@ export default async function SearchPage({
         <Link className="backLink" href="/">
           <span aria-hidden="true">←</span> New search
         </Link>
-        <code className="recordId">Search {search.searchId.slice(0, 8)}</code>
       </div>
       <SearchResults search={search} />
     </main>

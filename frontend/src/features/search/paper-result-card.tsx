@@ -10,11 +10,23 @@ import {
 } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 
+function matchReasonLabel(feature: string): string {
+  if (feature === "TEXT_RELEVANCE") return "Similar words in the title or abstract";
+  if (feature === "CITATION_SIGNAL") return "Frequently cited paper";
+  if (feature === "PROVIDER_RECIPROCAL_RANK_FUSION") {
+    return "Appears across research sources";
+  }
+  return "Strong topic match";
+}
+
 export function PaperResultCard({
   result,
 }: {
   result: SearchResult;
 }): React.JSX.Element {
+  const matchReasons = Array.from(
+    new Set(result.rankingReasons.map((reason) => matchReasonLabel(reason.feature))),
+  );
   const identifiers = [
     result.identifiers.doi === null ? null : `DOI ${result.identifiers.doi}`,
     result.identifiers.arxiv === null
@@ -24,14 +36,11 @@ export function PaperResultCard({
 
   return (
     <article className="resultCard">
-      <div className="rankMarker" aria-label={`Result rank ${result.rank}`}>
-        {String(result.rank).padStart(2, "0")}
-      </div>
       <div className="resultContent">
         <div className="resultBadges">
           <Badge>{humanizeEnum(result.documentType)}</Badge>
           {result.reportedOpenAccess ? (
-            <Badge tone="positive">Provider reports open access</Badge>
+            <Badge tone="positive">Open access reported</Badge>
           ) : null}
         </div>
         <h2>
@@ -61,7 +70,7 @@ export function PaperResultCard({
           <p className="resultAbstract">{result.abstractText}</p>
         ) : (
           <p className="resultAbstract resultAbstract--muted">
-            No abstract was supplied by the provider.
+            No abstract available.
           </p>
         )}
         <div className="resultFooter">
@@ -80,29 +89,23 @@ export function PaperResultCard({
             className="textLink"
             href={`/papers/${result.paperId}` as Route}
           >
-            Inspect paper and access <span aria-hidden="true">→</span>
+            View paper &amp; access <span aria-hidden="true">→</span>
           </Link>
         </div>
         <details className="rankingDetails">
-          <summary>Why this result?</summary>
+          <summary>Why it matched</summary>
           <div>
-            <p>
-              Score: {result.score === null ? "not reported" : result.score.toFixed(3)}
-            </p>
-            {result.rankingReasons.length > 0 ? (
+            {matchReasons.length > 0 ? (
               <ul>
-                {result.rankingReasons.map((reason) => (
-                  <li key={reason.feature}>
-                    {humanizeEnum(reason.feature)}
-                    {reason.value === null ? "" : `: ${reason.value.toFixed(3)}`}
-                  </li>
+                {matchReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
                 ))}
               </ul>
             ) : null}
             <p>
-              Record from {result.provenance.map((item) => item.provider).join(", ")}.
-              Open-access labels on this card are provider-reported; verified links
-              appear on the paper page.
+              Metadata from {result.provenance.map((item) => item.provider).join(", ")}.
+              Open-access labels come from those sources; OpenScholar checks links
+              on the paper page.
             </p>
           </div>
         </details>

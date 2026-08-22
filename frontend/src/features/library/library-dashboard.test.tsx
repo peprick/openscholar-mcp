@@ -164,8 +164,10 @@ describe("LibraryDashboard", () => {
     await user.click(screen.getByRole("button", { name: "Create collection" }));
 
     expect(await screen.findByText("Created “New review queue”.")).toBeInTheDocument();
-    expect(screen.getByText("2 of 2 shown")).toBeInTheDocument();
+    expect(screen.getByText("2 collections")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "New review queue" })).toBeInTheDocument();
+    expect(screen.getByText("1 saved item")).toBeInTheDocument();
+    expect(screen.queryByText(/memberships/i)).not.toBeInTheDocument();
     expect(screen.getByText("1", { selector: ".batchExportBar strong" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export BibTeX" })).toBeEnabled();
     expect(navigation.refresh).not.toHaveBeenCalled();

@@ -63,6 +63,11 @@ describe("PaperPage", () => {
         name: "Message passing networks for molecular discovery",
       }),
     ).toHaveAttribute("href", `/papers/${testIds.relatedPaper}`);
+    expect(screen.getByRole("heading", { name: "Sources" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Paper details" })).toBeVisible();
+    expect(screen.queryByText("Metadata completeness")).not.toBeInTheDocument();
+    expect(screen.queryByText("Citation count as of")).not.toBeInTheDocument();
+    expect(screen.queryByText("Metadata updated")).not.toBeInTheDocument();
   });
 
   it("rejects malformed paper IDs before any backend request", async () => {

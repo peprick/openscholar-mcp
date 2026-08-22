@@ -17,18 +17,23 @@ export function RelatedPapers({
   related: RelatedPapersResponse;
   unavailable?: boolean;
 }): React.JSX.Element {
+  function matchDescription(feature: string | undefined): string {
+    if (feature === "CLAMPED_COSINE") return "Similar topic";
+    if (feature === "POSTGRES_FULL_TEXT") return "Similar title or abstract";
+    return "Similar paper";
+  }
+
   return (
     <section className="paperSection" aria-labelledby="related-papers-heading">
-      <span className="eyebrow">Experimental local relevance</span>
+      <span className="eyebrow">Keep exploring</span>
       <h2 id="related-papers-heading">Related papers</h2>
       <p className="sectionDescription">
-        Ranked from title, abstract, and venue matches among papers already
-        stored in OpenScholar.
+        Suggestions based on similarities in title, abstract, and publication venue.
       </p>
       {unavailable ? (
         <p className="inlineNotice" role="status">
-          Related papers are temporarily unavailable. The canonical paper
-          details remain available.
+          Related papers are temporarily unavailable. This paper’s details are
+          still available.
         </p>
       ) : related.results.length === 0 ? (
         <p className="inlineNotice">
@@ -40,9 +45,6 @@ export function RelatedPapers({
             <li key={result.paperId}>
               <article>
                 <div className="relatedPaperHeading">
-                  <span className="relatedPaperRank" aria-label={`Rank ${result.rank}`}>
-                    {String(result.rank).padStart(2, "0")}
-                  </span>
                   <div>
                     <Badge>{humanizeEnum(result.documentType)}</Badge>
                     <h3>
@@ -64,10 +66,7 @@ export function RelatedPapers({
                   <span>{formatInteger(result.citationCount)} citations</span>
                 </p>
                 <p className="relatedPaperReason">
-                  {result.rankingReasons.length > 0
-                    ? humanizeEnum(result.rankingReasons[0]!.feature)
-                    : "Local relevance"}
-                  {` · score ${result.score.toFixed(3)}`}
+                  {matchDescription(result.rankingReasons[0]?.feature)}
                 </p>
               </article>
             </li>

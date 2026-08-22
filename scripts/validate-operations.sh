@@ -131,6 +131,10 @@ cp -R "${repository_directory}/deploy/prometheus/." "${prometheus_validation_dir
 cp \
   "${prometheus_validation_directory}/targets/public-endpoints.example.json" \
   "${prometheus_validation_directory}/targets/public-endpoints.json"
+# The validator image runs as non-root. Keep the repository private under the
+# process umask, but make this temporary public-configuration copy traversable
+# and readable inside the read-only bind mount.
+chmod -R go+rX "${prometheus_validation_directory}"
 docker run --rm \
   --network none \
   --read-only \

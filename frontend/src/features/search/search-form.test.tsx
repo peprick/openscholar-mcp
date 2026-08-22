@@ -51,12 +51,7 @@ describe("SearchForm", () => {
       await user.click(screen.getByRole("checkbox", { name: "Thesis" }));
       await user.click(
         screen.getByRole("checkbox", {
-          name: "Provider-reported open access only",
-        }),
-      );
-      await user.click(
-        screen.getByRole("checkbox", {
-          name: "Refresh provider results instead of reusing a fresh cache",
+          name: "Show papers marked as open access",
         }),
       );
       await user.click(screen.getByRole("button", { name: "Search papers" }));
@@ -76,7 +71,7 @@ describe("SearchForm", () => {
             languages: ["en"],
           },
           pageSize: 20,
-          forceRefresh: true,
+          forceRefresh: false,
         }),
       });
       await waitFor(() =>

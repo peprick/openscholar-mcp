@@ -199,8 +199,8 @@ export function LibraryDashboard({
         <span className="eyebrow">Your saved research</span>
         <h1 id="library-heading">Research library</h1>
         <p>
-          Organize canonical papers, track reading progress, and export a bounded
-          citation set without downloading or retaining source PDFs.
+          Organize papers into reading lists, track your progress, and export
+          citations when you need them.
         </p>
       </section>
 
@@ -212,7 +212,9 @@ export function LibraryDashboard({
               <h2 id="collections-heading">Collections</h2>
             </div>
             <Badge>
-              {collections.length} of {collectionPage.totalElements} shown
+              {collections.length === collectionPage.totalElements
+                ? `${collectionPage.totalElements} ${collectionPage.totalElements === 1 ? "collection" : "collections"}`
+                : `${collections.length} of ${collectionPage.totalElements} collections`}
             </Badge>
           </div>
 
@@ -249,7 +251,9 @@ export function LibraryDashboard({
               {collections.map((collection) => (
                 <article className="collectionCard" key={collection.collectionId}>
                   <div>
-                    <Badge>{collection.paperCount} papers</Badge>
+                    <Badge>
+                      {collection.paperCount} {collection.paperCount === 1 ? "paper" : "papers"}
+                    </Badge>
                     <h3>
                       <Link
                         href={
@@ -309,7 +313,9 @@ export function LibraryDashboard({
               <span className="eyebrow">Across every collection</span>
               <h2 id="saved-papers-heading">Saved papers</h2>
             </div>
-            <Badge>{papers.totalElements} memberships</Badge>
+            <Badge>
+              {papers.totalElements} {papers.totalElements === 1 ? "saved item" : "saved items"}
+            </Badge>
           </div>
           <form action="/library" className="libraryFilterForm" method="get">
             <div className="fieldGroup libraryQueryField">
@@ -376,7 +382,8 @@ export function LibraryDashboard({
             <>
               <div className="batchExportBar">
                 <p>
-                  <strong>{selectedPaperIds.size}</strong> distinct papers selected
+                  <strong>{selectedPaperIds.size}</strong>{" "}
+                  {selectedPaperIds.size === 1 ? "paper" : "papers"} selected
                 </p>
                 <div className="buttonGroup">
                   <button
@@ -466,7 +473,7 @@ export function LibraryDashboard({
           ) : (
             <div className="libraryEmptyState">
               <h3>No saved papers match</h3>
-              <p>Adjust the filters or save a canonical paper to a collection.</p>
+              <p>Adjust the filters or save a paper to a collection.</p>
             </div>
           )}
         </section>

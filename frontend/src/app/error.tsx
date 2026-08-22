@@ -19,8 +19,8 @@ export default function GlobalError({
         <span className="eyebrow">Temporary problem</span>
         <h1>We could not load this research view.</h1>
         <p>
-          Check that the Java backend is running, then retry. Your saved data has
-          not been changed.
+          OpenScholar is temporarily unavailable. Try again in a moment; your
+          saved data has not been changed.
         </p>
         <button className="button button--primary" onClick={reset} type="button">
           Try again

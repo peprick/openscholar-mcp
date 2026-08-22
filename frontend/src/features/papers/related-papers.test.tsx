@@ -13,10 +13,9 @@ describe("RelatedPapers", () => {
     const section = screen.getByRole("region", { name: "Related papers" });
     expect(
       within(section).getByText(
-        "Ranked from title, abstract, and venue matches among papers already stored in OpenScholar.",
+        "Suggestions based on similarities in title, abstract, and publication venue.",
       ),
     ).toBeVisible();
-    expect(within(section).getByLabelText("Rank 1")).toHaveTextContent("01");
     expect(
       within(section).getByRole("link", {
         name: "Message passing networks for molecular discovery",
@@ -24,9 +23,9 @@ describe("RelatedPapers", () => {
     ).toHaveAttribute("href", `/papers/${testIds.relatedPaper}`);
     expect(within(section).getByText("Grace Scholar")).toBeVisible();
     expect(within(section).getByText("18 citations")).toBeVisible();
-    expect(
-      within(section).getByText("Postgres Full Text · score 0.420"),
-    ).toBeVisible();
+    expect(within(section).getByText("Similar title or abstract")).toBeVisible();
+    expect(within(section).queryByText(/score/i)).not.toBeInTheDocument();
+    expect(within(section).queryByText("Postgres Full Text")).not.toBeInTheDocument();
   });
 
   it("explains when the local catalog has no related matches", () => {

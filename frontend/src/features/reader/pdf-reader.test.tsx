@@ -139,7 +139,7 @@ describe("PdfReader", () => {
     );
 
     const externalLink = screen.getByRole("link", {
-      name: /Open verified PDF externally/,
+      name: /Open PDF in a new tab/,
     });
     expect(externalLink).toHaveAttribute("href", source.pdfUrl);
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
@@ -256,7 +256,7 @@ describe("PdfReader", () => {
     );
     expect(alert).not.toHaveTextContent("Failed to fetch");
     const fallbackLink = within(alert).getByRole("link", {
-      name: /Open verified PDF externally/,
+      name: /Open PDF in a new tab/,
     });
     expect(fallbackLink).toHaveAttribute("href", source.pdfUrl);
     expect(fallbackLink).toHaveAttribute("rel", "noopener noreferrer");
@@ -267,7 +267,7 @@ describe("PdfReader", () => {
     expect(readerHeader).not.toBeNull();
     expect(
       within(readerHeader!).getByRole("link", {
-        name: /Open verified PDF externally/,
+        name: /Open PDF in a new tab/,
       }),
     ).toHaveAttribute("href", source.pdfUrl);
 
@@ -310,7 +310,7 @@ describe("PdfReader", () => {
     expect(alert).not.toHaveTextContent("Canvas rendering failed");
     expect(
       within(alert).getByRole("link", {
-        name: /Open verified PDF externally/,
+        name: /Open PDF in a new tab/,
       }),
     ).toHaveAttribute("href", source.pdfUrl);
 

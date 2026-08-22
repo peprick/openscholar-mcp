@@ -89,14 +89,14 @@ describe("ReaderPage", () => {
     render(await ReaderPage(pageParams()));
 
     expect(
-      screen.getByRole("heading", { name: "Reader access has expired." }),
+      screen.getByRole("heading", { name: "This reader link has expired." }),
     ).toBeVisible();
     expect(screen.queryByTestId("pdf-reader")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Refresh on paper details" }),
+      screen.getByRole("link", { name: "Check access on paper page" }),
     ).toHaveAttribute("href", `/papers/${testIds.paper}`);
     const externalFallback = screen.getByRole("link", {
-      name: /Open last verified PDF externally/,
+      name: /Open PDF in a new tab/,
     });
     expect(externalFallback).toHaveAttribute(
       "href",
