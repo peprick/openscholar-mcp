@@ -1,0 +1,307 @@
+name: openscholar-production
+
+x-locked-down-service: &locked-down-service
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+      compress: "true"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the production environment file}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the production environment file}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - source: postgres_password
+        target: postgres_password
+        mode: 0400
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 60s
+    shm_size: 256m
+    cpus: ${POSTGRES_CPUS:-2.0}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-4g}
+    pids_limit: ${POSTGRES_PIDS_LIMIT:-512}
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=16m,mode=0775
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - database
+
+  backend:
+    <<: *locked-down-service
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a reviewed immutable image:tag@sha256:<64-hex-digest> reference}
+    user: "10001:10001"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configtree:/run/secrets/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      MANAGEMENT_SERVER_ADDRESS: 0.0.0.0
+      MANAGEMENT_SERVER_PORT: "9091"
+      OIDC_SECURITY_ENABLED: "true"
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:?Set OIDC_ISSUER_URI to the HTTPS issuer identifier}
+      OIDC_JWK_SET_URI: ${OIDC_JWK_SET_URI:?Set OIDC_JWK_SET_URI to the issuer's HTTPS JWKS endpoint}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set OIDC_AUDIENCE to the backend API audience}
+      OIDC_MCP_RESOURCE_URI: ${OIDC_MCP_RESOURCE_URI:?Set OIDC_MCP_RESOURCE_URI to the canonical public /mcp URL}
+      MCP_ALLOWED_ORIGINS: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}
+      MCP_RATE_LIMIT_ENABLED: "true"
+      MCP_RATE_LIMIT_REQUESTS: ${MCP_RATE_LIMIT_REQUESTS:-120}
+      MCP_RATE_LIMIT_WINDOW: ${MCP_RATE_LIMIT_WINDOW:-1m}
+      MCP_RATE_LIMIT_MAX_CLIENTS: ${MCP_RATE_LIMIT_MAX_CLIENTS:-10000}
+      MCP_MAX_REQUEST_BYTES: ${MCP_MAX_REQUEST_BYTES:-1048576}
+      MCP_MAX_TOOL_RESULT_BYTES: ${MCP_MAX_TOOL_RESULT_BYTES:-1048576}
+      SEARCH_COORDINATION_WAIT_TIMEOUT: ${SEARCH_COORDINATION_WAIT_TIMEOUT:-12s}
+      SEARCH_EXECUTION_TIMEOUT: ${SEARCH_EXECUTION_TIMEOUT:-18s}
+      RELATED_PAPERS_HYBRID_ENABLED: ${RELATED_PAPERS_HYBRID_ENABLED:-false}
+      DATACITE_ENABLED: ${DATACITE_ENABLED:-false}
+      DATACITE_CONTACT_EMAIL: ${DATACITE_CONTACT_EMAIL:-}
+      DOAJ_ENABLED: ${DOAJ_ENABLED:-false}
+      DOAJ_CONTACT_EMAIL: ${DOAJ_CONTACT_EMAIL:-}
+      CORE_ENABLED: ${CORE_ENABLED:-false}
+      CORE_LICENSE_CONFIRMED: ${CORE_LICENSE_CONFIRMED:-false}
+      UNPAYWALL_EMAIL: ${UNPAYWALL_EMAIL:-}
+      REFRESH_JOBS_WORKER_ENABLED: ${REFRESH_JOBS_WORKER_ENABLED:-false}
+      REFRESH_JOBS_SCHEDULED_ENABLED: ${REFRESH_JOBS_SCHEDULED_ENABLED:-false}
+      REFRESH_JOBS_POLL_DELAY: ${REFRESH_JOBS_POLL_DELAY:-5s}
+      REFRESH_JOBS_SCAN_DELAY: ${REFRESH_JOBS_SCAN_DELAY:-1h}
+      REFRESH_JOBS_LEASE_DURATION: ${REFRESH_JOBS_LEASE_DURATION:-2m}
+      REFRESH_JOBS_RETRY_BACKOFF: ${REFRESH_JOBS_RETRY_BACKOFF:-30s}
+      REFRESH_JOBS_MAX_ATTEMPTS: ${REFRESH_JOBS_MAX_ATTEMPTS:-3}
+      REFRESH_JOBS_PER_POLL: ${REFRESH_JOBS_PER_POLL:-25}
+      REFRESH_JOBS_STALE_TARGETS_PER_SCAN: ${REFRESH_JOBS_STALE_TARGETS_PER_SCAN:-100}
+    secrets:
+      - source: postgres_password
+        target: POSTGRES_PASSWORD
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    expose:
+      - "8080"
+      - "9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 30s
+    cpus: ${BACKEND_CPUS:-2.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-2g}
+    pids_limit: ${BACKEND_PIDS_LIMIT:-512}
+    tmpfs:
+      - /tmp:size=128m,uid=10001,gid=10001,mode=1770
+    networks:
+      - application
+      - database
+      - monitoring
+      - provider-egress
+
+  frontend:
+    <<: *locked-down-service
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a reviewed immutable image:tag@sha256:<64-hex-digest> reference}
+    user: "1001:1001"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      OPENSCHOLAR_API_BASE_URL: http://backend:8080
+      OPENSCHOLAR_AUTH_MODE: oidc
+      OPENSCHOLAR_AUTH_SESSION_MAX_AGE_SECONDS: ${OPENSCHOLAR_AUTH_SESSION_MAX_AGE_SECONDS:-28800}
+      OPENSCHOLAR_OIDC_ISSUER: ${OIDC_ISSUER_URI:?Set OIDC_ISSUER_URI to the HTTPS issuer identifier}
+      OPENSCHOLAR_OIDC_AUTHORIZATION_ENDPOINT: ${OPENSCHOLAR_OIDC_AUTHORIZATION_ENDPOINT:?Set the provider's HTTPS authorization endpoint}
+      OPENSCHOLAR_OIDC_TOKEN_ENDPOINT: ${OPENSCHOLAR_OIDC_TOKEN_ENDPOINT:?Set the provider's HTTPS token endpoint}
+      OPENSCHOLAR_OIDC_JWKS_URI: ${OIDC_JWK_SET_URI:?Set OIDC_JWK_SET_URI to the issuer's HTTPS JWKS endpoint}
+      OPENSCHOLAR_OIDC_END_SESSION_ENDPOINT: ${OPENSCHOLAR_OIDC_END_SESSION_ENDPOINT:-}
+      OPENSCHOLAR_OIDC_CLIENT_ID: ${OPENSCHOLAR_OIDC_CLIENT_ID:?Set the frontend OIDC client ID}
+      OPENSCHOLAR_OIDC_CLIENT_AUTH_METHOD: client_secret_basic
+      OPENSCHOLAR_OIDC_REDIRECT_URI: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}/api/auth/callback
+      OPENSCHOLAR_OIDC_POST_LOGOUT_REDIRECT_URI: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}/
+      OPENSCHOLAR_OIDC_SCOPES: ${OPENSCHOLAR_OIDC_SCOPES:-openid profile openscholar.search openscholar.library openscholar.jobs openscholar.privacy}
+      OPENSCHOLAR_OIDC_ID_TOKEN_ALGS: ${OPENSCHOLAR_OIDC_ID_TOKEN_ALGS:-RS256}
+    entrypoint: ["/bin/sh", "/usr/local/bin/openscholar-frontend-entrypoint"]
+    secrets:
+      - source: auth_session_secret
+        target: OPENSCHOLAR_AUTH_SESSION_SECRET
+        uid: "1001"
+        gid: "1001"
+        mode: 0400
+      - source: oidc_client_secret
+        target: OPENSCHOLAR_OIDC_CLIENT_SECRET
+        uid: "1001"
+        gid: "1001"
+        mode: 0400
+    volumes:
+      - ./frontend-entrypoint.sh:/usr/local/bin/openscholar-frontend-entrypoint:ro
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 30s
+    cpus: ${FRONTEND_CPUS:-1.0}
+    mem_limit: ${FRONTEND_MEMORY_LIMIT:-1g}
+    pids_limit: ${FRONTEND_PIDS_LIMIT:-256}
+    tmpfs:
+      - /tmp:size=128m,uid=1001,gid=1001,mode=1770
+    networks:
+      - application
+      - identity-egress
+
+  proxy:
+    <<: *locked-down-service
+    image: ${CADDY_IMAGE:-caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}
+    user: "10001:10001"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL for certificate expiry notices}
+      XDG_CONFIG_HOME: /tmp/caddy-config
+      XDG_DATA_HOME: /data
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    ports:
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:${PUBLIC_HTTP_PORT:-80}:80"
+      - "${PUBLIC_BIND_ADDRESS:-127.0.0.1}:${PUBLIC_HTTPS_PORT:-443}:443"
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CADDY_DATA_DIR:?Set CADDY_DATA_DIR to a directory owned by UID 10001}:/data
+    tmpfs:
+      - /tmp:size=32m,uid=10001,gid=10001,mode=1770
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    stop_grace_period: 30s
+    cpus: ${PROXY_CPUS:-1.0}
+    mem_limit: ${PROXY_MEMORY_LIMIT:-256m}
+    pids_limit: ${PROXY_PIDS_LIMIT:-128}
+    networks:
+      - application
+      - edge
+
+  blackbox-exporter:
+    <<: *locked-down-service
+    profiles: [observability]
+    image: ${BLACKBOX_EXPORTER_IMAGE:-prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc}
+    user: "65534:65534"
+    command: ["--config.file=/etc/blackbox_exporter/config.yml"]
+    volumes:
+      - ./prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    tmpfs:
+      - /tmp:size=16m,uid=65534,gid=65534,mode=1770
+    cpus: ${BLACKBOX_EXPORTER_CPUS:-0.5}
+    mem_limit: ${BLACKBOX_EXPORTER_MEMORY_LIMIT:-256m}
+    pids_limit: ${BLACKBOX_EXPORTER_PIDS_LIMIT:-128}
+    networks:
+      - application
+      - database
+      - monitoring
+      - monitoring-egress
+
+  alertmanager:
+    <<: *locked-down-service
+    profiles: [observability]
+    image: ${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286}
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${ALERTMANAGER_DATA_DIR:?Set ALERTMANAGER_DATA_DIR to a directory owned by UID 65534}:/alertmanager
+    tmpfs:
+      - /tmp:size=16m,uid=65534,gid=65534,mode=1770
+    cpus: ${ALERTMANAGER_CPUS:-0.5}
+    mem_limit: ${ALERTMANAGER_MEMORY_LIMIT:-256m}
+    pids_limit: ${ALERTMANAGER_PIDS_LIMIT:-128}
+    networks:
+      - monitoring
+      - monitoring-egress
+
+  prometheus:
+    <<: *locked-down-service
+    profiles: [observability]
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.5.5@sha256:332c2f43e7e389d74d3893b55bb02fbbd684208e681eeb604641d5d769c0fe2a}
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ${PUBLIC_PROBE_TARGETS_FILE:?Set PUBLIC_PROBE_TARGETS_FILE to the rendered target JSON}:/etc/prometheus/targets/public-endpoints.json:ro
+      - ${PROMETHEUS_DATA_DIR:?Set PROMETHEUS_DATA_DIR to a directory owned by UID 65534}:/prometheus
+    tmpfs:
+      - /tmp:size=16m,uid=65534,gid=65534,mode=1770
+    cpus: ${PROMETHEUS_CPUS:-1.0}
+    mem_limit: ${PROMETHEUS_MEMORY_LIMIT:-1g}
+    pids_limit: ${PROMETHEUS_PIDS_LIMIT:-256}
+    depends_on:
+      - blackbox-exporter
+      - alertmanager
+    networks:
+      - monitoring
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE to a mode-0400 secret file}
+  auth_session_secret:
+    file: ${AUTH_SESSION_SECRET_FILE:?Set AUTH_SESSION_SECRET_FILE to a mode-0400 base64 secret file}
+  oidc_client_secret:
+    file: ${OIDC_CLIENT_SECRET_FILE:?Set OIDC_CLIENT_SECRET_FILE to a mode-0400 secret file}
+
+volumes:
+  postgres-data:
+
+networks:
+  application:
+    internal: true
+  database:
+    internal: true
+  monitoring:
+    internal: true
+  provider-egress: {}
+  monitoring-egress: {}
+  identity-egress: {}
+  edge: {}

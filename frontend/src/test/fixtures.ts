@@ -262,7 +262,7 @@ export function paperAccessLocationFixture(
     id: testIds.location,
     source: "UNPAYWALL",
     best: true,
-    accessStatus: "OPEN_PDF",
+    accessStatus: "REPOSITORY_COPY",
     versionType: "ACCEPTED_MANUSCRIPT",
     hostType: "REPOSITORY",
     landingPageUrl: "https://repository.example.edu/items/paper-42",
@@ -288,7 +288,7 @@ export function paperAccessResponseFixture(
 ): PaperAccessResponse {
   return {
     paperId: testIds.paper,
-    status: "OPEN_PDF",
+    status: "REPOSITORY_COPY",
     cacheDisposition: "RESOLVED",
     checkedAt: "2026-08-17T14:31:00Z",
     freshUntil: "2026-08-18T14:31:00Z",

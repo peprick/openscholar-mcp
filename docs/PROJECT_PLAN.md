@@ -4,7 +4,7 @@
 
 OpenScholar MCP turns a topic into an evidence-backed reading workspace. It combines scholarly discovery, legal full-text resolution, persistent caching, personal knowledge management, and agent-compatible MCP tools without pretending that every indexed paper is freely downloadable.
 
-The complete workflow is:
+The target workflow is:
 
 1. Understand a topic and explicit filters.
 2. Reuse sufficiently fresh local results.
@@ -17,14 +17,14 @@ The complete workflow is:
 
 ## 2. Scope
 
-### MVP scope
+### Original MVP scope
 
 - Single-user local installation.
 - Topic, title, author, and keyword search.
 - Year, document type, open-access, language, and citation filters; provider/source filtering is post-MVP.
 - OpenAlex discovery integration.
 - Unpaywall legal-access resolution.
-- arXiv metadata and PDF integration.
+- arXiv exact-identifier legal-access evidence and PDF links.
 - PostgreSQL persistence and query-result caching.
 - DOI, arXiv, OpenAlex-ID, and provider-record deduplication; conservative title/fuzzy reconciliation is post-MVP.
 - Search results, paper details, collections, and a basic PDF reader.
@@ -32,16 +32,26 @@ The complete workflow is:
 - MCP tools for search, details, stored legal full text, saved-library lookup, and citation export.
 - Docker Compose development environment.
 
-### Post-MVP scope
+The original local MVP is implemented. The project has since added typed publication metadata, optional provider fan-out, durable refresh jobs, owner-scoped hosted identity, privacy endpoints, and deployment/operations artifacts.
 
-- CORE, PubMed Central, DOAJ, OATD, Shodhganga, and institutional repositories.
-- Abstract and note embeddings with pgvector.
-- Highlights, annotations, and reading progress.
-- Multi-user authentication and private libraries.
-- Background refresh and provider-health dashboards.
+### Implemented expansions
+
+- Disabled-by-default DataCite thesis/dissertation and DOAJ article discovery.
+- Disabled-by-default, separately licence-gated CORE metadata discovery.
+- Provider-neutral concurrent fan-out, partial-success snapshots, exact-identifier merging, and reciprocal-rank fusion.
+- Versioned abstract/title embeddings plus a default-off, independently evaluated hybrid related-paper read.
+- OIDC issuer+subject identities, private libraries/search snapshots, and privacy export/account deletion.
+- Durable operational metadata/access refresh jobs, optional scheduling, UI inspection, and manual retry.
+- Hosted OIDC resource-server and browser-BFF code plus single-host deployment, blackbox monitoring, and backup/restore templates.
+
+### Deferred or external scope
+
+- PubMed Central, OATD, Shodhganga, and institutional repositories.
+- Highlights, annotations, and page-level reading progress. Collection membership already records unread/reading/completed status.
 - Optional summaries and question answering over user-selected documents.
 - Object storage for documents that are legally permitted to be retained.
 - Personalized recommendations and research-gap exploration.
+- Real IdP/provider registrations, cloud deployment, managed data/secret services, and launch evidence.
 
 ### Explicit non-goals
 
@@ -75,7 +85,7 @@ Inspects provider errors, stale links, ingestion runs, cache effectiveness, and 
 ### Discovery
 
 - Query parsing and validation.
-- Provider fan-out with deadlines, retries, and rate limits.
+- Concurrent provider fan-out with per-adapter deadlines/body limits, partial failures, and provider rate-limit translation. General interactive retries/circuit breakers remain deferred; durable jobs have their own bounded retry policy.
 - Result normalization into a canonical paper model.
 - Deduplication and version reconciliation.
 - Transparent result ranking.
@@ -91,14 +101,14 @@ Inspects provider errors, stale links, ingestion runs, cache effectiveness, and 
 
 - Cache normalized paper metadata independent of individual search caches.
 - Store query fingerprints, filters, result order, and freshness timestamps.
-- Associate papers with topics and later semantic embeddings.
+- Associate papers with later topics; versioned title/abstract embedding storage already exists as an opt-in offline path.
 - Preserve user collections, notes, and reading state until the user deletes them.
 
 ### Reader and library
 
 - Render supported PDFs with PDF.js.
 - Open external landing pages when browser embedding is prohibited.
-- Save, tag, annotate, and export papers.
+- Save, tag, and export papers; annotations/highlights remain planned.
 - Show access and licence information beside every document action.
 
 ### MCP
@@ -110,13 +120,13 @@ Inspects provider errors, stale links, ingestion runs, cache effectiveness, and 
 
 ## 5. Delivery strategy
 
-Build a vertical slice before adding provider breadth:
+The project was built from this first vertical slice before provider breadth:
 
 ```text
 topic -> local cache -> OpenAlex -> normalize -> PostgreSQL -> REST -> result UI
 ```
 
-The second slice adds legal full-text resolution and reading. The third adds the persistent local library and batch citation export. The fourth exposes the shared read use cases through MCP. Semantic search, more providers, authentication, and AI-assisted analysis come afterward.
+Subsequent slices added legal-access resolution/reading, the persistent library and batch citation export, MCP, measured semantic retrieval, optional provider fan-out, durable jobs, and hosted identity/privacy boundaries. AI-assisted analysis remains deferred. Hosted deployment is now an evidence and external-service integration phase, not an unimplemented application-authentication phase.
 
 ## 6. Quality gates
 
@@ -135,16 +145,18 @@ Each milestone must satisfy:
 
 | Risk | Mitigation |
 |---|---|
-| Provider API changes or outages | Adapter interface, timeouts, circuit breakers, fixtures, partial results |
-| Duplicate records and versions | Identifier-first reconciliation followed by conservative fuzzy matching |
+| Provider API changes or outages | Adapter interface, whole-exchange/body bounds, fixtures, partial results, caching; circuit breakers/general interactive retries remain deferred |
+| Duplicate records and versions | Exact identifier reconciliation and deterministic multi-provider fusion; conservative fuzzy matching remains deferred |
 | Stale or misleading PDF URLs | Store multiple locations, verify periodically, retain last-known status |
 | Copyright or licence ambiguity | Store links by default; retain PDFs only when permission is explicit |
 | Prompt injection inside documents | Treat documents as untrusted data and isolate them from tool instructions |
 | Poor semantic ranking | Launch with explainable lexical/metadata ranking and evaluate vectors separately |
-| Excessive project complexity | Modular monolith, three-provider MVP, deferred multi-user and LLM features |
-| API rate limits | Local cache, bounded fan-out, backoff, request coalescing, provider budgets |
+| Excessive project complexity | Modular monolith, default-off optional providers/workers/hybrid mode, narrow MCP surface, deferred LLM features |
+| API rate limits | Owner-scoped cache, bounded fan-out, provider response translation, access cooldown, durable-job retry; aggregate quotas and cross-instance coordination remain deployment work |
 
-## 8. Portfolio definition of done
+## 8. Public portfolio definition of done
+
+These remain release gates; repository artifacts alone do not satisfy them.
 
 - Reproducible setup from a clean clone.
 - Public architecture, security, and data-source documentation.

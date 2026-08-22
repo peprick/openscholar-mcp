@@ -5,8 +5,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -311,6 +313,23 @@ class McpProtocolIntegrationTests {
 		assertThat(access.required("locations")).isEmpty();
 	}
 
+	@Test
+	void repeatedJsonRpcIdsDoNotActAsIdempotencyKeysAndOrdinarySearchCachingStillApplies() throws Exception {
+		String topic = "duplicate JSON-RPC identifier " + UUID.randomUUID();
+		Map<String, Object> arguments = Map.of("topic", topic, "limit", 1);
+
+		JsonNode first = callTool(25, "search_research", arguments);
+		JsonNode second = callTool(25, "search_research", arguments);
+
+		assertThat(first.required("id").asInt()).isEqualTo(25);
+		assertThat(second.required("id").asInt()).isEqualTo(25);
+		assertThat(successfulStructuredContent(first).required("cacheDisposition").asString())
+				.isEqualTo("MISS_FETCHED");
+		assertThat(successfulStructuredContent(second).required("cacheDisposition").asString())
+				.isEqualTo("EXACT_HIT");
+		assertThat(researchProvider.calls()).isEqualTo(1);
+	}
+
 	private JsonNode initialize(int id) throws Exception {
 		Map<String, Object> params = Map.of(
 				"protocolVersion", PROTOCOL_VERSION,
@@ -422,6 +441,12 @@ class McpProtocolIntegrationTests {
 		@Primary
 		FakeResearchProvider fakeResearchProvider() {
 			return new FakeResearchProvider();
+		}
+
+		@Bean
+		@Primary
+		Clock fixedClock() {
+			return Clock.fixed(RETRIEVED_AT, ZoneOffset.UTC);
 		}
 
 	}

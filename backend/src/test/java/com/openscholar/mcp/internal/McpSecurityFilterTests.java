@@ -2,6 +2,7 @@ package com.openscholar.mcp.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -11,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
+import com.openscholar.security.OidcSecurityProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +22,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 class McpSecurityFilterTests {
 
@@ -32,6 +38,7 @@ class McpSecurityFilterTests {
 	@AfterEach
 	void clearDiagnosticContext() {
 		MDC.remove("mcpRequestId");
+		SecurityContextHolder.clearContext();
 	}
 
 	@Test
@@ -57,6 +64,28 @@ class McpSecurityFilterTests {
 	@Test
 	void permitsNativeClientsWithoutAnOrigin() throws Exception {
 		Invocation invocation = invoke(filter(List.of()), "/mcp", authorized(), response -> {
+		});
+
+		assertThat(invocation.chainInvoked()).isTrue();
+		assertThat(invocation.response().getStatus()).isEqualTo(HttpServletResponse.SC_NO_CONTENT);
+		assertSecurityHeaders(invocation.response());
+	}
+
+	@Test
+	void delegatesBearerAuthenticationToSpringSecurityWhenOidcIsEnabled() throws Exception {
+		McpSecurityFilter filter = new McpSecurityFilter(
+				new McpSecurityProperties(null, List.of()),
+				new OidcSecurityProperties(
+						true,
+						java.net.URI.create("https://issuer.example"),
+						java.net.URI.create("https://issuer.example/jwks"),
+						"openscholar",
+						java.net.URI.create("https://research.example/mcp")),
+				defaultRateLimiter(),
+				new SimpleMeterRegistry());
+
+		Invocation invocation = invoke(filter, "/mcp", request -> {
+		}, response -> {
 		});
 
 		assertThat(invocation.chainInvoked()).isTrue();
@@ -223,6 +252,30 @@ class McpSecurityFilterTests {
 	}
 
 	@Test
+	void rateLimitsHostedMcpByAuthenticatedSubjectInsteadOfSharedProxyAddress() throws Exception {
+		McpRateLimiter rateLimiter = new McpRateLimiter(
+				new McpRateLimitProperties(true, 1, Duration.ofMinutes(1), 100));
+		McpSecurityFilter filter = new McpSecurityFilter(
+				new McpSecurityProperties(null, List.of()),
+				enabledOidc(),
+				rateLimiter,
+				new SimpleMeterRegistry());
+
+		setOidcSubject("alice");
+		Invocation aliceFirst = invoke(filter, "/mcp", request -> request.setRemoteAddr("10.0.0.2"), response -> {
+		});
+		Invocation aliceLimited = invoke(filter, "/mcp", request -> request.setRemoteAddr("10.0.0.2"), response -> {
+		});
+		setOidcSubject("bob");
+		Invocation bobFirst = invoke(filter, "/mcp", request -> request.setRemoteAddr("10.0.0.2"), response -> {
+		});
+
+		assertThat(aliceFirst.chainInvoked()).isTrue();
+		assertRejected(aliceLimited, HttpStatus.TOO_MANY_REQUESTS.value(), "MCP_RATE_LIMITED");
+		assertThat(bobFirst.chainInvoked()).isTrue();
+	}
+
+	@Test
 	void rejectedCredentialsDoNotConsumeTheAuthenticatedClientBudget() throws Exception {
 		McpRateLimiter rateLimiter = new McpRateLimiter(new McpRateLimitProperties(
 				true, 1, Duration.ofMinutes(1), 100));
@@ -271,12 +324,35 @@ class McpSecurityFilterTests {
 			McpSecurityProperties securityProperties,
 			McpRateLimiter rateLimiter,
 			SimpleMeterRegistry meterRegistry) {
-		return new McpSecurityFilter(securityProperties, rateLimiter, meterRegistry);
+		return new McpSecurityFilter(
+				securityProperties,
+				new OidcSecurityProperties(false, null, null, null, null),
+				rateLimiter,
+				meterRegistry);
 	}
 
 	private static McpRateLimiter defaultRateLimiter() {
 		return new McpRateLimiter(new McpRateLimitProperties(
 				true, 1_000, Duration.ofMinutes(1), 100));
+	}
+
+	private static OidcSecurityProperties enabledOidc() {
+		return new OidcSecurityProperties(
+				true,
+				URI.create("https://issuer.example"),
+				URI.create("https://issuer.example/jwks"),
+				"openscholar",
+				URI.create("https://research.example/mcp"));
+	}
+
+	private static void setOidcSubject(String subject) {
+		Jwt jwt = Jwt.withTokenValue("synthetic-token")
+				.header("alg", "RS256")
+				.issuer("https://issuer.example")
+				.subject(subject)
+				.build();
+		SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+				jwt, List.of(new SimpleGrantedAuthority("SCOPE_openscholar.mcp"))));
 	}
 
 	private static Consumer<MockHttpServletRequest> authorized() {

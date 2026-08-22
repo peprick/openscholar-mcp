@@ -13,6 +13,7 @@ frontend/.next/
 frontend/out/
 frontend/coverage/
 frontend/playwright-report/
+frontend/playwright-compose-report/
 frontend/public/pdfjs/
 frontend/test-results/
 *.tsbuildinfo
@@ -21,3 +22,8 @@ frontend/test-results/
 tmp/
 data/
 documents/
+backups/
+deploy/production.env
+deploy/secrets/
+deploy/state/
+deploy/prometheus/targets/public-endpoints.json

@@ -6,17 +6,21 @@
 flowchart LR
     U["Researcher"] --> W["Next.js web client"]
     A["MCP-compatible agent host"] --> M["Spring Boot MCP endpoint"]
+    I["OIDC provider (hosted)"] --> W
+    I --> M
     W --> R["Spring Boot REST API"]
     R --> C["Application services"]
     M --> C
     C --> P[("PostgreSQL + pgvector")]
     C --> S["Scholarly provider adapters"]
     S --> OA["OpenAlex"]
+    S --> DC["DataCite (opt-in)"]
+    S --> DJ["DOAJ (opt-in)"]
+    S --> CO["CORE (licensed opt-in)"]
     S --> UW["Unpaywall"]
     S --> AX["arXiv"]
     S --> MO["Additional open repositories"]
     C --> E["Optional local Ollama (offline backfill only)"]
-    C --> O["Permitted document storage"]
 ```
 
 ## Architectural style
@@ -32,20 +36,22 @@ Current package-level modules:
 ```text
 com.openscholar
 ├── common                 # shared safe errors and boundary utilities
-├── search                 # commands, exact-snapshot cache, OpenAlex orchestration
+├── search                 # owner-scoped exact snapshots, provider fan-out, fusion, deadlines
 ├── paper                  # canonical metadata, identifiers, authors, persistence
-├── provider               # research-provider SPI plus OpenAlex adapter
+├── provider               # research-provider SPI plus discovery adapters
 ├── access                 # legal-access resolution, URL verification, Unpaywall/arXiv clients
 ├── citation               # BibTeX and CSL-JSON rendering/export
 ├── library                # collections, reading status, tags, saved-paper lookup
 ├── embedding              # provider-neutral generation SPI plus pinned local Ollama adapter
-├── jobs                   # explicit bounded embedding backfill and per-profile lease
+├── jobs                   # offline embedding backfill plus durable metadata/access refresh leases
+├── privacy                # owner-scoped personal-data export and deletion
+├── security               # local identity or OIDC principal/JWT/scope boundary
 ├── mcp                    # five tool handlers and HTTP security boundary
 ├── api                    # Spring MVC controllers and request/response DTOs
 └── persistence            # shared persistence configuration
 ```
 
-`security` currently contains a boundary placeholder. The `paper` module owns provider-neutral embedding-profile and vector-store primitives plus the default-off related-paper hybrid read; `embedding` supplies a disabled-by-default local generator; and `jobs` supplies the explicit maintenance backfill. Related-topic semantic reuse, recurring job scheduling, MCP resources, generated OpenAPI models, and hosted authentication remain planned. Package boundaries are verified with ArchUnit. Domain modules must not depend on web controllers or provider implementations.
+The `paper` module owns provider-neutral embedding-profile and vector-store primitives plus the default-off related-paper hybrid read; `embedding` supplies a disabled-by-default local generator. `jobs` contains both the explicit non-web embedding backfill and PostgreSQL-backed refresh jobs for search metadata/access evidence. `security` selects a fixed local owner when OIDC is off and issuer/subject-backed principals when hosted OIDC is on. Package boundaries are verified with ArchUnit. MCP resources, generated OpenAPI models, notes/highlights, and broader semantic reuse remain planned.
 
 ## Search request flow
 
@@ -55,7 +61,7 @@ sequenceDiagram
     participant API as REST or MCP adapter
     participant Search as Search orchestrator
     participant DB as PostgreSQL
-    participant OpenAlex
+    participant Providers as Enabled providers
 
     Client->>API: topic + filters
     API->>Search: validated SearchCommand
@@ -63,8 +69,9 @@ sequenceDiagram
     alt exact snapshot is fresh and refresh is not forced
         DB-->>Search: immutable cached snapshot
     else cache miss, stale snapshot, or forced refresh
-        Search->>OpenAlex: one bounded provider search
-        OpenAlex-->>Search: mapped records or provider error
+        Search->>Providers: bounded concurrent fan-out
+        Providers-->>Search: mapped records and isolated failures
+        Search->>Search: exact-ID merge + reciprocal-rank fusion when multi-provider
         Search->>Search: normalize and reconcile identifiers
         Search->>DB: idempotent upsert and result snapshot
     end
@@ -74,12 +81,12 @@ sequenceDiagram
 
 ## Cache decision
 
-A query fingerprint is calculated from normalized topic text and sorted filters. The current orchestrator reuses an exact fresh fingerprint unless refresh is forced. It evaluates:
+A query fingerprint is calculated from normalized topic text, sorted filters, and the enabled-provider set. Snapshots and continuation reads are scoped to the current user; two principals may have the same fingerprint without sharing private search history. The orchestrator reuses an exact fresh owner/fingerprint pair unless refresh is forced. It evaluates:
 
 - freshness of the exact search snapshot;
 - explicit user refresh requests.
 
-Otherwise it performs one OpenAlex search, persists a new immutable snapshot, or returns the latest exact stale snapshot when OpenAlex fails. A bounded 64-stripe coordinator rechecks the exact cache inside the same-instance critical section before provider access and persistence, so concurrent ordinary misses for the same fingerprint share the leader's new snapshot. Lock acquisition has a configurable 12-second default limit; it does not time work after acquisition or cancel the leader. On timeout, the orchestrator rechecks the latest exact snapshot: a normal caller may return a newly fresh `EXACT_HIT`, while any other available snapshot becomes `STALE_FALLBACK` with `SEARCH_COORDINATION_TIMEOUT`; only a caller without a snapshot receives the retryable public timeout error. An interrupted wait restores the interruption state and surfaces the distinct retryable `SEARCH_COORDINATION_INTERRUPTED` error without running the request or applying timeout fallback. Explicit forced refreshes retain their provider-fetch semantics after a successful wait and can use stale fallback if acquisition times out. This coordination is intentionally JVM-local; multi-instance duplicate suppression would require a distributed lease or database protocol. Responses expose `searchedAt`, `freshUntil`, cache disposition, and provider coverage. A web continuation posts the current snapshot ID; the server reconstructs its persisted criteria and searches with only the stored opaque next cursor changed, producing another independently cacheable immutable snapshot. Related-topic local/full-text/vector reuse and coverage-based provider fan-out remain planned.
+Otherwise it invokes the enabled discovery providers concurrently, persists a new immutable snapshot from all successful results, or returns the latest exact stale snapshot if no provider succeeds. Individual provider failures remain coverage/warning entries and do not erase useful results. Exact identifiers reconcile duplicates; multi-provider result sets use deterministic reciprocal-rank fusion and retain every contributing provider. A bounded 64-stripe coordinator rechecks the owner-scoped exact cache inside the same-instance critical section before provider access and persistence, so concurrent ordinary misses for the same owner/fingerprint share the leader's new snapshot. Lock acquisition has a configurable 12-second default limit; it does not time work after acquisition or cancel the leader. On timeout, the orchestrator rechecks the latest exact snapshot: a normal caller may return a newly fresh `EXACT_HIT`, while any other available snapshot becomes `STALE_FALLBACK` with `SEARCH_COORDINATION_TIMEOUT`; only a caller without a snapshot receives the retryable public timeout error. Explicit forced refreshes retain their provider-fetch semantics. This coordination is intentionally JVM-local; cross-instance request coalescing remains external work. Responses expose freshness, cache disposition, provider coverage/contributions, warnings, and an opaque combined provider cursor.
 
 An outer `SearchExecutionDeadline` runs every `SearchResearchUseCase` `search`, `next`, and `get` operation on a context-propagating virtual-thread worker with a configurable 18-second default. Its monotonic budget covers application dispatch through cache, coordination, provider/deserialization, persistence, and final `SearchView` construction. On expiration it marks cancellation, interrupts the worker, and uses cooperative checkpoints before and after blocking boundaries. The deadline is terminal and takes precedence when it fires first, so the orchestrator does not initiate a new stale fallback after expiration; inner OpenAlex and coordination outcomes retain precedence when they finish first. The deadline cannot guarantee cancellation of JDBC persistence already in progress; its transaction may continue and commit, so a new immutable snapshot may later become visible. Parsing/schema validation, REST/MCP DTO and framework serialization, socket lifetime, client disconnects, and MCP cancellation notifications remain outside this application boundary.
 
@@ -94,19 +101,26 @@ interface ResearchProvider {
 }
 ```
 
-The current OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. Its configurable 10-second default whole-exchange deadline covers request transmission, response headers, and streamed response-body consumption. Its configurable 8 MiB default limit is enforced while the body is streamed and before JSON deserialization; responses that exceed it fail as non-retryable `OPENALEX_RESPONSE_TOO_LARGE`. The deadline is an outbound-provider boundary: it does not include local coordination waits, database or persistence work, final REST/MCP response serialization, or the REST/MCP request as a whole. The adapter returns provider records and never writes directly to canonical paper tables. Unpaywall and arXiv are separate exact-identifier clients inside access resolution.
+The default OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. The disabled-by-default DataCite adapter performs keyless thesis/dissertation metadata discovery across modern controlled and legacy free-text resource types. It uses relevance page cursors owned by OpenScholar, returns canonical DOI links, and deliberately sets both PDF and open-access claims to false; `openAccessOnly` requests are skipped until the exact-DOI access pipeline can verify them. DataCite does not download a document or follow an upstream continuation URL.
+
+The disabled-by-default DOAJ adapter adds keyless v4 article discovery from DOAJ's open-access index. It treats DOAJ's status as a source-reported access claim, maps only typed metadata and reported links, ignores upstream continuation URLs in favor of a locally validated opaque page cursor, and never downloads article bytes. Because DOAJ's search results do not provide citation counts and journal language is not necessarily article language, that adapter skips citation-threshold and language-filtered queries instead of silently weakening them.
+
+The disabled-by-default CORE API v3 adapter is absent unless an operator also confirms that an applicable licence and the current terms have been reviewed. An optional API key is backend-only Bearer authentication. The adapter searches work metadata with bounded paging, translates CORE rate-limit signals, and accepts both documented response naming variants. It intentionally discards full text and download URLs, never calls CORE's document-download endpoints, never emits a discovery PDF URL, and treats a provider-reported full-text signal only as unverified provenance. It does not scrape CORE or write directly to canonical paper tables.
+
+All four discovery adapters have configurable whole-exchange deadlines and streamed response limits; their 10-second and 8 MiB defaults cover request transmission, response headers, and body consumption before JSON deserialization. These deadlines are outbound-provider boundaries: they do not include local coordination waits, database/persistence work, final REST/MCP serialization, or the full request. Adapters return provider records and never write directly to canonical tables. Unpaywall and arXiv remain separate exact-identifier clients inside access resolution.
 
 Implemented resilience:
 
-- a configurable OpenAlex whole-exchange deadline plus bounded access-provider timeouts;
+- configurable whole-exchange deadlines for enabled discovery adapters plus bounded access-provider timeouts;
 - bounded provider response bodies;
 - upstream `429`/retry metadata translation;
 - exact search caching/stale fallback;
 - configurable, bounded same-instance lock acquisition for search coordination;
 - a shared configurable search application-execution deadline with interrupting cancellation and cooperative checkpoints;
+- concurrent provider fan-out, partial-success persistence, combined opaque cursors, deterministic fusion, and provider metrics;
 - isolation of Unpaywall and arXiv access-provider outcomes.
 
-Limited retries, exponential backoff with jitter, provider concurrency budgets, circuit breakers, bulkheads, cross-instance request coalescing, client-disconnect and MCP-notification cancellation propagation, transport parsing/serialization/socket deadlines, and multi-provider search partial results remain planned.
+General automatic retries, jittered backoff, circuit breakers/bulkheads, cross-instance request coalescing, client-disconnect and MCP-notification cancellation propagation, and transport parsing/serialization/socket deadlines remain planned. Durable refresh jobs implement bounded retry/backoff for their owned workflow; that is not a general interactive-provider retry policy.
 
 ## Canonicalization and deduplication
 
@@ -142,14 +156,17 @@ The related-paper endpoint remains database-only. Its opt-in hybrid read consume
 - Implemented JDBC/native query for PostgreSQL full-text related-paper retrieval.
 - Implemented provider-neutral pgvector profile/storage, missing-work paging, exact same-profile cosine operations, the pinned partial/expression HNSW index, exact scoring for bounded candidate IDs, an explicit offline population job, and a default-off hybrid related-paper read.
 - Flyway as the only production schema-change mechanism.
-- PostgreSQL session advisory lock for same-profile embedding backfill; durable/scheduled job leases remain planned.
+- PostgreSQL session advisory lock for same-profile embedding backfill.
+- Durable `PAPER_ACCESS` and `SEARCH_METADATA` refresh rows with active-target deduplication, `SKIP LOCKED` claims, expiring lease tokens, bounded exponential retry, terminal safe errors, optional stale-target scheduling, REST/UI inspection, and manual retry. Worker and scheduler are default-off.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.
 
 ## MCP architecture
 
 The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spring AI WebMVC starter. Five annotation-registered, read-oriented handlers delegate to the same application services used by REST. WebMVC plus Java 21 virtual threads fits the blocking JPA path.
 
-Stateless mode suits the MVP's bounded request/response tools and horizontal scaling. Search is the only initial MCP tool allowed to contact an external provider; legal-access retrieval is stored-only. The configured `spring.ai.mcp.server.request-timeout` is 20 seconds, but the stateless MCP Java SDK 2.0 path does not currently enforce it as whole-tool cancellation. OpenAlex's separate 10-second outbound exchange deadline protects only that provider call, the 12-second search-coordination limit protects only lock acquisition by a waiting caller, and OpenScholar's 18-second execution deadline now bounds the complete search application use case shared by REST and MCP. The application deadline does not cover MCP framework parsing/serialization or socket lifetime, and the pinned stateless SDK does not propagate client disconnects or `notifications/cancelled` into tool cancellation. Longer operations will return owned job handles (`start_research_job`, `get_research_job`) rather than holding sessions. Stateful Streamable HTTP is a later option if progress, elicitation, cancellation correlation, or server-to-client features become essential. STDIO may be added as a local profile; deprecated HTTP+SSE is not a target.
+Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; legal-access retrieval is stored-only. Local mode uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
+
+The configured MCP SDK request timeout still does not provide whole-tool cancellation. Discovery-provider exchange deadlines, the 12-second coordination limit, and the 18-second search application deadline bound their own layers, but framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not cancel the tool worker. Durable refresh jobs are REST/UI operations and are not MCP Tasks or owned MCP job handles.
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions through `2025-11-25`. OpenScholar records `2025-11-25` as its maximum tested revision and does not hand-build newer Tasks/Apps features before official Java/Spring support exists.
 
@@ -165,11 +182,11 @@ Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions th
 
 ### Hosted portfolio deployment
 
-- managed PostgreSQL with pgvector;
-- backend/frontend container services;
-- S3-compatible storage only when retention policy permits;
-- edge TLS/reverse proxy;
-- OAuth 2.0 resource-server protection for MCP and user APIs.
+- The repository contains a hardened single-host Compose template with PostgreSQL/pgvector, backend, Next.js, Caddy TLS edge, isolated networks, file-backed secrets, non-root/read-only services, resource/log bounds, and an optional blackbox Prometheus/Alertmanager profile.
+- Production Compose is fail-closed on OIDC configuration. Spring Boot is the JWT resource server; Next.js is an authorization-code/PKCE BFF that validates ID tokens and keeps encrypted access/refresh/ID-token state in `__Host-` HttpOnly cookies before forwarding access tokens server-to-server.
+- Guarded PostgreSQL custom-format backup and restore scripts provide checksum validation and optional `age` encryption; they do not upload, rotate, or prove restore success automatically.
+- These are deployable artifacts, not evidence of a running cloud service. Managed PostgreSQL/PITR, registry/signing, public DNS/ingress, identity-provider registration, a real alert receiver, secret management, and operational evidence remain deployment decisions.
+- No object-storage service or PDF retention path exists.
 
 Extract ingestion workers only when background work measurably competes with interactive latency or requires independent scaling.
 
@@ -178,10 +195,12 @@ Extract ingestion workers only when background work measurably competes with int
 Current:
 
 - Ordinary SLF4J application logs with sanitized MCP failure logging and MCP request IDs in logging context.
-- Spring Boot Actuator `health`/`info` plus internal Micrometer counters and timing for the MCP security boundary.
+- Spring Boot Actuator `health`/`info` plus a Prometheus registry containing bounded-cardinality HTTP, search/cache, MCP-boundary, provider, and durable refresh-job counters/timers.
+- Production Compose moves Actuator to a private `9091` management listener on the monitoring network; Prometheus scrapes it directly while Caddy exposes no management route.
+- Optional blackbox Prometheus/Alertmanager artifacts for internal readiness, frontend, PostgreSQL TCP, public HTTPS, probe health, latency, and certificate expiry, plus application-meter alerts. The checked-in Alertmanager receiver is intentionally a no-op.
 
 Planned:
 
 - Structured JSON logs and OpenTelemetry traces for REST, MCP, database, and provider calls.
-- Broader metrics for latency, cache hits, provider health, result counts, merges, access verification, and job lag.
+- Broader metrics for access verification, queue depth/lag, database pools, and principal/aggregate rate limits.
 - Correlation IDs in REST Problem Details.

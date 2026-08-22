@@ -46,6 +46,8 @@ export const savedPaperMutationSchema = z
 
 const pageSchema = z.number().int().nonnegative();
 const sizeSchema = z.number().int().min(1).max(100);
+const blankStringAsUndefined = (value: unknown): unknown =>
+  typeof value === "string" && value.trim() === "" ? undefined : value;
 
 export const collectionListQuerySchema = z
   .object({
@@ -57,15 +59,16 @@ export const collectionListQuerySchema = z
 export const savedLibraryQuerySchema = z
   .object({
     q: z.preprocess(
-      (value) =>
-        typeof value === "string" && value.trim() === "" ? undefined : value,
+      blankStringAsUndefined,
       z.string().trim().max(200).optional(),
     ),
-    collectionId: uuidSchema.optional(),
-    readingStatus: readingStatusSchema.optional(),
+    collectionId: z.preprocess(blankStringAsUndefined, uuidSchema.optional()),
+    readingStatus: z.preprocess(
+      blankStringAsUndefined,
+      readingStatusSchema.optional(),
+    ),
     tag: z.preprocess(
-      (value) =>
-        typeof value === "string" && value.trim() === "" ? undefined : value,
+      blankStringAsUndefined,
       normalizedTagSchema.optional(),
     ),
     page: pageSchema.default(0),

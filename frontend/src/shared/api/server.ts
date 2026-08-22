@@ -19,6 +19,12 @@ import {
   type UpdateCollectionRequest,
 } from "@/shared/api/library-schemas";
 import {
+  researchRefreshJobPageSchema,
+  researchRefreshJobSchema,
+  type ResearchRefreshJob,
+  type ResearchRefreshJobPage,
+} from "@/shared/api/jobs-schemas";
+import {
   apiProblemSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
@@ -33,6 +39,7 @@ import {
   type SearchResponse,
   type SystemStatusResponse,
 } from "@/shared/api/schemas";
+import { getBackendAccessToken } from "@/shared/auth/session";
 
 const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -88,8 +95,16 @@ export async function fetchBackend(
   init: RequestInit = {},
 ): Promise<Response> {
   try {
+    const headers = new Headers(init.headers);
+    if (!headers.has("authorization")) {
+      const accessToken = await getBackendAccessToken();
+      if (accessToken !== null) {
+        headers.set("authorization", `Bearer ${accessToken}`);
+      }
+    }
     return await fetch(backendUrl(path), {
       ...init,
+      headers,
       cache: "no-store",
       signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -164,6 +179,29 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     systemStatusResponseSchema,
     "system status",
     { signal: AbortSignal.timeout(2_500) },
+  )).data;
+}
+
+export async function getResearchRefreshJobs(
+  page = 0,
+  size = 20,
+): Promise<ResearchRefreshJobPage> {
+  const query = paginationQuery(page, size);
+  return (await requestJson(
+    `/api/v1/refresh-jobs?${query}`,
+    researchRefreshJobPageSchema,
+    "refresh job list",
+  )).data;
+}
+
+export async function retryResearchRefreshJob(
+  jobId: string,
+): Promise<ResearchRefreshJob> {
+  return (await requestJson(
+    `/api/v1/refresh-jobs/${encodeURIComponent(jobId)}/retry`,
+    researchRefreshJobSchema,
+    "refresh job",
+    { method: "POST" },
   )).data;
 }
 

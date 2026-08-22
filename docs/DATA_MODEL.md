@@ -21,6 +21,7 @@ erDiagram
     AUTHOR ||--o{ PAPER_AUTHOR : writes
     PAPER ||--o{ PAPER_TOPIC : classified_as
     TOPIC ||--o{ PAPER_TOPIC : labels
+    USER ||--o{ SEARCH_SNAPSHOT : owns
     SEARCH_SNAPSHOT ||--o{ SEARCH_RESULT : contains
     PAPER ||--o{ SEARCH_RESULT : appears_in
     USER ||--o{ COLLECTION : owns
@@ -30,9 +31,11 @@ erDiagram
     PAPER ||--o{ NOTE : annotates
     PAPER ||--o{ PAPER_EMBEDDING : represented_by
     EMBEDDING_PROFILE ||--o{ PAPER_EMBEDDING : defines
+    SEARCH_SNAPSHOT ||--o{ RESEARCH_REFRESH_JOB : may_target
+    PAPER ||--o{ RESEARCH_REFRESH_JOB : may_target
 ```
 
-The diagram includes planned topic and note relationships alongside the implemented embedding-profile and offline-population foundation. Planned highlights are described in the library section but are not drawn.
+The diagram includes planned topic and note relationships alongside the implemented embedding-profile, offline-population, ownership, and durable-refresh foundations. `RESEARCH_REFRESH_JOB.target_id` is a polymorphic application reference selected by `job_type`, not a database foreign key, so the two target edges are conceptual. Planned highlights are described in the library section but are not drawn.
 
 ## Core tables
 
@@ -49,6 +52,10 @@ The diagram includes planned topic and note relationships alongside the implemen
 | `document_type` | VARCHAR | Article, preprint, thesis, dissertation, etc. |
 | `language` | VARCHAR nullable | Standard code when known |
 | `venue_name` | TEXT nullable | Venue display name |
+| `publisher`, `institution` | TEXT nullable | Typed publication or thesis organization |
+| `volume`, `issue`, `pages`, `article_number` | TEXT nullable | Typed serial/article location |
+| `edition`, `degree` | TEXT nullable | Edition or thesis degree metadata |
+| `isbn`, `issn` | JSONB arrays | Normalized identifier lists |
 | `citation_count` | INTEGER nullable | Time-varying/source-qualified |
 | `citation_count_as_of` | TIMESTAMPTZ nullable | Freshness marker |
 | `metadata_quality` | NUMERIC | Explainable confidence/completeness |
@@ -104,11 +111,11 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 ### `search_snapshot`
 
 - Original and normalized query.
-- SHA-256 fingerprint over query plus sorted filters.
+- Mandatory owner ID referencing `app_user`.
+- SHA-256 fingerprint over query, sorted filters, and the enabled discovery-provider set.
 - Validated filter JSONB.
 - Status, search/freshness timestamps.
 - Provider coverage and warnings.
-- Initiating user after multi-user support.
 
 ### `search_result`
 
@@ -118,20 +125,20 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 - Total score and feature-level explanation.
 - Provider contribution set.
 
-Exact fresh fingerprints reuse snapshots. Related-topic searches retrieve canonical papers independently and are not labelled exact hits.
+Exact fresh fingerprints reuse only the current owner's snapshots. Related-topic searches retrieve canonical papers independently and are not labelled exact hits.
 
-The current implementation keeps successful snapshots immutable, retains canonical-paper references with delete protection, indexes fingerprint plus freshness, caches empty result sets, and creates a new snapshot for forced or stale refreshes. Provider failures can serve the latest exact stale snapshot with an explicit warning; they never overwrite it.
+The current implementation keeps successful snapshots immutable, retains canonical-paper references with delete protection, indexes owner plus fingerprint/freshness, caches empty result sets, and creates a new snapshot for forced or stale refreshes. Enabled providers can contribute partial results; exact identifiers merge duplicate works, provider contributions are retained, and deterministic reciprocal-rank fusion ranks multi-provider pages. Provider failures can serve the latest exact owner-scoped stale snapshot with an explicit warning; they never overwrite it.
 
 ## Library
 
-- `app_user`: the implemented local identity; external subject/tenant arrives with authentication.
+- `app_user`: internal identity with nullable paired `identity_issuer`/`identity_subject` and a unique partial index for hosted identities. OIDC requests resolve or create the row from the validated issuer+subject and may update its display name.
 - `library_collection`: owner, bounded name/description, optimistic-lock version, and timestamps.
 - `collection_paper`: unique collection/paper membership, `UNREAD`/`READING`/`COMPLETED` status, optimistic-lock version, and timestamps.
 - `collection_paper_tag`: zero to ten canonical lowercase tags per membership, with database constraints for shape, uniqueness, and count.
 - `note`: planned owner, paper, optional page/selection, and Markdown text.
 - `highlight`: planned owner, paper version, page, rectangles/text quote, and color.
 
-The fixed local user has UUID `00000000-0000-0000-0000-000000000001`. Application queries scope collection access through that owner even though authentication is not yet enabled. Deleting a collection cascades only its memberships/tags; deleting a referenced canonical paper is restricted.
+The fixed local user has UUID `00000000-0000-0000-0000-000000000001` and is used only while OIDC is disabled. Application queries scope collections and searches through the resolved current owner. Deleting a collection cascades only its memberships/tags; deleting a referenced canonical paper is restricted.
 
 ## Embedding foundation
 
@@ -153,26 +160,33 @@ The default-off related-paper hybrid read unions bounded lexical and HNSW candid
 
 `TITLE_ABSTRACT` input-policy v1 renders `Title: <title>\nAbstract: <abstract or empty>`. Fields are stripped, line endings become LF, and Unicode is normalized to NFC. Inputs above 24 KiB of rendered UTF-8 are rejected instead of truncated; the checksum covers those exact rendered bytes. Changing any of these rules creates a new input-policy version.
 
-## Planned jobs and operations
+## Durable refresh jobs
 
-- `job_run`: type, state, attempt, lease owner, schedule, timestamps, error code.
+`research_refresh_job` stores `SEARCH_METADATA` and `PAPER_ACCESS` work with a target UUID, `MANUAL`/`SCHEDULED`/`RETRY` trigger, `QUEUED`/`RUNNING`/`SUCCEEDED`/`FAILED` state, availability and lifecycle timestamps, bounded attempt budget, expiring lease token, and safe terminal error code/detail. A partial unique index permits only one queued/running row per type+target. Workers claim due or expired rows with `FOR UPDATE SKIP LOCKED`; token matching prevents a worker that lost its lease from completing the job.
+
+The worker and stale-target scheduler are default-off. The scheduler is invalid unless the worker is enabled. Job rows deliberately have no `owner_id`: visibility is derived from the polymorphic target. `SEARCH_METADATA` enqueue/list/get/retry follows the target snapshot's owner; `PAPER_ACCESS` rows are visible/retryable to every `openscholar.jobs` principal because papers/access evidence are shared. This remains an operational REST/UI model, not MCP Tasks or private job handles.
+
+## Planned operations data
+
 - `provider_request`: provider, operation, outcome, latency, result count, rate-limit metadata, correlation ID.
 - `audit_event`: principal, action, target, outcome, safe metadata.
 - `outbox_event`: reliable post-commit events if async processing is added.
+- Job-history retention/cleanup state if operational policy requires it.
 
 ## Retention
 
 - Canonical metadata: retained while referenced, with source timestamps.
-- Search snapshots: initially 90 days.
-- Provider diagnostics: initially 30 days, without secrets/full payloads.
-- Library/notes: until user deletion.
-- PDFs: not stored by default; retained only when policy/licence permits.
+- Search snapshots: a proposed 90-day policy; no automatic purge currently enforces it.
+- Provider diagnostics: a proposed 30-day policy without secrets/full payloads; normalized provider records currently follow catalog persistence.
+- Owner-scoped searches and library data: removed by the implemented account-deletion flow; backup/diagnostic retention still needs an operator policy.
+- Refresh jobs: no automatic history purge currently exists.
+- PDFs: not stored. The current schema constrains active access locations to `LINK_ONLY` and `retention_allowed=false`.
 - Derived embeddings: deleted with disallowed/deleted source content.
 
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage; `V11` adds the pinned Qwen/Ollama profile's partial/expression HNSW index; `V12` adds typed publication metadata fields.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage; `V11` adds the pinned Qwen/Ollama profile's partial/expression HNSW index; `V12` adds typed publication metadata fields; `V13` creates durable research-refresh jobs; `V14` adds unique issuer+subject identity columns; `V15` scopes search snapshots and their cache indexes to an owner.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

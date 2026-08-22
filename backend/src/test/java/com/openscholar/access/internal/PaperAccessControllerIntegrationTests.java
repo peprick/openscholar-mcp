@@ -65,7 +65,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @Import({TestcontainersConfiguration.class, PaperAccessControllerIntegrationTests.FakeAccessConfiguration.class})
 @SpringBootTest(
 		classes = PaperAccessControllerIntegrationTests.AccessTestApplication.class,
@@ -212,6 +212,26 @@ class PaperAccessControllerIntegrationTests {
 	}
 
 	@Test
+	void repositoryEvidencePersistsARepositoryCopyClassification() throws Exception {
+		UUID paperId = createPaper(true, false, true);
+		providers.unpaywall().resolveWith(repositoryPdfCandidate(SOURCE_KEY));
+
+		mockMvc.perform(post("/api/v1/papers/{paperId}/access/verify", paperId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("REPOSITORY_COPY"))
+				.andExpect(jsonPath("$.cacheDisposition").value("RESOLVED"))
+				.andExpect(jsonPath("$.bestLocationId").isNotEmpty())
+				.andExpect(jsonPath("$.locations.length()").value(1))
+				.andExpect(jsonPath("$.locations[0].accessStatus").value("REPOSITORY_COPY"))
+				.andExpect(jsonPath("$.locations[0].hostType").value("REPOSITORY"))
+				.andExpect(jsonPath("$.locations[0].versionType").value("ACCEPTED_MANUSCRIPT"))
+				.andExpect(jsonPath("$.locations[0].pdfUrl").value(PDF.toString()));
+
+		assertThat(resolutionCount(paperId)).isEqualTo(1);
+		assertThat(activeVersionCount(paperId)).isEqualTo(1);
+	}
+
+	@Test
 	void freshPostUsesTheNegativeOrPositiveCacheWithoutProviderCalls() throws Exception {
 		UUID paperId = createPaper(true, false, false);
 		providers.unpaywall().resolveWith(openPdfCandidate(AccessSource.UNPAYWALL, SOURCE_KEY));
@@ -316,21 +336,24 @@ class PaperAccessControllerIntegrationTests {
 	}
 
 	@Test
-	void partialProviderFailureReturnsSuccessfulEvidenceWithWarning() throws Exception {
+	void partialProviderFailureReturnsVerifiedArxivPreprintWithWarning() throws Exception {
 		UUID paperId = createPaper(true, true, false);
 		providers.unpaywall().failWith("UNPAYWALL_DOWN");
 		providers.arxiv().resolveWith(openPdfCandidate(AccessSource.ARXIV, "arxiv:2608.30001"));
 
 		mockMvc.perform(post("/api/v1/papers/{paperId}/access/verify", paperId))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("OPEN_PDF"))
+				.andExpect(jsonPath("$.status").value("PREPRINT"))
 				.andExpect(jsonPath("$.cacheDisposition").value("RESOLVED"))
 				.andExpect(jsonPath("$.warnings", hasItem("UNPAYWALL_DOWN")))
 				.andExpect(jsonPath("$.providerCoverage[?(@.provider == 'UNPAYWALL')].status")
 						.value(hasItem("FAILED")))
 				.andExpect(jsonPath("$.providerCoverage[?(@.provider == 'ARXIV')].status")
 						.value(hasItem("RESOLVED")))
-				.andExpect(jsonPath("$.locations[0].source").value("ARXIV"));
+				.andExpect(jsonPath("$.locations[0].source").value("ARXIV"))
+				.andExpect(jsonPath("$.locations[0].accessStatus").value("PREPRINT"))
+				.andExpect(jsonPath("$.locations[0].hostType").value("PREPRINT_SERVER"))
+				.andExpect(jsonPath("$.locations[0].versionType").value("PREPRINT"));
 
 		assertThat(providers.unpaywall().calls()).isEqualTo(1);
 		assertThat(providers.arxiv().calls()).isEqualTo(1);
@@ -436,6 +459,33 @@ class PaperAccessControllerIntegrationTests {
 				Instant.class,
 				paperId)).isEqualTo(INITIAL_TIME);
 		assertThat(activeVersionCount(paperId)).isEqualTo(1);
+	}
+
+	@Test
+	void rejectedCandidateWithoutCachePersistsUnavailableResolution() throws Exception {
+		UUID paperId = createPaper(true, false, true);
+		providers.unpaywall().resolveWith(repositoryPdfCandidate(SOURCE_KEY));
+		verifier.rejectWith("UNPAYWALL_PDF_NOT_VERIFIED");
+
+		mockMvc.perform(post("/api/v1/papers/{paperId}/access/verify", paperId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("UNAVAILABLE"))
+				.andExpect(jsonPath("$.cacheDisposition").value("RESOLVED"))
+				.andExpect(jsonPath("$.bestLocationId").value(nullValue()))
+				.andExpect(jsonPath("$.warnings", hasItem("UNPAYWALL_PDF_NOT_VERIFIED")))
+				.andExpect(jsonPath("$.locations").isEmpty());
+
+		int providerCalls = providers.totalCalls();
+		int verifierCalls = verifier.calls();
+		mockMvc.perform(post("/api/v1/papers/{paperId}/access/verify", paperId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("UNAVAILABLE"))
+				.andExpect(jsonPath("$.cacheDisposition").value("CACHE_HIT"));
+
+		assertThat(providers.totalCalls()).isEqualTo(providerCalls);
+		assertThat(verifier.calls()).isEqualTo(verifierCalls);
+		assertThat(resolutionCount(paperId)).isEqualTo(1);
+		assertThat(versionCount(paperId)).isZero();
 	}
 
 	@Test
@@ -568,6 +618,20 @@ class PaperAccessControllerIntegrationTests {
 				PDF,
 				INITIAL_TIME.minus(Duration.ofDays(1)),
 				Map.of("fixture", "deterministic"));
+	}
+
+	private static AccessCandidate repositoryPdfCandidate(String sourceKey) {
+		return new AccessCandidate(
+				AccessSource.UNPAYWALL,
+				sourceKey,
+				true,
+				"repository",
+				"acceptedVersion",
+				"cc-by-4.0",
+				LANDING_PAGE,
+				PDF,
+				INITIAL_TIME.minus(Duration.ofDays(1)),
+				Map.of("fixture", "deterministic-repository"));
 	}
 
 	private void enrichWithDoi(UUID paperId) {
@@ -810,17 +874,24 @@ class PaperAccessControllerIntegrationTests {
 			if (rejectionWarning != null) {
 				return CandidateVerificationOutcome.rejected(rejectionWarning);
 			}
-			AccessVersionType versionType = candidate.source() == AccessSource.ARXIV
+			boolean arxiv = candidate.source() == AccessSource.ARXIV;
+			boolean repository = "repository".equalsIgnoreCase(candidate.hostType());
+			AccessVersionType versionType = arxiv
 					? AccessVersionType.PREPRINT
-					: AccessVersionType.PUBLISHED;
-			AccessHostType hostType = candidate.source() == AccessSource.ARXIV
+					: repository ? AccessVersionType.ACCEPTED_MANUSCRIPT : AccessVersionType.PUBLISHED;
+			AccessHostType hostType = arxiv
 					? AccessHostType.PREPRINT_SERVER
-					: AccessHostType.PUBLISHER;
+					: repository ? AccessHostType.REPOSITORY : AccessHostType.PUBLISHER;
+			AccessStatus accessStatus = arxiv
+					? AccessStatus.PREPRINT
+					: repository
+							? AccessStatus.REPOSITORY_COPY
+							: candidate.pdfUrl() == null ? AccessStatus.OPEN_LANDING_PAGE : AccessStatus.OPEN_PDF;
 			ResolvedAccessLocation location = new ResolvedAccessLocation(
 					candidate.source().name(),
 					candidate.sourceKey(),
 					candidate.best(),
-					candidate.pdfUrl() == null ? AccessStatus.OPEN_LANDING_PAGE : AccessStatus.OPEN_PDF,
+					accessStatus,
 					versionType,
 					hostType,
 					candidate.landingPageUrl(),

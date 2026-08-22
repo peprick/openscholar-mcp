@@ -31,7 +31,14 @@ describe("library API schemas", () => {
 
   it("treats blank optional library filters as absent", () => {
     expect(
-      savedLibraryQuerySchema.parse({ q: "  ", tag: "", page: 0, size: 20 }),
+      savedLibraryQuerySchema.parse({
+        q: "  ",
+        collectionId: "",
+        readingStatus: "",
+        tag: "",
+        page: 0,
+        size: 20,
+      }),
     ).toEqual({ page: 0, size: 20 });
   });
 

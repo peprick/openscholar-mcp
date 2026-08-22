@@ -135,8 +135,9 @@ public record ProviderPaperRecord(
 		switch (provider) {
 			case OPENALEX -> addIdentifier(values, PaperIdentifierType.OPENALEX, "", providerRecordId);
 			case CORE -> addIdentifier(values, PaperIdentifierType.CORE, "", providerRecordId);
-			case DATACITE -> {
-				// DataCite's provider record identifier is the DOI already added above.
+			case DATACITE, DOAJ -> {
+				// These adapters retain their provider ID in record provenance. Their DOI,
+				// when present, is already represented by the canonical DOI identifier.
 			}
 		}
 		return List.copyOf(values.values());

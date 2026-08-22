@@ -1,0 +1,14 @@
+[
+  {
+    "targets": ["https://research.example.com/"],
+    "labels": {
+      "component": "public-edge"
+    }
+  },
+  {
+    "targets": ["https://research.example.com/api/v1/system/status"],
+    "labels": {
+      "component": "public-api"
+    }
+  }
+]

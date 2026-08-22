@@ -1,0 +1,36 @@
+services:
+  openalex-fixture:
+    image: nginx:1.29.5-alpine@sha256:1eff5a5f3fcf8431a0abb7eddf5471fec24e5e1905a2581aeacdb07a4479b92b
+    user: "101:101"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command: ["nginx", "-c", "/etc/nginx/openalex-nginx.conf", "-g", "daemon off;"]
+    volumes:
+      - ./deploy/e2e/openalex-nginx.conf:/etc/nginx/openalex-nginx.conf:ro
+    tmpfs:
+      - /tmp:size=16m,uid=101,gid=101,mode=1770
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+
+  backend:
+    environment:
+      OPENALEX_BASE_URL: http://openalex-fixture:8080
+      OPENALEX_REQUEST_TIMEOUT: 3s
+      OPENALEX_MAX_RESPONSE_BYTES: 1048576
+    depends_on:
+      openalex-fixture:
+        condition: service_healthy
+
+  frontend:
+    depends_on:
+      backend:
+        condition: service_started

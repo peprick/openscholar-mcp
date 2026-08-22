@@ -1,0 +1,117 @@
+{
+  "version": "paper-deduplication-baseline-v1",
+  "policy": "exact-identifiers-and-provider-records-only",
+  "records": [
+    {
+      "key": "bridge-doi-openalex",
+      "expectedCluster": "bridge-work",
+      "provider": "openalex",
+      "providerRecordId": "W-BRIDGE-1",
+      "title": "Bridged canonical work",
+      "identifiers": [
+        {"type": "DOI", "value": "https://doi.org/10.1000/BRIDGE"}
+      ]
+    },
+    {
+      "key": "bridge-doi-arxiv",
+      "expectedCluster": "bridge-work",
+      "provider": "doaj",
+      "providerRecordId": "DOAJ-BRIDGE-1",
+      "title": "Bridged canonical work journal record",
+      "identifiers": [
+        {"type": "DOI", "value": "doi:10.1000/bridge"},
+        {"type": "ARXIV", "value": "arXiv:2601.01234v2"}
+      ]
+    },
+    {
+      "key": "bridge-arxiv-core",
+      "expectedCluster": "bridge-work",
+      "provider": "core",
+      "providerRecordId": "CORE-BRIDGE-1",
+      "title": "Repository copy of bridged work",
+      "identifiers": [
+        {"type": "ARXIV", "value": "2601.01234"}
+      ]
+    },
+    {
+      "key": "openalex-normalized-a",
+      "expectedCluster": "openalex-work",
+      "provider": "openalex",
+      "providerRecordId": "W-NORMALIZED-A",
+      "title": "OpenAlex identifier normalization",
+      "identifiers": [
+        {"type": "OPENALEX", "value": "https://openalex.org/W424242"}
+      ]
+    },
+    {
+      "key": "openalex-normalized-b",
+      "expectedCluster": "openalex-work",
+      "provider": "datacite",
+      "providerRecordId": "DATACITE-NORMALIZED-B",
+      "title": "OpenAlex identifier normalization metadata",
+      "identifiers": [
+        {"type": "OPENALEX", "value": "w424242"}
+      ]
+    },
+    {
+      "key": "provider-replay-a",
+      "expectedCluster": "provider-replay",
+      "provider": "core",
+      "providerRecordId": "CORE-REPLAY-9",
+      "title": "Provider replay without external identifiers",
+      "identifiers": []
+    },
+    {
+      "key": "provider-replay-b",
+      "expectedCluster": "provider-replay",
+      "provider": "core",
+      "providerRecordId": "CORE-REPLAY-9",
+      "title": "Updated provider replay without external identifiers",
+      "identifiers": []
+    },
+    {
+      "key": "common-title-one",
+      "expectedCluster": "common-title-one",
+      "provider": "doaj",
+      "providerRecordId": "DOAJ-COMMON-1",
+      "title": "A common title in science",
+      "identifiers": []
+    },
+    {
+      "key": "common-title-two",
+      "expectedCluster": "common-title-two",
+      "provider": "core",
+      "providerRecordId": "CORE-COMMON-2",
+      "title": "A common title in science",
+      "identifiers": []
+    },
+    {
+      "key": "preprint-version",
+      "expectedCluster": "preprint-version",
+      "provider": "openalex",
+      "providerRecordId": "W-PREPRINT-1",
+      "title": "Version reconciliation remains conservative",
+      "identifiers": [
+        {"type": "ARXIV", "value": "2502.00001"}
+      ]
+    },
+    {
+      "key": "published-version",
+      "expectedCluster": "published-version",
+      "provider": "doaj",
+      "providerRecordId": "DOAJ-PUBLISHED-1",
+      "title": "Version reconciliation remains conservative",
+      "identifiers": [
+        {"type": "DOI", "value": "10.1000/published-version"}
+      ]
+    },
+    {
+      "key": "doi-less-thesis",
+      "expectedCluster": "doi-less-thesis",
+      "provider": "datacite",
+      "providerRecordId": "THESIS-LOCAL-1",
+      "title": "A DOI-less thesis remains independently addressable",
+      "identifiers": []
+    }
+  ]
+}

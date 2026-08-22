@@ -21,7 +21,7 @@ Exit: clean clone starts through documented commands and CI passes.
 
 Estimated effort: 1–2 weeks.
 
-Status: the search application pipeline, immutable result snapshot, cursor-continuation UI, and canonical paper-details UI are complete. Transport-lifecycle cancellation, richer typed publication metadata, and final hardening remain.
+Status: the search application pipeline, owner-scoped immutable result snapshots, multi-provider continuation UI, canonical paper-details UI, and typed publication metadata are complete. Transport-lifecycle cancellation and final hardening remain.
 
 - Canonical paper/search domain models and initial Flyway migrations.
 - OpenAlex adapter with rate limits and resilience.
@@ -41,7 +41,7 @@ Exit: persisted results, repeated-query reuse, and useful partial/failure respon
 
 Estimated effort: 1–2 weeks.
 
-Status: backend legal-access resolution, verified-version UI, supported-source PDF.js reader, external link fallback, and single-paper citation downloads are complete. Richer citation metadata, reader accessibility enhancements, and final hardening remain.
+Status: backend legal-access resolution, verified-version UI, supported-source PDF.js reader, external link fallback, typed single/batch citation downloads, automated keyboard/reader scenarios, and local WCAG 2.2 axe evidence are complete. Target-environment assistive-technology review remains a launch gate.
 
 - Implemented: exact DOI resolution through Unpaywall with optional backend-email configuration.
 - Implemented: exact arXiv-ID lookup with canonical response matching and provider-compliant request pacing.
@@ -50,8 +50,8 @@ Status: backend legal-access resolution, verified-version UI, supported-source P
 - Implemented: deterministic single-paper BibTeX and CSL-JSON downloads without provider calls.
 - Implemented: direct PDF.js reading for fresh, verified, CORS-compatible HTTPS PDF locations, with no byte proxy or retention and an external fallback.
 - Implemented: browser citation actions for BibTeX and CSL-JSON through a same-origin proxy.
-- Citation metadata hardening: credited-name snapshots, typed publication fields, identifier preference, and schema fixtures.
-- Restricted/unavailable/repository-copy tests.
+- Implemented: citation metadata hardening with credited-name snapshots, typed publication fields, identifier preference, and schema fixtures.
+- Implemented: restricted, unavailable, repository-copy, and arXiv-preprint classification tests.
 
 Exit: users identify and open legal versions in the UI, and export citations, without bypassing controls.
 
@@ -59,11 +59,11 @@ Exit: users identify and open legal versions in the UI, and export citations, wi
 
 Estimated effort: 1 week.
 
-Status: complete. The local-user bootstrap, owner-scoped collection management, saved-paper status/tags, lexical library search, and ordered batch citation downloads are implemented through REST and the Next.js UI.
+Status: complete. Local bootstrap and OIDC issuer+subject identities, owner-scoped collection management, saved-paper status/tags, lexical library search, and ordered batch citation downloads are implemented through REST and the Next.js UI.
 
 - Implemented: collections, reading status, and normalized tags.
 - Implemented: saved-library search and citation batch export.
-- Implemented: fixed local-user bootstrap, with principal-scoped boundaries ready for later authentication.
+- Implemented: fixed local-user bootstrap for local mode and lazy issuer+subject user provisioning for hosted OIDC mode, with negative cross-user authorization coverage.
 
 Exit: saved research survives restarts and is manageable through the UI.
 
@@ -71,12 +71,13 @@ Exit: saved research survives restarts and is manageable through the UI.
 
 Estimated effort: 1–2 weeks.
 
-Status: complete for the current five-tool local MVP. The Spring AI 2.0 stateless WebMVC transport, five read-oriented tool adapters, local bearer/Origin boundary, bounded per-address rate limiting, request IDs, response safety headers, Micrometer request metrics, raw JSON-RPC calls for every database-only tool, an MCP Inspector smoke run, and the applicable official conformance scenarios are implemented and verified locally.
+Status: complete for the current five-tool protocol surface. The Spring AI 2.0 stateless WebMVC transport, five read-oriented tool adapters, local bearer/Origin boundary, hosted JWT audience/scope boundary and protected-resource metadata, bounded per-address/principal rate limiting, request IDs, response safety headers, Micrometer request metrics, raw JSON-RPC calls for every database-only tool, an MCP Inspector smoke run, and the applicable official conformance scenarios are implemented. Inspector/conformance evidence remains local; a real hosted authorization-server/client interoperability run is still required.
 
 - Implemented: Spring AI WebMVC MCP server starter.
 - Implemented: stateless Streamable HTTP and five bounded, non-destructive, read-oriented tools. Search is correctly marked non-read-only/non-idempotent because it may fetch and persist cache/catalog data; the other four tools are database-only reads.
 - Deferred post-MVP: job-handle tools if provider breadth creates genuinely long-running searches.
 - Implemented: local API-key security, Origin validation, bounded inbound rate limiting, metrics, and request logging context.
+- Implemented: hosted `openscholar.mcp` JWT authorization, issuer/audience validation, issuer+subject ownership, hashed-principal rate-limit identity, and OAuth protected-resource metadata. Inbound tokens are never forwarded to providers.
 - Implemented: the shared 18-second application deadline bounds `search_research` execution and exposes safe deadline/interruption codes.
 - Known limitation: the configured 20-second MCP request timeout is not enforced by the stateless MCP Java SDK 2.0 path. MCP framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not yet cancel the tool worker.
 - Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios run with `--spec-version 2025-11-25` through a loopback bearer-injection proxy; both pass without warnings and discover exactly five tools.
@@ -91,7 +92,7 @@ Estimated effort: 1–2 weeks.
 
 Status: in progress. A versioned synthetic related-paper relevance corpus, PostgreSQL full-text vector/GIN migration, deterministic database-only ranker, bounded REST endpoint, and focused PostgreSQL/API tests are implemented. The provider/model/input decision, immutable `V10` embedding-profile and exact-store foundation, artifact-and-runtime-pinned local Ollama adapter, bounded offline backfill, opt-in exact-vector evaluation, exploratory hybrid sensitivity sweep, frozen independent holdout validation, pinned `V11` HNSW gate, and default-off production-readiness hybrid path are implemented. Generation remains opt-in and no model is downloaded by the project.
 
-- Implemented: first related-paper relevance evaluation set; dedicated provider/deduplication cases remain.
+- Implemented: the related-paper relevance sets plus a separate frozen exact-identifier deduplication fixture covering DOI/arXiv/OpenAlex normalization, provider replay, common-title false positives, DOI-less theses, and separate preprint/published records.
 - Implemented: PostgreSQL full-text search baseline over weighted canonical title, abstract, and venue metadata.
 - Implemented: local-first provider decision—full-digest-pinned Qwen3-Embedding-0.6B at 1024 dimensions on pinned Ollama `0.31.1`, with OpenAI `text-embedding-3-large` shortened to 1024 only as a future opt-in evaluation profile.
 - Implemented: provider-neutral immutable profile registry, deterministic title/abstract v1 input, checksum-guarded vector store, source invalidation, and exact same-profile cosine lookup.
@@ -110,11 +111,16 @@ Exit: measured retrieval improvement without hiding ranking rationale.
 
 Estimated effort: 2 weeks.
 
-- CORE and one thesis source.
-- PubMed Central or DOAJ based on target audience.
-- Scheduled metadata/access refresh.
-- Job dashboard, retry controls, provider metrics, transport-lifecycle budgets, and client cancellation propagation.
-- Optional permitted-document storage.
+Status: the planned provider/job foundation is implemented. OpenAlex plus optional DataCite, DOAJ, and licence-gated CORE participate in concurrent partial-success fan-out and deterministic fusion. Durable operational refresh jobs, UI/manual retry, metrics, and optional stale-target scheduling exist. Remaining items are production provider authorization/quotas, client cancellation, optional legally permitted storage, and further sources.
+
+- Implemented: disabled-by-default CORE API v3 work discovery with an explicit operator licence-confirmation gate, metadata-only mapping, bounded transport, and adapter-owned pagination. Actual deployment authorization remains external.
+- Implemented: disabled-by-default DOAJ v4 article discovery with keyless metadata/link mapping, bounded transport, and adapter-owned pagination.
+- Implemented: disabled-by-default DataCite thesis/dissertation metadata discovery with keyless DOI API access, provider-owned paging, and deliberately no discovery PDF/open-access claim.
+- Implemented: concurrent provider fan-out, isolated partial failures, exact-identifier merging, combined opaque cursors, provider-set cache fingerprints, reciprocal-rank fusion, and provider metrics.
+- PubMed Central remains a target-audience-dependent follow-up.
+- Implemented: PostgreSQL-backed `SEARCH_METADATA`/`PAPER_ACCESS` operational jobs with active-target deduplication, expiring leases, bounded retry/backoff, default-off worker/scheduling, REST/UI dashboard, and manual retry. They are not per-user MCP job handles.
+- Deferred: client-disconnect/MCP-notification cancellation propagation and MCP Tasks/job handles.
+- Optional permitted-document storage remains deferred; the current product stores links only and retains no PDF bytes.
 
 Exit: improved coverage with isolated partial failures.
 
@@ -122,13 +128,16 @@ Exit: improved coverage with isolated partial failures.
 
 Estimated effort: 1–2 weeks.
 
-- OIDC and principal-scoped data.
-- Hardened MCP authorization/scopes.
-- Privacy/export/delete flows.
-- Managed PostgreSQL and deployed containers.
-- TLS, backups, alerts, and secret management.
-- Accessibility, performance, threat-model, and licence reviews.
-- Demo recording and architecture/results publication.
+Status: the application and single-host deployment artifacts are implemented and tested locally/synthetically, but there is no live cloud deployment and the public-release evidence gate remains open.
+
+- Implemented: Spring Security OIDC resource server, issuer/audience/scope validation, issuer+subject-owned searches/libraries, and a Next.js authorization-code/PKCE BFF with encrypted HttpOnly sessions.
+- Implemented: hosted MCP authorization challenges/scopes and protected-resource metadata.
+- Implemented: no-store privacy export and confirmed account deletion with documented shared-catalog/reprovision semantics.
+- Implemented as templates: hardened single-host Compose/Caddy topology, blackbox monitoring, guarded checksum/encryption-capable PostgreSQL backup/restore, threat model, and supply-chain workflow.
+- Implemented locally: deterministic Compose-backed Playwright coverage, WCAG 2.2 axe checks, a frozen exact-identifier deduplication gate, and a reproducible loopback performance harness with passing synthetic reference evidence.
+- External: real IdP registration/interoperability/rotation, public DNS/TLS/ingress, immutable signed images, managed PostgreSQL/PITR/HA decision, secret manager, off-host backups/restore drills, and an actual deployment.
+- External: working alerts/on-call, privacy/licence/provider approval, target-environment assistive-technology/load/penetration/disaster-recovery evidence.
+- Implemented locally: reproducible search/paper/collection portfolio screenshots and an evidence page. An optional video and public architecture/results publication remain external presentation work.
 
 Exit: public demo is secure, reproducible, observable, and evidence-backed.
 
@@ -144,4 +153,4 @@ Exit: public demo is secure, reproducible, observable, and evidence-backed.
 
 ## Recommended order
 
-The core portfolio story remains query → normalized evidence → legal access → persistent reuse → UI → MCP. Embedding work now follows the measured lexical baseline: establish immutable provenance and deterministic storage first, then adopt vector or hybrid ranking only when the versioned fixture demonstrates an improvement. LLM summaries, broad provider fan-out, and multi-user auth remain later concerns.
+The core portfolio story remains query → normalized evidence → legal access → persistent reuse → UI → MCP. Provider fan-out and hosted identity boundaries now exist; the next priority is proving them in a real deployment rather than expanding claims. Embedding work continues to follow the measured lexical baseline, and LLM summaries remain later work subject to citation, prompt-injection, privacy, and document-rights controls.

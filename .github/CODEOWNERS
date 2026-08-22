@@ -1,0 +1,17 @@
+# Replace or extend this owner when maintainers/teams change. Branch protection
+# must require CODEOWNERS approval for these rules to become an enforcement gate.
+* @peprick
+
+/.github/ @peprick
+/backend/pom.xml @peprick
+/backend/Dockerfile @peprick
+/backend/src/main/resources/db/migration/ @peprick
+/frontend/package.json @peprick
+/frontend/pnpm-lock.yaml @peprick
+/frontend/Dockerfile @peprick
+/deploy/ @peprick
+/scripts/postgres-backup.sh @peprick
+/scripts/postgres-restore.sh @peprick
+/docs/SECURITY_AND_LEGAL.md @peprick
+/docs/THREAT_MODEL.md @peprick
+/docs/OPERATIONS_RUNBOOK.md @peprick

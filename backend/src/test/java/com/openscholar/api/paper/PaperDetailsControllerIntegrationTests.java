@@ -57,7 +57,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @Import({
 	TestcontainersConfiguration.class,
 	PaperDetailsControllerIntegrationTests.FakeAccessConfiguration.class

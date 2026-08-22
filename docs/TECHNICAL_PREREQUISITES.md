@@ -27,16 +27,15 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - Maven lifecycle, dependency scopes, and the wrapper.
 - JUnit 5, Mockito, integration tests, and Testcontainers.
 
-### Learn during implementation
+### Project-specific topics
 
 - Spring Boot 4.1 and Spring Framework 7 conventions.
-- Spring AI `@McpTool`, `@McpResource`, and `@McpPrompt` annotations.
-- Stateless Streamable HTTP MCP configuration and protocol negotiation.
+- Spring AI `@McpTool`, structured schemas, stateless Streamable HTTP configuration, and protocol negotiation. The current server does not advertise resources or prompts.
 - PostgreSQL full-text search and pgvector similarity queries.
 - Spring AI's low-level Ollama API, immutable model-artifact pinning, and offline backfill safety.
-- Resilience4j circuit breakers, retries, and bulkheads.
+- Provider deadlines/body limits, concurrent fan-out, partial failures, reciprocal-rank fusion, and durable leased-job retry. Resilience4j circuit breakers/bulkheads remain a possible later addition, not a current dependency.
 - Flyway migration discipline.
-- OAuth 2.0 resource-server security and local API-key authentication.
+- Spring Security OAuth 2.0 JWT resource-server validation, route scopes, issuer+subject ownership, protected-resource metadata, and local MCP-key authentication.
 - Micrometer/OpenTelemetry instrumentation and ArchUnit boundaries.
 
 ## Frontend knowledge
@@ -44,6 +43,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - TypeScript and asynchronous programming.
 - React components, hooks, forms, and rendering boundaries.
 - Next.js routing and API integration.
+- Authorization Code + PKCE BFF flows, state/nonce, ID-token/JWKS validation, encrypted HttpOnly sessions, token refresh, and same-origin mutation checks.
 - Accessible HTML and keyboard interaction.
 - PDF.js and browser cross-origin restrictions.
 - Playwright end-to-end testing.
@@ -55,6 +55,7 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - Secret handling through ignored files or a secret manager.
 - GitHub Actions jobs, caches, service containers, and protected secrets.
 - Basic DNS, TLS, reverse proxies, and container deployment.
+- Caddy routing/automatic TLS, blackbox Prometheus/Alertmanager operation, file-secret ownership, and guarded PostgreSQL backup/restore with checksums and optional `age` encryption.
 
 ## Academic-data concepts
 
@@ -66,11 +67,13 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 
 ## Accounts and API credentials
 
-### MVP
+### Local development
 
-- OpenAlex API key.
-- Contact email for Unpaywall API requests.
-- CORE key only when that provider is enabled.
+- A generated `MCP_LOCAL_API_KEY` for the local MCP route.
+- OpenAlex works without a project-owned credential in the default configuration; an optional backend API key may be configured when approved.
+- A contact email for Unpaywall is optional; leaving it blank disables Unpaywall while arXiv access checks remain available.
+- DataCite and DOAJ discovery are keyless, disabled-by-default providers with optional contact identity.
+- CORE remains disabled until its terms/applicable licence are approved and `CORE_LICENSE_CONFIRMED=true`; its backend bearer key is optional where the approved service permits it.
 - No LLM/embedding key for the first lexical-search milestone.
 
 ### Optional local embedding evaluation
@@ -79,11 +82,16 @@ This development machine currently has Java 26 and Docker 29.6.1. Java 26 is com
 - The explicit `qwen3-embedding:0.6b` model tag and its reviewed full SHA-256 digest.
 - No hosted embedding credential is required for the implemented local profile.
 
+### Hosted deployment prerequisites
+
+- An external OIDC authorization server with a confidential browser client, MCP-client grants, JWT access tokens for the configured API audience, approved `openscholar.*` scopes, explicit authorization/token/JWKS/logout endpoints, and tested rotation/revocation.
+- A 32-byte-base64 browser session-sealing secret and confidential OIDC client secret, preferably delivered by a managed secret system.
+- DNS/TLS/ingress, reviewed container registry/digests/signing, database/PITR/backup decisions, and a working alert route. The checked-in files are templates, not provisioned services.
+
 ### Optional later
 
 - Hosted embedding provider credentials for a separately versioned comparison profile.
 - S3-compatible object storage.
-- OAuth identity provider.
 - Error monitoring.
 
 All credentials belong in ignored environment files or deployment secrets. `.env.example` contains variable names, safe local defaults, and documentation only.

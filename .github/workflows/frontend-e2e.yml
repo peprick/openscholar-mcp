@@ -5,10 +5,18 @@ on:
     branches: [main]
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "compose.yaml"
+      - "deploy/compose.e2e.yaml"
+      - "deploy/e2e/**"
       - ".github/workflows/frontend-e2e.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "compose.yaml"
+      - "deploy/compose.e2e.yaml"
+      - "deploy/e2e/**"
       - ".github/workflows/frontend-e2e.yml"
 
 permissions:
@@ -30,15 +38,15 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           package_json_file: frontend/package.json
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
           cache: pnpm
@@ -60,7 +68,7 @@ jobs:
 
       - name: Upload failure-only traces and screenshots
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: frontend-e2e-${{ github.run_attempt }}
           path: |
@@ -68,3 +76,76 @@ jobs:
             frontend/test-results/playwright
           if-no-files-found: ignore
           retention-days: 7
+
+  compose:
+    name: Compose full-stack Chromium workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      COMPOSE_PROJECT_NAME: openscholar-e2e
+      POSTGRES_PORT: "55432"
+      BACKEND_PORT: "8180"
+      FRONTEND_PORT: "3300"
+      PLAYWRIGHT_COMPOSE_ORIGIN: http://127.0.0.1:3300
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install browser-test dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium and operating-system dependencies
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build and start the isolated full stack
+        run: >-
+          docker compose
+          -f compose.yaml
+          -f deploy/compose.e2e.yaml
+          up --build --detach --wait --wait-timeout 180
+
+      - name: Run Compose-backed browser workflow
+        working-directory: frontend
+        run: pnpm test:e2e:compose
+
+      - name: Capture service logs on failure
+        if: failure()
+        run: >-
+          docker compose
+          -f compose.yaml
+          -f deploy/compose.e2e.yaml
+          logs --no-color --tail 300
+
+      - name: Upload failure-only browser evidence
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: frontend-compose-e2e-${{ github.run_attempt }}
+          path: |
+            frontend/playwright-compose-report
+            frontend/test-results/playwright-compose
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Remove the isolated stack and disposable volume
+        if: always()
+        run: >-
+          docker compose
+          -f compose.yaml
+          -f deploy/compose.e2e.yaml
+          down --volumes --remove-orphans

@@ -47,7 +47,7 @@ class ProviderAccessCandidateVerifier implements AccessCandidateVerifier {
 				return new CandidateVerificationOutcome(
 						java.util.Optional.of(location(
 								candidate,
-								AccessStatus.OPEN_PDF,
+								pdfStatus(candidate),
 								verifiedLandingPage,
 								pdfResult.finalUri(),
 								pdfResult,
@@ -110,7 +110,20 @@ class ProviderAccessCandidateVerifier implements AccessCandidateVerifier {
 	}
 
 	private static AccessStatus landingStatus(AccessCandidate candidate) {
-		return AccessStatus.OPEN_LANDING_PAGE;
+		return classifiedLocationStatus(candidate, AccessStatus.OPEN_LANDING_PAGE);
+	}
+
+	private static AccessStatus pdfStatus(AccessCandidate candidate) {
+		return classifiedLocationStatus(candidate, AccessStatus.OPEN_PDF);
+	}
+
+	private static AccessStatus classifiedLocationStatus(AccessCandidate candidate, AccessStatus fallback) {
+		if (candidate.source() == AccessSource.ARXIV) {
+			return AccessStatus.PREPRINT;
+		}
+		return hostType(candidate) == AccessHostType.REPOSITORY
+				? AccessStatus.REPOSITORY_COPY
+				: fallback;
 	}
 
 	private static AccessHostType hostType(AccessCandidate candidate) {

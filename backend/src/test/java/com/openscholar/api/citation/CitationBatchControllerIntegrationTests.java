@@ -57,7 +57,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @Import({ TestcontainersConfiguration.class, CitationBatchControllerIntegrationTests.CitationTestConfiguration.class })
 @SpringBootTest(classes = CitationBatchControllerIntegrationTests.CitationBatchTestApplication.class)
 class CitationBatchControllerIntegrationTests {

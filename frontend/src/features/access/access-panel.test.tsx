@@ -122,6 +122,33 @@ describe("AccessPanel", () => {
     ).toBeVisible();
   });
 
+  it("renders a cached unavailable result without exposing a reader or external link", () => {
+    const access = paperAccessResponseFixture({
+      status: "UNAVAILABLE",
+      cacheDisposition: "RESOLVED",
+      bestLocationId: null,
+      locations: [],
+    });
+
+    render(
+      <AccessPanel
+        initialAccess={access}
+        initialNow={initialNow}
+        paperId={testIds.paper}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable")).toBeVisible();
+    expect(screen.getByText("No verified location stored yet.")).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Read in OpenScholar" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Check cached access" }),
+    ).toBeVisible();
+  });
+
   it("keeps a stale verified PDF external-only until access is refreshed", () => {
     const access = paperAccessResponseFixture({
       cacheDisposition: "STALE_FALLBACK",

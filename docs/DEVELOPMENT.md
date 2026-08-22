@@ -62,12 +62,38 @@ FRONTEND_PORT
 SPRING_DATASOURCE_URL
 SPRING_DOCKER_COMPOSE_ENABLED
 SERVER_ADDRESS
+OIDC_SECURITY_ENABLED
+OIDC_ISSUER_URI
+OIDC_JWK_SET_URI
+OIDC_AUDIENCE
+OIDC_MCP_RESOURCE_URI
 OPENALEX_API_KEY
 OPENALEX_BASE_URL
 OPENALEX_REQUEST_TIMEOUT
 OPENALEX_MAX_RESPONSE_BYTES
+DOAJ_ENABLED
+DOAJ_BASE_URL
+DOAJ_CONTACT_EMAIL
+DOAJ_CONNECT_TIMEOUT
+DOAJ_REQUEST_TIMEOUT
+DOAJ_MAX_RESPONSE_BYTES
+CORE_ENABLED
+CORE_LICENSE_CONFIRMED
+CORE_API_KEY
+CORE_BASE_URL
+CORE_CONNECT_TIMEOUT
+CORE_REQUEST_TIMEOUT
+CORE_MAX_RESPONSE_BYTES
+DATACITE_ENABLED
+DATACITE_BASE_URL
+DATACITE_CONTACT_EMAIL
+DATACITE_CONNECT_TIMEOUT
+DATACITE_REQUEST_TIMEOUT
+DATACITE_MAX_RESPONSE_BYTES
 SEARCH_COORDINATION_WAIT_TIMEOUT
 SEARCH_EXECUTION_TIMEOUT
+RELATED_PAPERS_HYBRID_ENABLED
+RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE
 UNPAYWALL_EMAIL
 UNPAYWALL_BASE_URL
 ARXIV_BASE_URL
@@ -77,6 +103,17 @@ MCP_RATE_LIMIT_ENABLED
 MCP_RATE_LIMIT_REQUESTS
 MCP_RATE_LIMIT_WINDOW
 MCP_RATE_LIMIT_MAX_CLIENTS
+MCP_MAX_REQUEST_BYTES
+MCP_MAX_TOOL_RESULT_BYTES
+REFRESH_JOBS_WORKER_ENABLED
+REFRESH_JOBS_SCHEDULED_ENABLED
+REFRESH_JOBS_POLL_DELAY
+REFRESH_JOBS_SCAN_DELAY
+REFRESH_JOBS_LEASE_DURATION
+REFRESH_JOBS_RETRY_BACKOFF
+REFRESH_JOBS_MAX_ATTEMPTS
+REFRESH_JOBS_PER_POLL
+REFRESH_JOBS_STALE_TARGETS_PER_SCAN
 OLLAMA_EMBEDDING_ENABLED
 OLLAMA_BASE_URL
 OLLAMA_QWEN3_EMBEDDING_DIGEST
@@ -90,13 +127,28 @@ EMBEDDING_BACKFILL_AFTER_EXCLUSIVE
 EMBEDDING_BACKFILL_LIMIT
 EMBEDDING_BACKFILL_MAX_ATTEMPTS
 OPENSCHOLAR_API_BASE_URL
+OPENSCHOLAR_AUTH_MODE
+OPENSCHOLAR_AUTH_SESSION_SECRET
+OPENSCHOLAR_AUTH_SESSION_MAX_AGE_SECONDS
+OPENSCHOLAR_OIDC_ISSUER
+OPENSCHOLAR_OIDC_AUTHORIZATION_ENDPOINT
+OPENSCHOLAR_OIDC_TOKEN_ENDPOINT
+OPENSCHOLAR_OIDC_JWKS_URI
+OPENSCHOLAR_OIDC_END_SESSION_ENDPOINT
+OPENSCHOLAR_OIDC_CLIENT_ID
+OPENSCHOLAR_OIDC_CLIENT_AUTH_METHOD
+OPENSCHOLAR_OIDC_CLIENT_SECRET
+OPENSCHOLAR_OIDC_REDIRECT_URI
+OPENSCHOLAR_OIDC_POST_LOGOUT_REDIRECT_URI
+OPENSCHOLAR_OIDC_SCOPES
+OPENSCHOLAR_OIDC_ID_TOKEN_ALGS
 ```
 
 `SEARCH_COORDINATION_WAIT_TIMEOUT` defaults to `12s` and bounds only acquisition of the JVM-local striped search-coordination lock. It does not bound cache reads, provider work after acquisition, persistence, response serialization, or the complete REST/MCP request, and a caller that stops waiting does not cancel the leader already holding the stripe.
 
 `SEARCH_EXECUTION_TIMEOUT` defaults to `18s`, accepts values of at least one millisecond, and bounds each `SearchResearchUseCase` `search`, `next`, or `get` execution shared by REST and MCP. A dedicated virtual-thread worker and cooperative checkpoints cover application dispatch through `SearchView` construction. Parsing/schema validation, transport DTO/framework serialization, socket lifetime, client disconnects, and MCP cancellation notifications are outside this setting.
 
-The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. OAuth, storage, and monitoring variables arrive only with those features. `.env.example` contains placeholders; `.env` is ignored.
+The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. Local auth mode is the default. To exercise hosted mode, backend OIDC and frontend BFF settings must describe the same issuer/audience/client and use explicit loopback or HTTPS endpoints; never expose these values through `NEXT_PUBLIC_*`. Optional discovery providers and durable workers/scheduling remain default-off. Object storage does not exist, and monitoring-specific variables live under `deploy/`. `.env.example` contains placeholders; `.env` is ignored.
 
 ## Backend conventions
 
@@ -115,13 +167,13 @@ The embedding variables apply to direct backend development only; the root conta
 ## Frontend conventions
 
 - Strict TypeScript.
-- Generated/validated OpenAPI types where practical.
+- Runtime-validated API responses aligned with the checked-in OpenAPI contract; generated types may be adopted where they reduce rather than duplicate validation.
 - Accessible components and tested keyboard behavior.
 - Dedicated server-data query/cache layer.
 - No credentials/private backend configuration in browser bundles.
 - Explicit PDF failure and external-link fallback.
 - Only fresh, verified HTTPS PDF locations may enter the in-app reader; PDF.js fetches them directly without credentials, proxying, or retention.
-- Runtime-validated API responses until an OpenAPI document is available.
+- Keep runtime response schemas and the controller-checked OpenAPI document aligned.
 - Only independently verified `/versions` links may be rendered as legal-access actions.
 
 ## Branch and commit workflow

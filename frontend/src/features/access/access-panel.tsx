@@ -4,7 +4,10 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { selectReaderSource } from "@/features/reader/reader-source";
+import {
+  isReadablePdfAccessStatus,
+  selectReaderSource,
+} from "@/features/reader/reader-source";
 import {
   apiProblemSchema,
   paperAccessResponseSchema,
@@ -109,7 +112,7 @@ function AccessLocation({
         </p>
       )}
       {location.verificationStatus === "VERIFIED" &&
-      location.accessStatus === "OPEN_PDF" &&
+      isReadablePdfAccessStatus(location.accessStatus) &&
       location.pdfUrl !== null &&
       readerHref === null ? (
         <p className="inlineNotice">

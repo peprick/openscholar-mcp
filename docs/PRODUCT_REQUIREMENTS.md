@@ -10,9 +10,9 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 2. **Evidence over fluency:** show provenance, identifiers, and source links.
 3. **Local reuse:** persisted results should improve future searches.
 4. **Explainable ranking:** expose why a result was included.
-5. **Progressive enrichment:** return useful metadata before every provider finishes.
+5. **Partial resilience:** preserve useful metadata when another enabled provider fails or is inapplicable.
 6. **Safe agent access:** tools are narrow, typed, auditable, and read-first.
-7. **User control:** saving, downloading, summarizing, and deleting are explicit actions.
+7. **User control:** saving, opening external documents, summarizing, and deleting are explicit actions.
 
 ## MVP functional requirements
 
@@ -23,7 +23,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 - Return local results immediately when cache coverage and freshness meet policy.
 - Query enabled providers when local coverage is insufficient.
 - Return partial results with provider warnings rather than failing the entire request.
-- Preserve the exact user query and normalized query fingerprint.
+- Preserve the exact user query and a normalized fingerprint that also reflects filters and the enabled-provider set.
 
 ### Paper records
 
@@ -34,7 +34,7 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ### Full-text availability
 
-- Classify locations as `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, or `UNAVAILABLE`.
+- Classify locations as `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, or `UNAVAILABLE`. Repository-copy and preprint classifications require verified links plus corresponding provider host/source evidence; either may carry a verified PDF or landing-page-only link.
 - Prefer a verified open version without hiding the canonical publisher page.
 - Show source, host type, licence if known, and last verification time.
 - Never attempt to download a restricted version.
@@ -65,27 +65,27 @@ Research discovery is fragmented across indexes, journals, preprint archives, an
 
 ### Performance targets
 
-- Cached search p95: under 500 ms on the local stack.
+- Cached search p95: under 500 ms on the local stack. The checked-in harness has a passing 40-sample reference run at 6.944 ms; see [Local performance evidence](PERFORMANCE_EVIDENCE.md).
 - First uncached partial results: under 4 seconds when at least one provider is healthy.
-- OpenAlex outbound HTTP exchange deadline: 10 seconds by default, covering request transmission, response headers, and response-body consumption.
+- Each discovery adapter's outbound whole-exchange deadline: 10 seconds by default, covering request transmission, response headers, and response-body consumption.
 - Same-instance search-coordination acquisition limit: 12 seconds by default; this is not an end-to-end request target.
 - Search application-execution deadline: 18 seconds by default across REST and MCP search use cases.
 - Full multi-provider fan-out target: 10 seconds by default; transport parsing/serialization and socket-lifetime deadlines remain planned.
-- Cached paper detail p95: under 300 ms.
+- Cached paper detail p95: under 300 ms. The same reference run measured 7.305 ms.
 
 ### Reliability
 
 - One provider failure must not discard successful results from other providers.
-- Every outbound request has a timeout. OpenAlex's whole-exchange deadline does not include local coordination, database or persistence work, or transport serialization. Search coordination separately bounds only JVM-local lock acquisition to 12 seconds by default; it neither starts duplicate work after timeout nor cancels the leader. A timed-out caller reuses an exact snapshot when available and otherwise returns retryable `SEARCH_COORDINATION_TIMEOUT`; interruption is reported separately as retryable `SEARCH_COORDINATION_INTERRUPTED`. The shared 18-second execution deadline covers validated `search`, `next`, and `get` application work and returns retryable `SEARCH_DEADLINE_EXCEEDED` when it fires first or `SEARCH_EXECUTION_INTERRUPTED` for caller/server interruption. Deadline expiration is terminal, performs no new stale fallback, and may not stop JDBC persistence already in progress; it may later commit. These public errors omit `Retry-After`. arXiv pacing, access-refresh cooldowns, cache reuse, and upstream `429` metadata are implemented; client-disconnect/MCP-notification cancellation, transport-level deadlines, bounded retries, and general per-provider budgets remain planned.
-- Failed jobs are retryable and visible to maintainers.
+- Every outbound request has a timeout. Discovery whole-exchange deadlines do not include local coordination, database or persistence work, or transport serialization. Search coordination separately bounds only JVM-local lock acquisition to 12 seconds by default; it neither starts duplicate work after timeout nor cancels the leader. A timed-out caller reuses an exact owner-scoped snapshot when available and otherwise returns retryable `SEARCH_COORDINATION_TIMEOUT`; interruption is reported separately as retryable `SEARCH_COORDINATION_INTERRUPTED`. The shared 18-second execution deadline covers validated `search`, `next`, and `get` application work and returns retryable `SEARCH_DEADLINE_EXCEEDED` when it fires first or `SEARCH_EXECUTION_INTERRUPTED` for caller/server interruption. Deadline expiration is terminal, performs no new stale fallback, and may not stop JDBC persistence already in progress; it may later commit. These public errors omit `Retry-After`. arXiv pacing, access-refresh cooldowns, cache reuse, partial discovery results, and upstream `429` metadata are implemented; client-disconnect/MCP-notification cancellation, transport-level deadlines, general interactive retries, and provider concurrency budgets remain planned. Durable refresh jobs have a separate bounded retry/backoff policy.
+- Durable `SEARCH_METADATA` and `PAPER_ACCESS` jobs are retryable operational records, not MCP job handles. Search-job visibility follows the target snapshot owner; shared-catalog access jobs are visible to all `openscholar.jobs` principals.
 - Search persistence is idempotent.
 
 ### Accessibility and privacy
 
 - Target WCAG 2.2 AA and keyboard-operable controls.
-- The single-user MVP runs locally without analytics.
-- Multi-user mode isolates libraries and notes by user ID.
-- Search history deletion is supported before public deployment.
+- Local mode runs without analytics and uses one fixed bootstrap owner.
+- Hosted OIDC mode isolates libraries and search snapshots by the internal user derived from validated issuer+subject. Notes remain planned.
+- No-store personal-data export and confirmed account deletion are implemented. Shared canonical/provider/access records remain, and a later valid token reprovisions an empty internal user.
 - Providers receive only query data required for the search.
 
 ## Acceptance scenarios
@@ -110,10 +110,10 @@ Given a paper with both DOI and arXiv identifiers, when Unpaywall times out whil
 
 Given a valid `search_research` tool call, the server returns structured results with identifiers, provider-reported access hints, ranking reasons, and source provenance.
 
-## Deferred decisions
+## Deferred or external decisions
 
-- Hosted authentication provider.
-- Embedding provider and model.
+- Real hosted OIDC provider/client registration, grants, interoperability, and key rotation. The application-side resource server and BFF are implemented.
+- Whether to evaluate a hosted embedding provider; the current default-off local Qwen/Ollama profile is already pinned and implemented.
 - Commercial versus non-commercial deployment.
 - Retained-PDF storage policy by licence family.
 - Open-source licence for this repository.

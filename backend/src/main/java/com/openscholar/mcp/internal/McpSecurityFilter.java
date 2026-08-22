@@ -3,9 +3,12 @@ package com.openscholar.mcp.internal;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Enumeration;
+import java.util.HexFormat;
 import java.util.UUID;
 
+import com.openscholar.security.OidcSecurityProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,17 +20,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.core.Ordered;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 @ConditionalOnBean(McpSecurityProperties.class)
-@Order(Ordered.HIGHEST_PRECEDENCE + 20)
+@Order(SecurityFilterProperties.DEFAULT_FILTER_ORDER + 1)
 class McpSecurityFilter extends OncePerRequestFilter {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(McpSecurityFilter.class);
@@ -40,6 +46,7 @@ class McpSecurityFilter extends OncePerRequestFilter {
 	private static final String DURATION_METRIC = "openscholar.mcp.request.duration";
 
 	private final McpSecurityProperties properties;
+	private final OidcSecurityProperties oidcProperties;
 	private final McpRateLimiter rateLimiter;
 	private final MeterRegistry meterRegistry;
 	private final Counter requestCounter;
@@ -47,9 +54,11 @@ class McpSecurityFilter extends OncePerRequestFilter {
 
 	McpSecurityFilter(
 			McpSecurityProperties properties,
+			OidcSecurityProperties oidcProperties,
 			McpRateLimiter rateLimiter,
 			MeterRegistry meterRegistry) {
 		this.properties = properties;
+		this.oidcProperties = oidcProperties;
 		this.rateLimiter = rateLimiter;
 		this.meterRegistry = meterRegistry;
 		this.requestCounter = Counter.builder(REQUESTS_METRIC)
@@ -84,18 +93,18 @@ class McpSecurityFilter extends OncePerRequestFilter {
 						"MCP_ORIGIN_REJECTED", "The request Origin is not allowed.");
 				return;
 			}
-			if (!properties.hasApiKey()) {
+			if (!oidcProperties.enabled() && !properties.hasApiKey()) {
 				reject(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
 						"MCP_NOT_CONFIGURED", "Set MCP_LOCAL_API_KEY before using the MCP endpoint.");
 				return;
 			}
-			if (!hasValidBearerToken(request)) {
+			if (!oidcProperties.enabled() && !hasValidBearerToken(request)) {
 				response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer realm=\"openscholar-mcp\"");
 				reject(response, HttpServletResponse.SC_UNAUTHORIZED,
 						"MCP_UNAUTHORIZED", "A valid local MCP bearer key is required.");
 				return;
 			}
-			McpRateLimiter.Decision rateLimitDecision = rateLimiter.acquire(request.getRemoteAddr());
+			McpRateLimiter.Decision rateLimitDecision = rateLimiter.acquire(rateLimitIdentity(request));
 			if (!rateLimitDecision.permitted()) {
 				response.setHeader(HttpHeaders.RETRY_AFTER,
 						Long.toString(rateLimitDecision.retryAfterSeconds()));
@@ -112,6 +121,28 @@ class McpSecurityFilter extends OncePerRequestFilter {
 			LOGGER.info("MCP request completed: requestId={}, method={}, status={}",
 					requestId, request.getMethod(), response.getStatus());
 			MDC.remove("mcpRequestId");
+		}
+	}
+
+	private String rateLimitIdentity(HttpServletRequest request) {
+		if (oidcProperties.enabled()) {
+			Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+			if (authentication != null && authentication.isAuthenticated()
+					&& authentication.getPrincipal() instanceof Jwt jwt
+					&& jwt.getIssuer() != null && jwt.getSubject() != null) {
+				return "oidc:" + sha256(jwt.getIssuer() + "\0" + jwt.getSubject());
+			}
+		}
+		return "address:" + request.getRemoteAddr();
+	}
+
+	private static String sha256(String value) {
+		try {
+			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+					.digest(value.getBytes(StandardCharsets.UTF_8)));
+		}
+		catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable", exception);
 		}
 	}
 

@@ -1,0 +1,2424 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: OpenScholar REST API
+  version: 0.1.0
+  summary: Bounded scholarly discovery, legal-access, library, job, and privacy APIs.
+  description: |
+    Static contract for every current `/api/v1` endpoint exposed by the Spring Boot
+    backend. Research-provider PDF URLs in search results are provider-reported and
+    are not independently verified legal-access claims; use the paper access routes
+    for verified locations. The API never returns or retains PDF document bytes.
+
+    Security requirements describe hosted mode (`OIDC_SECURITY_ENABLED=true`). In
+    loopback local mode, REST requests are permitted without a bearer token and are
+    resolved as the fixed local owner. In hosted mode, the configured resource server
+    validates JWT signature, expiry, issuer, and audience before applying the scopes
+    shown on each operation. Search snapshots, collections, saved papers, privacy
+    data, and `SEARCH_METADATA` refresh jobs are resolved for the authenticated
+    issuer-and-subject principal; an identifier owned by another principal is returned
+    as `404`, not `403`. Canonical papers, stored access records, and `PAPER_ACCESS`
+    refresh jobs are shared records as described by their operations.
+  license:
+    name: All rights reserved
+    identifier: LicenseRef-Proprietary
+externalDocs:
+  description: Human-readable REST and MCP contracts
+  url: https://github.com/peprick/openscholar-mcp/blob/main/docs/API_AND_MCP.md
+servers:
+  - url: /
+    description: Same-origin deployment
+  - url: http://localhost:8080
+    description: Loopback backend development
+tags:
+  - name: System
+  - name: Searches
+  - name: Papers
+  - name: Access
+  - name: Citations
+  - name: Collections
+  - name: Library
+  - name: Refresh jobs
+  - name: Privacy
+paths:
+  /api/v1/system/status:
+    get:
+      tags: [System]
+      operationId: getSystemStatus
+      summary: Read the public application status
+      description: Returns a small public liveness/status document without database or provider detail.
+      security: []
+      responses:
+        "200":
+          description: The backend is serving requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStatus"
+
+  /api/v1/searches:
+    post:
+      tags: [Searches]
+      operationId: createSearch
+      summary: Search scholarly metadata
+      description: |
+        Searches enabled metadata providers with bounded filters and stores an immutable,
+        principal-owned snapshot. A newly fetched snapshot returns `201`; an exact fresh
+        cache hit or stale fallback returns `200`. Partial provider success remains a
+        successful response and is described by `providerCoverage` and `warnings`.
+      security:
+        - HostedOidc: [openscholar.search]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSearchRequest"
+      responses:
+        "200":
+          description: An exact cache hit or stale fallback snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "201":
+          description: A new immutable search snapshot was stored.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/searches/{searchId}/next:
+    parameters:
+      - $ref: "#/components/parameters/SearchId"
+    post:
+      tags: [Searches]
+      operationId: createNextSearchPage
+      summary: Continue an immutable search snapshot
+      description: |
+        Reuses the current principal's stored query, filters, page size, and opaque next
+        cursor. A newly fetched continuation returns `201`; replaying a fresh continuation
+        may return `200`. A missing or other-principal source snapshot returns
+        `SEARCH_NOT_FOUND`; an exhausted snapshot returns `SEARCH_PAGE_EXHAUSTED`.
+      security:
+        - HostedOidc: [openscholar.search]
+      responses:
+        "200":
+          description: An existing fresh continuation or stale fallback.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "201":
+          description: A new immutable continuation snapshot was stored.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/searches/{searchId}:
+    parameters:
+      - $ref: "#/components/parameters/SearchId"
+    get:
+      tags: [Searches]
+      operationId: getSearch
+      summary: Read a stored search snapshot
+      description: Reads the current principal's immutable snapshot without contacting a provider.
+      security:
+        - HostedOidc: [openscholar.search]
+      responses:
+        "200":
+          description: The stored search snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+
+  /api/v1/papers/{paperId}:
+    parameters:
+      - $ref: "#/components/parameters/PaperId"
+    get:
+      tags: [Papers]
+      operationId: getPaper
+      summary: Read canonical paper details
+      description: |
+        Returns shared canonical bibliographic metadata, record-level provenance, and a
+        compact summary of the currently stored access resolution. It does not contact
+        metadata or access providers.
+      security: []
+      responses:
+        "200":
+          description: Canonical paper details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperDetailsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/papers/{paperId}/related:
+    parameters:
+      - $ref: "#/components/parameters/PaperId"
+      - $ref: "#/components/parameters/RelatedLimit"
+    get:
+      tags: [Papers]
+      operationId: getRelatedPapers
+      summary: Rank related canonical papers
+      description: |
+        Performs a bounded database-only lexical or opt-in hybrid lookup. The response
+        always identifies the ranking mode and reports a nullable fallback reason.
+      security: []
+      responses:
+        "200":
+          description: Bounded related-paper ranking.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelatedPapersResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/papers/{paperId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/PaperId"
+    get:
+      tags: [Access]
+      operationId: getPaperVersions
+      summary: Read stored legal-access evidence
+      description: |
+        Reads shared stored access evidence only. Before the first resolution it returns
+        `NOT_YET_RESOLVED`, no locations, and performs no provider request.
+      security: []
+      responses:
+        "200":
+          description: Stored paper-access state and independently verified locations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperAccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/papers/{paperId}/access/verify:
+    parameters:
+      - $ref: "#/components/parameters/PaperId"
+      - $ref: "#/components/parameters/ForceRefresh"
+    post:
+      tags: [Access]
+      operationId: verifyPaperAccess
+      summary: Resolve and verify legal-access locations
+      description: |
+        Performs bounded synchronous resolution against supported exact-identifier access
+        sources. The shared stored result contains links and evidence only, never document
+        bytes. Forced refreshes are cooldown protected.
+      security:
+        - HostedOidc: [openscholar.search]
+      responses:
+        "200":
+          description: The resolved, cached, refreshed, or stale-fallback access state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperAccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/v1/papers/{paperId}/citation:
+    parameters:
+      - $ref: "#/components/parameters/PaperId"
+      - $ref: "#/components/parameters/CitationFormat"
+    get:
+      tags: [Citations]
+      operationId: exportPaperCitation
+      summary: Download one paper citation
+      description: Returns deterministic UTF-8 BibTeX or a one-item CSL-JSON array without provider calls.
+      security: []
+      responses:
+        "200":
+          description: Citation attachment in the requested format.
+          headers:
+            Content-Disposition:
+              $ref: "#/components/headers/ContentDisposition"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/x-bibtex:
+              schema:
+                type: string
+            application/vnd.citationstyles.csl+json:
+              schema:
+                $ref: "#/components/schemas/CslJsonCitationArray"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/citations/export:
+    post:
+      tags: [Citations]
+      operationId: exportCitationBatch
+      summary: Download an ordered citation batch
+      description: |
+        Exports one to 100 distinct canonical paper IDs in caller order. The operation is
+        all-or-nothing: an unknown paper returns `PAPER_NOT_FOUND` and no attachment.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchCitationRequest"
+      responses:
+        "200":
+          description: Citation attachment in the requested format.
+          headers:
+            Content-Disposition:
+              $ref: "#/components/headers/ContentDisposition"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/x-bibtex:
+              schema:
+                type: string
+            application/vnd.citationstyles.csl+json:
+              schema:
+                $ref: "#/components/schemas/CslJsonCitationArray"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/collections:
+    get:
+      tags: [Collections]
+      operationId: listCollections
+      summary: List the current principal's collections
+      security:
+        - HostedOidc: [openscholar.library]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of principal-owned collection summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Collections]
+      operationId: createCollection
+      summary: Create a collection for the current principal
+      security:
+        - HostedOidc: [openscholar.library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionRequest"
+      responses:
+        "201":
+          description: The created collection summary.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/collections/{collectionId}:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+    get:
+      tags: [Collections]
+      operationId: getCollection
+      summary: Read one principal-owned collection
+      description: Missing and other-principal collection IDs both return `COLLECTION_NOT_FOUND`.
+      security:
+        - HostedOidc: [openscholar.library]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Collection metadata and a page of saved papers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Collections]
+      operationId: updateCollection
+      summary: Replace a collection's editable metadata
+      description: Both name and description are interpreted as the complete editable state.
+      security:
+        - HostedOidc: [openscholar.library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionRequest"
+      responses:
+        "200":
+          description: The updated collection summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Collections]
+      operationId: deleteCollection
+      summary: Delete a principal-owned collection
+      security:
+        - HostedOidc: [openscholar.library]
+      responses:
+        "204":
+          description: The collection and its memberships were deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/collections/{collectionId}/papers/{paperId}:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+      - $ref: "#/components/parameters/PaperId"
+    put:
+      tags: [Collections]
+      operationId: putSavedPaper
+      summary: Add or replace a saved-paper membership
+      description: Idempotently creates or replaces reading status and normalized tags.
+      security:
+        - HostedOidc: [openscholar.library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedPaperRequest"
+      responses:
+        "200":
+          description: The created or replaced saved-paper membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPaper"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Collections]
+      operationId: updateSavedPaper
+      summary: Replace saved-paper status and tags
+      description: Requires an existing membership; the body is the complete mutable state.
+      security:
+        - HostedOidc: [openscholar.library]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedPaperRequest"
+      responses:
+        "200":
+          description: The updated saved-paper membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPaper"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Collections]
+      operationId: removeSavedPaper
+      summary: Remove a paper from a collection
+      description: The removal is idempotent once the principal-owned collection has been resolved.
+      security:
+        - HostedOidc: [openscholar.library]
+      responses:
+        "204":
+          description: The membership is absent.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/library/papers:
+    get:
+      tags: [Library]
+      operationId: searchSavedPapers
+      summary: Search the current principal's saved library
+      description: |
+        Applies literal-safe lexical, collection, reading-status, and normalized-tag
+        filters. If `collectionId` is supplied, a missing or other-principal collection
+        returns `COLLECTION_NOT_FOUND`.
+      security:
+        - HostedOidc: [openscholar.library]
+      parameters:
+        - $ref: "#/components/parameters/LibraryQuery"
+        - $ref: "#/components/parameters/CollectionFilter"
+        - $ref: "#/components/parameters/ReadingStatusFilter"
+        - $ref: "#/components/parameters/TagFilter"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of principal-owned saved-paper memberships.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPaperPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/refresh-jobs:
+    get:
+      tags: [Refresh jobs]
+      operationId: listRefreshJobs
+      summary: List refresh jobs visible to the current principal
+      description: |
+        Lists the principal's `SEARCH_METADATA` jobs and shared `PAPER_ACCESS` jobs.
+        The latter operate on shared canonical access records and are visible to every
+        principal granted `openscholar.jobs`.
+      security:
+        - HostedOidc: [openscholar.jobs]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of visible durable refresh jobs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshJobPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Refresh jobs]
+      operationId: enqueueRefreshJob
+      summary: Enqueue a durable metadata or access refresh
+      description: |
+        Validates the target before enqueueing. `SEARCH_METADATA` requires a search
+        snapshot owned by the current principal; `PAPER_ACCESS` targets a shared canonical
+        paper. An already active job for the same type and target is deduplicated and returned.
+      security:
+        - HostedOidc: [openscholar.jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRefreshJobRequest"
+      responses:
+        "202":
+          description: The newly queued or already active refresh job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/refresh-jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      tags: [Refresh jobs]
+      operationId: getRefreshJob
+      summary: Read one visible refresh job
+      description: Other-principal `SEARCH_METADATA` job IDs return `REFRESH_JOB_NOT_FOUND`.
+      security:
+        - HostedOidc: [openscholar.jobs]
+      responses:
+        "200":
+          description: The visible durable refresh job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/refresh-jobs/{jobId}/retry:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    post:
+      tags: [Refresh jobs]
+      operationId: retryRefreshJob
+      summary: Retry a failed visible refresh job
+      description: Returns `REFRESH_JOB_NOT_RETRYABLE` unless the visible job is in failed state.
+      security:
+        - HostedOidc: [openscholar.jobs]
+      responses:
+        "202":
+          description: The requeued refresh job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/privacy/export:
+    get:
+      tags: [Privacy]
+      operationId: exportPersonalData
+      summary: Export the current principal's personal data
+      description: |
+        Returns owner-scoped account display data, search snapshots, collections, and
+        saved memberships. It intentionally omits issuer/subject, shared canonical records,
+        access records, and operational job history.
+      security:
+        - HostedOidc: [openscholar.privacy]
+      responses:
+        "200":
+          description: No-store personal-data JSON attachment.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Content-Disposition:
+              $ref: "#/components/headers/ContentDisposition"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacyExport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/privacy/account:
+    delete:
+      tags: [Privacy]
+      operationId: deletePersonalData
+      summary: Delete the current principal's owned application data
+      description: |
+        Requires the exact confirmation phrase. Deletes owner-scoped searches,
+        search-refresh jobs, collections, memberships/tags, and the hosted internal user.
+        Shared canonical/access data and global access-refresh jobs remain. This does not
+        revoke the identity-provider account; a later valid token reprovisions an empty user.
+        Local mode preserves its fixed bootstrap user row.
+      security:
+        - HostedOidc: [openscholar.privacy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeletePersonalDataRequest"
+      responses:
+        "204":
+          description: Principal-owned application data was deleted.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    HostedOidc:
+      type: openIdConnect
+      openIdConnectUrl: https://identity.example.com/.well-known/openid-configuration
+      description: |
+        Configurable hosted OIDC/OAuth 2.0 provider. The URL is illustrative; use the
+        discovery document for the configured issuer. Access tokens must be JWTs accepted
+        by the backend issuer and audience validators. Local loopback mode does not require
+        this scheme for REST requests.
+
+  parameters:
+    SearchId:
+      name: searchId
+      in: path
+      required: true
+      description: Principal-owned immutable search snapshot UUID.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    PaperId:
+      name: paperId
+      in: path
+      required: true
+      description: Shared canonical paper UUID.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    CollectionId:
+      name: collectionId
+      in: path
+      required: true
+      description: Principal-owned collection UUID.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      description: Durable refresh-job UUID.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Zero-based page index.
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+    PageSize:
+      name: size
+      in: query
+      required: false
+      description: Number of items per page.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+    RelatedLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum related papers to return.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 25
+        default: 10
+    ForceRefresh:
+      name: forceRefresh
+      in: query
+      required: false
+      description: Bypass a fresh access cache entry, subject to the per-paper cooldown.
+      schema:
+        type: boolean
+        default: false
+    CitationFormat:
+      name: format
+      in: query
+      required: false
+      description: Citation serialization format; input is trimmed and case-normalized.
+      schema:
+        $ref: "#/components/schemas/CitationFormat"
+    LibraryQuery:
+      name: q
+      in: query
+      required: false
+      description: Literal-safe title/author query. Blank is equivalent to no query.
+      schema:
+        type: string
+        maxLength: 200
+    CollectionFilter:
+      name: collectionId
+      in: query
+      required: false
+      description: Restrict results to one principal-owned collection.
+      schema:
+        $ref: "#/components/schemas/Uuid"
+    ReadingStatusFilter:
+      name: readingStatus
+      in: query
+      required: false
+      description: Restrict results by reading status.
+      schema:
+        $ref: "#/components/schemas/ReadingStatus"
+    TagFilter:
+      name: tag
+      in: query
+      required: false
+      description: Exact normalized tag. Blank is equivalent to no tag filter.
+      schema:
+        type: string
+        maxLength: 40
+
+  headers:
+    Location:
+      description: Relative canonical URI of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+    ContentDisposition:
+      description: Attachment disposition with a deterministic UTF-8 filename.
+      schema:
+        type: string
+    NoSniff:
+      description: Prevents browser content-type sniffing.
+      schema:
+        type: string
+        const: nosniff
+    NoStore:
+      description: Prevents storage of privacy responses.
+      schema:
+        type: string
+        const: no-store
+    RetryAfter:
+      description: Minimum whole seconds before a retry, when known.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  responses:
+    BadRequest:
+      description: Malformed input, unsupported format, or a request-bound validation failure.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Unauthorized:
+      description: Hosted mode requires a valid bearer access token.
+      headers:
+        WWW-Authenticate:
+          description: Bearer authentication challenge.
+          schema:
+            type: string
+    Forbidden:
+      description: The valid hosted token does not grant the operation's required scope.
+    NotFound:
+      description: The shared resource is absent, or the owner-scoped resource is not visible to this principal.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Conflict:
+      description: The resource state does not permit the requested continuation or retry.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    TooManyRequests:
+      description: A forced paper-access refresh was requested inside its cooldown.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    ServiceUnavailable:
+      description: Search coordination/execution or all applicable upstream providers were unavailable.
+      headers:
+        Retry-After:
+          description: Whole seconds before retry when an upstream supplied a retry delay.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    GatewayTimeout:
+      description: Search application execution exceeded the configured deadline.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  schemas:
+    # Schema definitions continue below. Every response record keeps all record
+    # component names present; values that Java may serialize as null are modeled
+    # explicitly with JSON Schema 2020-12 null unions.
+    Uuid:
+      type: string
+      format: uuid
+    Instant:
+      type: string
+      format: date-time
+    LocalDate:
+      type: string
+      format: date
+    NullableString:
+      type: [string, "null"]
+    NullableInteger:
+      type: [integer, "null"]
+      format: int32
+    NullableNumber:
+      type: [number, "null"]
+      format: double
+    NullableUuid:
+      oneOf:
+        - $ref: "#/components/schemas/Uuid"
+        - type: "null"
+    NullableInstant:
+      oneOf:
+        - $ref: "#/components/schemas/Instant"
+        - type: "null"
+    NullableLocalDate:
+      oneOf:
+        - $ref: "#/components/schemas/LocalDate"
+        - type: "null"
+    NullableUri:
+      type: [string, "null"]
+      format: uri
+
+    DocumentType:
+      type: string
+      enum:
+        - ARTICLE
+        - PREPRINT
+        - CONFERENCE_PAPER
+        - THESIS
+        - DISSERTATION
+        - BOOK
+        - BOOK_CHAPTER
+        - REPORT
+        - DATASET
+        - OTHER
+    PaperIdentifierType:
+      type: string
+      enum: [DOI, ARXIV, OPENALEX, PMID, PMCID, CORE, REPOSITORY]
+    ProviderId:
+      type: string
+      enum: [CORE, DATACITE, DOAJ, OPENALEX]
+    CacheDisposition:
+      type: string
+      enum: [EXACT_HIT, MISS_FETCHED, STALE_REFRESHED, FORCED_REFRESH, STALE_FALLBACK]
+    ReadingStatus:
+      type: string
+      enum: [UNREAD, READING, COMPLETED]
+    CitationFormat:
+      type: string
+      pattern: '^\s*(?:[Bb][Ii][Bb][Tt][Ee][Xx]|[Cc][Ss][Ll]-[Jj][Ss][Oo][Nn])\s*$'
+      examples: [bibtex, csl-json]
+      description: Canonical values are `bibtex` and `csl-json`; input is trimmed and case-normalized.
+      default: bibtex
+    AccessStatus:
+      type: string
+      enum:
+        - OPEN_PDF
+        - OPEN_LANDING_PAGE
+        - REPOSITORY_COPY
+        - PREPRINT
+        - ABSTRACT_ONLY
+        - RESTRICTED
+        - UNKNOWN
+        - UNAVAILABLE
+    AccessDisposition:
+      type: string
+      enum:
+        - CACHE_HIT
+        - RESOLVED
+        - REFRESHED
+        - FORCED_REFRESH
+        - STALE_FALLBACK
+        - NO_SUPPORTED_IDENTIFIER
+        - NOT_YET_RESOLVED
+    AccessHostType:
+      type: string
+      enum: [PUBLISHER, REPOSITORY, PREPRINT_SERVER, UNKNOWN]
+    AccessVersionType:
+      type: string
+      enum: [PUBLISHED, ACCEPTED_MANUSCRIPT, SUBMITTED_MANUSCRIPT, PREPRINT, UNKNOWN]
+    ContentHandlingMode:
+      type: string
+      enum: [LINK_ONLY, RETENTION_ALLOWED]
+    AccessVerificationStatus:
+      type: string
+      enum: [VERIFIED, UNVERIFIED, FAILED]
+    AccessProviderResolutionStatus:
+      type: string
+      enum: [RESOLVED, CLOSED, NO_RECORD, NOT_APPLICABLE, NOT_CONFIGURED, FAILED]
+    RelatedPaperRankingMode:
+      type: string
+      enum: [LEXICAL, HYBRID]
+    RelatedPaperFallbackReason:
+      type: string
+      enum:
+        - HYBRID_DISABLED
+        - EMBEDDING_PROFILE_MISSING
+        - SOURCE_VECTOR_MISSING
+        - CANDIDATE_VECTOR_COVERAGE_INCOMPLETE
+    RelatedPaperRankingFeature:
+      type: string
+      enum: [POSTGRES_FULL_TEXT, CLAMPED_COSINE]
+    RefreshJobType:
+      type: string
+      enum: [PAPER_ACCESS, SEARCH_METADATA]
+    RefreshJobTrigger:
+      type: string
+      enum: [MANUAL, SCHEDULED, RETRY]
+    RefreshJobStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED]
+
+    ProblemDetail:
+      type: object
+      description: RFC 9457 problem detail with stable OpenScholar extension fields.
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          format: uri
+          examples: ["urn:openscholar:problem:validation-failed"]
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          enum:
+            - VALIDATION_FAILED
+            - INVALID_REQUEST
+            - UNSUPPORTED_CITATION_FORMAT
+            - SEARCH_NOT_FOUND
+            - SEARCH_PAGE_EXHAUSTED
+            - PAPER_NOT_FOUND
+            - COLLECTION_NOT_FOUND
+            - SAVED_PAPER_NOT_FOUND
+            - REFRESH_JOB_NOT_FOUND
+            - REFRESH_JOB_NOT_RETRYABLE
+            - SEARCH_PROVIDER_UNAVAILABLE
+            - SEARCH_COORDINATION_TIMEOUT
+            - SEARCH_COORDINATION_INTERRUPTED
+            - SEARCH_DEADLINE_EXCEEDED
+            - SEARCH_EXECUTION_INTERRUPTED
+            - ACCESS_PROVIDERS_UNAVAILABLE
+            - ACCESS_REFRESH_RATE_LIMITED
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationViolation"
+        retryable:
+          type: boolean
+        retryAfterSeconds:
+          type: integer
+          format: int64
+          minimum: 1
+      additionalProperties: true
+    ValidationViolation:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+      additionalProperties: false
+
+    SystemStatus:
+      type: object
+      required: [service, status, timestamp]
+      properties:
+        service:
+          type: string
+          const: openscholar-backend
+        status:
+          type: string
+          const: UP
+        timestamp:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+
+    CreateSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 3
+          maxLength: 500
+          pattern: '\S'
+          description: Trimmed scholarly topic query.
+        filters:
+          oneOf:
+            - $ref: "#/components/schemas/SearchFilters"
+            - type: "null"
+          description: Omit or use null for the default empty filter set.
+        pageSize:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1
+          maximum: 50
+          default: 20
+        cursor:
+          type: [string, "null"]
+          maxLength: 4096
+          description: Opaque provider cursor; omit for a first page.
+        forceRefresh:
+          type: [boolean, "null"]
+          default: false
+      additionalProperties: false
+    SearchFilters:
+      type: object
+      description: If both years are present, `yearFrom` must not exceed `yearTo`.
+      properties:
+        yearFrom:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1000
+          maximum: 9999
+        yearTo:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1000
+          maximum: 9999
+        documentTypes:
+          type: [array, "null"]
+          maxItems: 12
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/DocumentType"
+        openAccessOnly:
+          type: [boolean, "null"]
+          default: false
+        minimumCitations:
+          type: [integer, "null"]
+          format: int32
+          minimum: 0
+          default: 0
+        languages:
+          type: [array, "null"]
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[A-Za-z]{2,3}$'
+      additionalProperties: false
+    SearchResponse:
+      type: object
+      required:
+        - searchId
+        - query
+        - queryFingerprint
+        - cacheDisposition
+        - searchedAt
+        - freshUntil
+        - nextCursor
+        - providerCoverage
+        - warnings
+        - results
+      properties:
+        searchId:
+          $ref: "#/components/schemas/Uuid"
+        query:
+          type: string
+        queryFingerprint:
+          type: string
+        cacheDisposition:
+          $ref: "#/components/schemas/CacheDisposition"
+        searchedAt:
+          $ref: "#/components/schemas/Instant"
+        freshUntil:
+          $ref: "#/components/schemas/Instant"
+        nextCursor:
+          $ref: "#/components/schemas/NullableString"
+        providerCoverage:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchProviderCoverage"
+        warnings:
+          type: array
+          items:
+            type: string
+        results:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/SearchResult"
+      additionalProperties: false
+    SearchProviderCoverage:
+      type: object
+      required: [provider, status, returnedCount, totalMatches]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProviderId"
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+        returnedCount:
+          type: integer
+          format: int32
+          minimum: 0
+        totalMatches:
+          type: integer
+          format: int64
+          minimum: 0
+      additionalProperties: false
+    SearchResult:
+      type: object
+      required:
+        - rank
+        - paperId
+        - title
+        - abstractText
+        - authors
+        - publicationDate
+        - publicationYear
+        - documentType
+        - language
+        - venue
+        - publisher
+        - institution
+        - volume
+        - issue
+        - pages
+        - articleNumber
+        - edition
+        - isbn
+        - issn
+        - degree
+        - citationCount
+        - identifiers
+        - reportedOpenAccess
+        - landingPageUrl
+        - reportedPdfUrl
+        - score
+        - rankingReasons
+        - provenance
+      properties:
+        rank:
+          type: integer
+          format: int32
+          minimum: 1
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        abstractText:
+          $ref: "#/components/schemas/NullableString"
+        authors:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchAuthor"
+        publicationDate:
+          $ref: "#/components/schemas/NullableLocalDate"
+        publicationYear:
+          $ref: "#/components/schemas/NullableInteger"
+        documentType:
+          $ref: "#/components/schemas/DocumentType"
+        language:
+          $ref: "#/components/schemas/NullableString"
+        venue:
+          $ref: "#/components/schemas/NullableString"
+        publisher:
+          $ref: "#/components/schemas/NullableString"
+        institution:
+          $ref: "#/components/schemas/NullableString"
+        volume:
+          $ref: "#/components/schemas/NullableString"
+        issue:
+          $ref: "#/components/schemas/NullableString"
+        pages:
+          $ref: "#/components/schemas/NullableString"
+        articleNumber:
+          $ref: "#/components/schemas/NullableString"
+        edition:
+          $ref: "#/components/schemas/NullableString"
+        isbn:
+          type: array
+          items:
+            type: string
+        issn:
+          type: array
+          items:
+            type: string
+        degree:
+          $ref: "#/components/schemas/NullableString"
+        citationCount:
+          type: [integer, "null"]
+          format: int32
+          minimum: 0
+        identifiers:
+          $ref: "#/components/schemas/SearchIdentifiers"
+        reportedOpenAccess:
+          type: boolean
+          description: Provider-reported metadata, not independently verified access evidence.
+        landingPageUrl:
+          $ref: "#/components/schemas/NullableUri"
+        reportedPdfUrl:
+          $ref: "#/components/schemas/NullableUri"
+          description: Provider-reported URL; never treat it as a verified download.
+        score:
+          $ref: "#/components/schemas/NullableNumber"
+        rankingReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchRankingReason"
+        provenance:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SearchProvenance"
+      additionalProperties: false
+    SearchAuthor:
+      type: object
+      required: [name, orcid, openAlexId]
+      properties:
+        name:
+          type: string
+        orcid:
+          $ref: "#/components/schemas/NullableString"
+        openAlexId:
+          $ref: "#/components/schemas/NullableString"
+      additionalProperties: false
+    SearchIdentifiers:
+      type: object
+      required: [doi, arxiv, openAlex]
+      properties:
+        doi:
+          $ref: "#/components/schemas/NullableString"
+        arxiv:
+          $ref: "#/components/schemas/NullableString"
+        openAlex:
+          $ref: "#/components/schemas/NullableString"
+      additionalProperties: false
+    SearchRankingReason:
+      type: object
+      required: [feature, value]
+      properties:
+        feature:
+          type: string
+        value:
+          $ref: "#/components/schemas/NullableNumber"
+      additionalProperties: false
+    SearchProvenance:
+      type: object
+      required: [provider, providerRecordId, retrievedAt]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProviderId"
+        providerRecordId:
+          type: string
+        retrievedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+
+    PaperDetailsResponse:
+      type: object
+      required:
+        - paperId
+        - title
+        - abstractText
+        - authors
+        - publicationDate
+        - publicationYear
+        - documentType
+        - language
+        - venueName
+        - publisher
+        - institution
+        - volume
+        - issue
+        - pages
+        - articleNumber
+        - edition
+        - isbn
+        - issn
+        - degree
+        - citationCount
+        - citationCountAsOf
+        - identifiers
+        - metadataCompleteness
+        - metadataUpdatedAt
+        - provenance
+        - access
+      properties:
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        abstractText:
+          $ref: "#/components/schemas/NullableString"
+        authors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperAuthor"
+        publicationDate:
+          $ref: "#/components/schemas/NullableLocalDate"
+        publicationYear:
+          $ref: "#/components/schemas/NullableInteger"
+        documentType:
+          $ref: "#/components/schemas/DocumentType"
+        language:
+          $ref: "#/components/schemas/NullableString"
+        venueName:
+          $ref: "#/components/schemas/NullableString"
+        publisher:
+          $ref: "#/components/schemas/NullableString"
+        institution:
+          $ref: "#/components/schemas/NullableString"
+        volume:
+          $ref: "#/components/schemas/NullableString"
+        issue:
+          $ref: "#/components/schemas/NullableString"
+        pages:
+          $ref: "#/components/schemas/NullableString"
+        articleNumber:
+          $ref: "#/components/schemas/NullableString"
+        edition:
+          $ref: "#/components/schemas/NullableString"
+        isbn:
+          type: array
+          items:
+            type: string
+        issn:
+          type: array
+          items:
+            type: string
+        degree:
+          $ref: "#/components/schemas/NullableString"
+        citationCount:
+          type: [integer, "null"]
+          format: int32
+          minimum: 0
+        citationCountAsOf:
+          $ref: "#/components/schemas/NullableInstant"
+        identifiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperIdentifier"
+        metadataCompleteness:
+          type: number
+          minimum: 0
+          maximum: 1
+        metadataUpdatedAt:
+          $ref: "#/components/schemas/Instant"
+        provenance:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaperProvenance"
+        access:
+          $ref: "#/components/schemas/PaperAccessSummary"
+      additionalProperties: false
+    PaperAuthor:
+      type: object
+      required: [name, orcid, openAlexId, position, corresponding]
+      properties:
+        name:
+          type: string
+        orcid:
+          $ref: "#/components/schemas/NullableString"
+        openAlexId:
+          $ref: "#/components/schemas/NullableString"
+        position:
+          type: integer
+          format: int32
+          minimum: 0
+        corresponding:
+          type: boolean
+      additionalProperties: false
+    PaperIdentifier:
+      type: object
+      required: [type, namespace, value]
+      properties:
+        type:
+          $ref: "#/components/schemas/PaperIdentifierType"
+        namespace:
+          type: string
+        value:
+          type: string
+      additionalProperties: false
+    PaperProvenance:
+      type: object
+      required:
+        - provider
+        - providerRecordId
+        - sourceUrl
+        - providerUpdatedAt
+        - retrievedAt
+        - reportedOpenAccess
+        - authorshipSource
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProviderId"
+        providerRecordId:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+          description: Absolute HTTP(S) provider-record URI without query or fragment.
+        providerUpdatedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        retrievedAt:
+          $ref: "#/components/schemas/Instant"
+        reportedOpenAccess:
+          type: boolean
+        authorshipSource:
+          type: boolean
+      additionalProperties: false
+    PaperAccessSummary:
+      type: object
+      required:
+        - status
+        - cacheDisposition
+        - checkedAt
+        - freshUntil
+        - bestLocationId
+        - locationCount
+        - warnings
+      properties:
+        status:
+          $ref: "#/components/schemas/AccessStatus"
+        cacheDisposition:
+          $ref: "#/components/schemas/AccessDisposition"
+        checkedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        freshUntil:
+          $ref: "#/components/schemas/NullableInstant"
+        bestLocationId:
+          $ref: "#/components/schemas/NullableUuid"
+        locationCount:
+          type: integer
+          format: int32
+          minimum: 0
+        warnings:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    RelatedPapersResponse:
+      type: object
+      required: [sourcePaperId, rankingMode, fallbackReason, results]
+      properties:
+        sourcePaperId:
+          $ref: "#/components/schemas/Uuid"
+        rankingMode:
+          $ref: "#/components/schemas/RelatedPaperRankingMode"
+        fallbackReason:
+          oneOf:
+            - $ref: "#/components/schemas/RelatedPaperFallbackReason"
+            - type: "null"
+        results:
+          type: array
+          maxItems: 25
+          items:
+            $ref: "#/components/schemas/RelatedPaperResult"
+      additionalProperties: false
+    RelatedPaperResult:
+      type: object
+      required:
+        - rank
+        - paperId
+        - title
+        - abstractText
+        - authors
+        - publicationDate
+        - publicationYear
+        - documentType
+        - language
+        - venue
+        - publisher
+        - institution
+        - volume
+        - issue
+        - pages
+        - articleNumber
+        - edition
+        - isbn
+        - issn
+        - degree
+        - citationCount
+        - identifiers
+        - score
+        - rankingReasons
+      properties:
+        rank:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 25
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        abstractText:
+          $ref: "#/components/schemas/NullableString"
+        authors:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchAuthor"
+        publicationDate:
+          $ref: "#/components/schemas/NullableLocalDate"
+        publicationYear:
+          $ref: "#/components/schemas/NullableInteger"
+        documentType:
+          $ref: "#/components/schemas/DocumentType"
+        language:
+          $ref: "#/components/schemas/NullableString"
+        venue:
+          $ref: "#/components/schemas/NullableString"
+        publisher:
+          $ref: "#/components/schemas/NullableString"
+        institution:
+          $ref: "#/components/schemas/NullableString"
+        volume:
+          $ref: "#/components/schemas/NullableString"
+        issue:
+          $ref: "#/components/schemas/NullableString"
+        pages:
+          $ref: "#/components/schemas/NullableString"
+        articleNumber:
+          $ref: "#/components/schemas/NullableString"
+        edition:
+          $ref: "#/components/schemas/NullableString"
+        isbn:
+          type: array
+          items:
+            type: string
+        issn:
+          type: array
+          items:
+            type: string
+        degree:
+          $ref: "#/components/schemas/NullableString"
+        citationCount:
+          type: [integer, "null"]
+          format: int32
+          minimum: 0
+        identifiers:
+          $ref: "#/components/schemas/SearchIdentifiers"
+        score:
+          type: number
+          format: double
+        rankingReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/RelatedPaperReason"
+      additionalProperties: false
+    RelatedPaperReason:
+      type: object
+      required: [feature, value]
+      properties:
+        feature:
+          $ref: "#/components/schemas/RelatedPaperRankingFeature"
+        value:
+          type: number
+          format: double
+      additionalProperties: false
+
+    PaperAccessResponse:
+      type: object
+      required:
+        - paperId
+        - status
+        - cacheDisposition
+        - checkedAt
+        - freshUntil
+        - bestLocationId
+        - providerCoverage
+        - warnings
+        - locations
+      properties:
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          $ref: "#/components/schemas/AccessStatus"
+        cacheDisposition:
+          $ref: "#/components/schemas/AccessDisposition"
+        checkedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        freshUntil:
+          $ref: "#/components/schemas/NullableInstant"
+        bestLocationId:
+          $ref: "#/components/schemas/NullableUuid"
+        providerCoverage:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccessProviderCoverage"
+        warnings:
+          type: array
+          items:
+            type: string
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccessLocation"
+      additionalProperties: false
+    AccessProviderCoverage:
+      type: object
+      required: [provider, status, candidateCount]
+      properties:
+        provider:
+          type: string
+          enum: [UNPAYWALL, ARXIV]
+        status:
+          $ref: "#/components/schemas/AccessProviderResolutionStatus"
+        candidateCount:
+          type: integer
+          format: int32
+          minimum: 0
+      additionalProperties: false
+    AccessLocation:
+      type: object
+      required:
+        - id
+        - source
+        - best
+        - accessStatus
+        - versionType
+        - hostType
+        - landingPageUrl
+        - pdfUrl
+        - hostDomain
+        - license
+        - evidence
+        - contentHandling
+        - verificationStatus
+        - verificationHttpStatus
+        - verificationContentType
+        - verificationFailureCode
+        - providerUpdatedAt
+        - retrievedAt
+        - lastSeenAt
+        - verifiedAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        source:
+          type: string
+          enum: [UNPAYWALL, ARXIV]
+        best:
+          type: boolean
+        accessStatus:
+          $ref: "#/components/schemas/AccessStatus"
+        versionType:
+          $ref: "#/components/schemas/AccessVersionType"
+        hostType:
+          $ref: "#/components/schemas/AccessHostType"
+        landingPageUrl:
+          $ref: "#/components/schemas/NullableUri"
+        pdfUrl:
+          $ref: "#/components/schemas/NullableUri"
+          description: Independently selected and verified candidate, never proxied by the API.
+        hostDomain:
+          $ref: "#/components/schemas/NullableString"
+        license:
+          $ref: "#/components/schemas/NullableString"
+        evidence:
+          $ref: "#/components/schemas/NullableString"
+        contentHandling:
+          $ref: "#/components/schemas/ContentHandlingMode"
+        verificationStatus:
+          $ref: "#/components/schemas/AccessVerificationStatus"
+        verificationHttpStatus:
+          type: [integer, "null"]
+          format: int32
+          minimum: 100
+          maximum: 599
+        verificationContentType:
+          $ref: "#/components/schemas/NullableString"
+        verificationFailureCode:
+          type: [string, "null"]
+          maxLength: 64
+        providerUpdatedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        retrievedAt:
+          $ref: "#/components/schemas/Instant"
+        lastSeenAt:
+          $ref: "#/components/schemas/Instant"
+        verifiedAt:
+          $ref: "#/components/schemas/NullableInstant"
+      additionalProperties: false
+
+    BatchCitationRequest:
+      type: object
+      required: [paperIds, format]
+      properties:
+        paperIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Uuid"
+          description: Distinct paper IDs retained in caller order.
+        format:
+          $ref: "#/components/schemas/CitationFormat"
+      additionalProperties: false
+    CslJsonCitationArray:
+      type: array
+      minItems: 1
+      maxItems: 100
+      items:
+        $ref: "#/components/schemas/CslJsonCitationItem"
+    CslJsonCitationItem:
+      type: object
+      required: [id, type, citation-key, title]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        type:
+          type: string
+          enum:
+            - article-journal
+            - article
+            - paper-conference
+            - thesis
+            - book
+            - chapter
+            - report
+            - dataset
+            - document
+        citation-key:
+          type: string
+        title:
+          type: string
+        abstract:
+          type: string
+        author:
+          type: array
+          items:
+            type: object
+            required: [literal]
+            properties:
+              literal:
+                type: string
+            additionalProperties: false
+        container-title:
+          type: string
+        publisher:
+          type: string
+        volume:
+          type: string
+        issue:
+          type: string
+        page:
+          type: string
+        edition:
+          type: string
+        ISBN:
+          type: string
+        ISSN:
+          type: string
+        genre:
+          type: string
+        custom:
+          type: object
+          properties:
+            openscholar-venue:
+              type: string
+            openscholar-institution:
+              type: string
+            openscholar-article-number:
+              type: string
+          additionalProperties: false
+        issued:
+          $ref: "#/components/schemas/CslIssuedDate"
+        language:
+          type: string
+        DOI:
+          type: string
+        URL:
+          type: string
+          format: uri
+        archive:
+          type: string
+          const: arXiv
+        archive_location:
+          type: string
+        PMID:
+          type: string
+        PMCID:
+          type: string
+      additionalProperties: false
+    CslIssuedDate:
+      type: object
+      required: [date-parts]
+      properties:
+        date-parts:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: array
+            minItems: 1
+            maxItems: 3
+            prefixItems:
+              - type: integer
+                minimum: 0
+              - type: integer
+                minimum: 1
+                maximum: 12
+              - type: integer
+                minimum: 1
+                maximum: 31
+      additionalProperties: false
+
+    CollectionRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '\S'
+          description: Whitespace is collapsed before persistence.
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+          description: Whitespace is collapsed; blank becomes null.
+      additionalProperties: false
+    SavedPaperRequest:
+      type: object
+      required: [readingStatus, tags]
+      properties:
+        readingStatus:
+          $ref: "#/components/schemas/ReadingStatus"
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+            pattern: '\S'
+          description: Tags are whitespace-collapsed and lowercased; normalized duplicates are rejected and responses are sorted.
+      additionalProperties: false
+    CollectionSummary:
+      type: object
+      required: [collectionId, name, description, paperCount, createdAt, updatedAt]
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+        paperCount:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          $ref: "#/components/schemas/Instant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+    CollectionDetails:
+      type: object
+      required: [collectionId, name, description, paperCount, createdAt, updatedAt, papers]
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+        paperCount:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          $ref: "#/components/schemas/Instant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+        papers:
+          $ref: "#/components/schemas/SavedPaperPage"
+      additionalProperties: false
+    SavedPaper:
+      type: object
+      required:
+        - collectionId
+        - collectionName
+        - paperId
+        - title
+        - authors
+        - publicationYear
+        - documentType
+        - readingStatus
+        - tags
+        - savedAt
+        - updatedAt
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        collectionName:
+          type: string
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        publicationYear:
+          $ref: "#/components/schemas/NullableInteger"
+        documentType:
+          $ref: "#/components/schemas/DocumentType"
+        readingStatus:
+          $ref: "#/components/schemas/ReadingStatus"
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+        savedAt:
+          $ref: "#/components/schemas/Instant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+    CollectionPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CollectionSummary"
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+        totalPages:
+          type: integer
+          format: int32
+          minimum: 0
+      additionalProperties: false
+    SavedPaperPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SavedPaper"
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+        totalPages:
+          type: integer
+          format: int32
+          minimum: 0
+      additionalProperties: false
+
+    CreateRefreshJobRequest:
+      type: object
+      required: [jobType, targetId]
+      properties:
+        jobType:
+          $ref: "#/components/schemas/RefreshJobType"
+        targetId:
+          $ref: "#/components/schemas/Uuid"
+      additionalProperties: false
+    RefreshJob:
+      type: object
+      required:
+        - id
+        - jobType
+        - targetId
+        - trigger
+        - status
+        - attemptCount
+        - maxAttempts
+        - availableAt
+        - leasedUntil
+        - lastErrorCode
+        - lastErrorDetail
+        - createdAt
+        - startedAt
+        - completedAt
+        - updatedAt
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        jobType:
+          $ref: "#/components/schemas/RefreshJobType"
+        targetId:
+          $ref: "#/components/schemas/Uuid"
+        trigger:
+          $ref: "#/components/schemas/RefreshJobTrigger"
+        status:
+          $ref: "#/components/schemas/RefreshJobStatus"
+        attemptCount:
+          type: integer
+          format: int32
+          minimum: 0
+        maxAttempts:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+        availableAt:
+          $ref: "#/components/schemas/Instant"
+        leasedUntil:
+          $ref: "#/components/schemas/NullableInstant"
+        lastErrorCode:
+          type: [string, "null"]
+          maxLength: 96
+        lastErrorDetail:
+          type: [string, "null"]
+          maxLength: 500
+        createdAt:
+          $ref: "#/components/schemas/Instant"
+        startedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        completedAt:
+          $ref: "#/components/schemas/NullableInstant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+    RefreshJobPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/RefreshJob"
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+        totalPages:
+          type: integer
+          format: int32
+          minimum: 0
+      additionalProperties: false
+
+    DeletePersonalDataRequest:
+      type: object
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          const: DELETE_MY_DATA
+      additionalProperties: false
+    PrivacyExport:
+      type: object
+      required:
+        - userId
+        - displayName
+        - accountCreatedAt
+        - generatedAt
+        - searches
+        - collections
+        - savedPapers
+      properties:
+        userId:
+          $ref: "#/components/schemas/Uuid"
+        displayName:
+          type: string
+        accountCreatedAt:
+          $ref: "#/components/schemas/Instant"
+        generatedAt:
+          $ref: "#/components/schemas/Instant"
+        searches:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrivacySearch"
+        collections:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrivacyCollection"
+        savedPapers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PrivacySavedPaper"
+      additionalProperties: false
+    PrivacySearch:
+      type: object
+      required: [searchId, query, filters, searchedAt, freshUntil, resultCount, warnings]
+      properties:
+        searchId:
+          $ref: "#/components/schemas/Uuid"
+        query:
+          type: string
+        filters:
+          $ref: "#/components/schemas/PrivacySearchFilters"
+        searchedAt:
+          $ref: "#/components/schemas/Instant"
+        freshUntil:
+          $ref: "#/components/schemas/Instant"
+        resultCount:
+          type: integer
+          format: int32
+          minimum: 0
+        warnings:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    PrivacySearchFilters:
+      type: object
+      required:
+        - yearFrom
+        - yearTo
+        - documentTypes
+        - openAccessOnly
+        - minimumCitations
+        - languages
+        - pageSize
+      properties:
+        yearFrom:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1000
+          maximum: 9999
+        yearTo:
+          type: [integer, "null"]
+          format: int32
+          minimum: 1000
+          maximum: 9999
+        documentTypes:
+          type: array
+          maxItems: 12
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/DocumentType"
+        openAccessOnly:
+          type: boolean
+        minimumCitations:
+          type: integer
+          format: int32
+          minimum: 0
+        languages:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-z]{2,3}$'
+        pageSize:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+      additionalProperties: false
+    PrivacyCollection:
+      type: object
+      required: [collectionId, name, description, createdAt, updatedAt]
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+        createdAt:
+          $ref: "#/components/schemas/Instant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false
+    PrivacySavedPaper:
+      type: object
+      required:
+        - collectionId
+        - paperId
+        - title
+        - readingStatus
+        - tags
+        - savedAt
+        - updatedAt
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+        readingStatus:
+          $ref: "#/components/schemas/ReadingStatus"
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+        savedAt:
+          $ref: "#/components/schemas/Instant"
+        updatedAt:
+          $ref: "#/components/schemas/Instant"
+      additionalProperties: false

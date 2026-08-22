@@ -33,6 +33,7 @@ import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchResearchUseCase;
+import com.openscholar.search.SearchRefreshUseCase;
 import com.openscholar.search.SearchView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,9 @@ class SearchOrchestratorConcurrencyTests {
 
 	@Autowired
 	private SearchResearchUseCase searchUseCase;
+
+	@Autowired
+	private SearchRefreshUseCase searchRefreshUseCase;
 
 	@Autowired
 	private QueryFingerprinter fingerprinter;
@@ -148,6 +152,20 @@ class SearchOrchestratorConcurrencyTests {
 		finally {
 			provider.releaseCalls();
 		}
+	}
+
+	@Test
+	void durableRefreshReplaysTheStoredCommandAsAnExplicitProviderFetch() {
+		SearchCommand command = command("durable replay " + UUID.randomUUID(), false);
+		SearchView initial = searchUseCase.search(command);
+
+		SearchView refreshed = searchRefreshUseCase.refresh(initial.searchId());
+
+		assertThat(refreshed.searchId()).isNotEqualTo(initial.searchId());
+		assertThat(refreshed.query()).isEqualTo(initial.query());
+		assertThat(refreshed.cacheDisposition()).isEqualTo(CacheDisposition.FORCED_REFRESH);
+		assertThat(provider.calls()).isEqualTo(2);
+		assertThat(snapshotCount(initial.queryFingerprint())).isEqualTo(2);
 	}
 
 	@Test

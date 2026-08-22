@@ -66,7 +66,14 @@ async function installOfflineNetwork(
 
 async function expectNoSeriousAccessibilityViolations(page: Page): Promise<void> {
   const scan = await new AxeBuilder({ page })
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .withTags([
+      "wcag2a",
+      "wcag2aa",
+      "wcag21a",
+      "wcag21aa",
+      "wcag22a",
+      "wcag22aa",
+    ])
     .analyze();
   const violations = scan.violations
     .filter(

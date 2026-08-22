@@ -9,6 +9,8 @@ import com.openscholar.access.AccessRefreshTooSoonException;
 import com.openscholar.citation.UnsupportedCitationFormatException;
 import com.openscholar.library.CollectionNotFoundException;
 import com.openscholar.library.SavedPaperNotFoundException;
+import com.openscholar.jobs.ResearchRefreshJobNotFoundException;
+import com.openscholar.jobs.ResearchRefreshJobNotRetryableException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
@@ -126,6 +128,24 @@ public class ApiExceptionHandler {
 				HttpStatus.NOT_FOUND,
 				"SAVED_PAPER_NOT_FOUND",
 				"Saved paper not found",
+				exception.getMessage());
+	}
+
+	@ExceptionHandler(ResearchRefreshJobNotFoundException.class)
+	ProblemDetail handleRefreshJobNotFound(ResearchRefreshJobNotFoundException exception) {
+		return problem(
+				HttpStatus.NOT_FOUND,
+				"REFRESH_JOB_NOT_FOUND",
+				"Refresh job not found",
+				exception.getMessage());
+	}
+
+	@ExceptionHandler(ResearchRefreshJobNotRetryableException.class)
+	ProblemDetail handleRefreshJobNotRetryable(ResearchRefreshJobNotRetryableException exception) {
+		return problem(
+				HttpStatus.CONFLICT,
+				"REFRESH_JOB_NOT_RETRYABLE",
+				"Refresh job cannot be retried",
 				exception.getMessage());
 	}
 

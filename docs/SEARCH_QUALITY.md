@@ -179,4 +179,10 @@ Candidate work includes:
 
 The frozen hybrid has cleared the first independent holdout plus the pinned HNSW mechanics gate and now has deterministic database-only fallback behavior and honest feature values. Lexical remains the default product ranker until an explicit later review changes the flag default.
 
-Deduplication quality remains a separate evaluation concern because full-text retrieval operates on already-canonical `paper` rows. DOI duplicates and preprint/published pairs belong in a dedicated reconciliation fixture.
+## Frozen exact-identifier deduplication baseline
+
+`paper-deduplication-baseline-v1.json` is a 12-record synthetic fixture evaluated against the unchanged catalog persistence path with the declared `exact-identifiers-and-provider-records-only` policy. It covers DOI normalization, arXiv URL/prefix/version normalization, OpenAlex URL normalization, provider-record replay, a DOI-less thesis, common-title false positives, and an intentionally separate preprint/published pair.
+
+Across all 66 record pairs, the reference run produced `tp=5`, `fp=0`, `fn=0`, and `tn=61`: pairwise precision `1.000`, recall `1.000`, and F1 `1.000`. The integration test requires all three scores to remain exactly `1.000`, explicitly requires the common-title records to remain separate, and explicitly requires the preprint/published records to remain separate.
+
+This small frozen fixture demonstrates the declared conservative identity policy; it does not estimate performance on the full scholarly graph or justify fuzzy title/author merges. Any future reconciliation heuristic needs an expanded independently reviewed fixture and a separately frozen gate before activation.

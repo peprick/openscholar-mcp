@@ -55,6 +55,13 @@ spring:
       fail-on-unknown-properties: true
 
 openscholar:
+  security:
+    oidc:
+      enabled: ${OIDC_SECURITY_ENABLED:false}
+      issuer-uri: ${OIDC_ISSUER_URI:}
+      jwk-set-uri: ${OIDC_JWK_SET_URI:}
+      audience: ${OIDC_AUDIENCE:}
+      mcp-resource-uri: ${OIDC_MCP_RESOURCE_URI:}
   related-papers:
     hybrid:
       enabled: ${RELATED_PAPERS_HYBRID_ENABLED:false}
@@ -74,6 +81,17 @@ openscholar:
       connect-timeout: ${OLLAMA_CONNECT_TIMEOUT:2s}
       read-timeout: ${OLLAMA_READ_TIMEOUT:60s}
       keep-alive: ${OLLAMA_KEEP_ALIVE:5m}
+  jobs:
+    refresh:
+      worker-enabled: ${REFRESH_JOBS_WORKER_ENABLED:false}
+      scheduled-enqueue-enabled: ${REFRESH_JOBS_SCHEDULED_ENABLED:false}
+      poll-delay: ${REFRESH_JOBS_POLL_DELAY:5s}
+      scan-delay: ${REFRESH_JOBS_SCAN_DELAY:1h}
+      lease-duration: ${REFRESH_JOBS_LEASE_DURATION:2m}
+      retry-backoff: ${REFRESH_JOBS_RETRY_BACKOFF:30s}
+      max-attempts: ${REFRESH_JOBS_MAX_ATTEMPTS:3}
+      jobs-per-poll: ${REFRESH_JOBS_PER_POLL:25}
+      stale-targets-per-scan: ${REFRESH_JOBS_STALE_TARGETS_PER_SCAN:100}
   mcp:
     security:
       local-api-key: ${MCP_LOCAL_API_KEY:}
@@ -114,6 +132,28 @@ openscholar:
       connect-timeout: 3s
       request-timeout: ${OPENALEX_REQUEST_TIMEOUT:${OPENALEX_READ_TIMEOUT:${openscholar.providers.openalex.read-timeout:10s}}}
       max-response-bytes: ${OPENALEX_MAX_RESPONSE_BYTES:8388608}
+    doaj:
+      enabled: ${DOAJ_ENABLED:false}
+      base-url: ${DOAJ_BASE_URL:https://doaj.org/api/v4}
+      contact-email: ${DOAJ_CONTACT_EMAIL:}
+      connect-timeout: ${DOAJ_CONNECT_TIMEOUT:3s}
+      request-timeout: ${DOAJ_REQUEST_TIMEOUT:10s}
+      max-response-bytes: ${DOAJ_MAX_RESPONSE_BYTES:8388608}
+    core:
+      enabled: ${CORE_ENABLED:false}
+      license-confirmed: ${CORE_LICENSE_CONFIRMED:false}
+      base-url: ${CORE_BASE_URL:https://api.core.ac.uk}
+      api-key: ${CORE_API_KEY:}
+      connect-timeout: ${CORE_CONNECT_TIMEOUT:3s}
+      request-timeout: ${CORE_REQUEST_TIMEOUT:10s}
+      max-response-bytes: ${CORE_MAX_RESPONSE_BYTES:8388608}
+    datacite:
+      enabled: ${DATACITE_ENABLED:false}
+      base-url: ${DATACITE_BASE_URL:https://api.datacite.org}
+      contact-email: ${DATACITE_CONTACT_EMAIL:}
+      connect-timeout: ${DATACITE_CONNECT_TIMEOUT:3s}
+      request-timeout: ${DATACITE_REQUEST_TIMEOUT:10s}
+      max-response-bytes: ${DATACITE_MAX_RESPONSE_BYTES:8388608}
   search:
     cache-ttl: 24h
     coordination-wait-timeout: ${SEARCH_COORDINATION_WAIT_TIMEOUT:12s}
@@ -127,7 +167,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
@@ -136,6 +176,20 @@ management:
   info:
     env:
       enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        openscholar.mcp.request.duration: true
+        openscholar.provider.request.duration: true
+        openscholar.refresh.jobs.duration: true
+        openscholar.search.duration: true
+      slo:
+        http.server.requests: 100ms,300ms,500ms,1s,4s
+        openscholar.mcp.request.duration: 100ms,300ms,500ms,1s,4s,10s,20s
+        openscholar.provider.request.duration: 100ms,300ms,500ms,1s,4s,8s,12s
+        openscholar.refresh.jobs.duration: 1s,4s,10s,30s,1m,5m
+        openscholar.search.duration: 100ms,300ms,500ms,1s,4s,10s,20s
 
 info:
   app:

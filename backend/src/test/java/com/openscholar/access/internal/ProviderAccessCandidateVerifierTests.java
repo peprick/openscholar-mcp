@@ -59,7 +59,7 @@ class ProviderAccessCandidateVerifierTests {
 	}
 
 	@Test
-	void fallsBackToVerifiedOpenLandingPageWhenPdfProbeFails() {
+	void classifiesARepositoryLandingPageFromUnpaywallEvidenceWhenPdfProbeFails() {
 		URI pdf = URI.create("https://repository.example/not-a-pdf");
 		URI landing = URI.create("https://repository.example/paper");
 		StubLinkVerifier links = new StubLinkVerifier()
@@ -75,7 +75,7 @@ class ProviderAccessCandidateVerifierTests {
 
 		assertThat(outcome.warningCode()).isEqualTo("UNPAYWALL_PDF_PDF_CONTENT_NOT_VERIFIED");
 		assertThat(outcome.location()).hasValueSatisfying(location -> {
-			assertThat(location.accessStatus()).isEqualTo(AccessStatus.OPEN_LANDING_PAGE);
+			assertThat(location.accessStatus()).isEqualTo(AccessStatus.REPOSITORY_COPY);
 			assertThat(location.hostType()).isEqualTo(AccessHostType.REPOSITORY);
 			assertThat(location.versionType()).isEqualTo(AccessVersionType.ACCEPTED_MANUSCRIPT);
 			assertThat(location.pdfUrl()).isNull();
@@ -84,7 +84,28 @@ class ProviderAccessCandidateVerifierTests {
 	}
 
 	@Test
-	void keepsArxivClassificationSeparateFromLandingPageAccessStatus() {
+	void keepsARegularPublisherLandingPageOpenLandingPage() {
+		URI landing = URI.create("https://publisher.example/article");
+		StubLinkVerifier links = new StubLinkVerifier().respond(landing, verified(landing, 200));
+
+		var outcome = verifier(links).verify(candidate(
+				AccessSource.UNPAYWALL,
+				"publisher",
+				"publishedVersion",
+				landing,
+				null), RETRIEVED_AT);
+
+		assertThat(outcome.location()).hasValueSatisfying(location -> {
+			assertThat(location.accessStatus()).isEqualTo(AccessStatus.OPEN_LANDING_PAGE);
+			assertThat(location.hostType()).isEqualTo(AccessHostType.PUBLISHER);
+			assertThat(location.versionType()).isEqualTo(AccessVersionType.PUBLISHED);
+			assertThat(location.pdfUrl()).isNull();
+			assertThat(location.landingPageUrl()).isEqualTo(landing);
+		});
+	}
+
+	@Test
+	void classifiesAnArxivLandingPageAsAPreprint() {
 		URI landing = URI.create("https://arxiv.org/abs/2608.12345");
 		StubLinkVerifier links = new StubLinkVerifier().respond(landing, verified(landing, 200));
 
@@ -96,7 +117,41 @@ class ProviderAccessCandidateVerifierTests {
 				null), RETRIEVED_AT);
 
 		assertThat(outcome.location()).hasValueSatisfying(location -> {
-			assertThat(location.accessStatus()).isEqualTo(AccessStatus.OPEN_LANDING_PAGE);
+			assertThat(location.accessStatus()).isEqualTo(AccessStatus.PREPRINT);
+			assertThat(location.hostType()).isEqualTo(AccessHostType.PREPRINT_SERVER);
+			assertThat(location.versionType()).isEqualTo(AccessVersionType.PREPRINT);
+		});
+	}
+
+	@Test
+	void classifiesVerifiedRepositoryAndArxivPdfsWithoutChangingPublisherPdfSemantics() {
+		URI repositoryPdf = URI.create("https://repository.example/paper.pdf");
+		URI arxivPdf = URI.create("https://arxiv.org/pdf/2608.12345");
+		StubLinkVerifier links = new StubLinkVerifier()
+				.respond(repositoryPdf, verified(repositoryPdf, 200))
+				.respond(arxivPdf, verified(arxivPdf, 200));
+		ProviderAccessCandidateVerifier verifier = verifier(links);
+
+		var repository = verifier.verify(candidate(
+				AccessSource.UNPAYWALL,
+				"repository",
+				"acceptedVersion",
+				null,
+				repositoryPdf), RETRIEVED_AT);
+		var preprint = verifier.verify(candidate(
+				AccessSource.ARXIV,
+				"preprint_server",
+				"preprint",
+				null,
+				arxivPdf), RETRIEVED_AT);
+
+		assertThat(repository.location()).hasValueSatisfying(location -> {
+			assertThat(location.accessStatus()).isEqualTo(AccessStatus.REPOSITORY_COPY);
+			assertThat(location.hostType()).isEqualTo(AccessHostType.REPOSITORY);
+			assertThat(location.versionType()).isEqualTo(AccessVersionType.ACCEPTED_MANUSCRIPT);
+		});
+		assertThat(preprint.location()).hasValueSatisfying(location -> {
+			assertThat(location.accessStatus()).isEqualTo(AccessStatus.PREPRINT);
 			assertThat(location.hostType()).isEqualTo(AccessHostType.PREPRINT_SERVER);
 			assertThat(location.versionType()).isEqualTo(AccessVersionType.PREPRINT);
 		});

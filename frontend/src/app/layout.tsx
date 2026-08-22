@@ -3,6 +3,7 @@ import type { Route } from "next";
 import Link from "next/link";
 
 import { Brand } from "@/shared/ui/brand";
+import { AuthNavigation } from "@/shared/ui/auth-navigation";
 
 import "./globals.css";
 
@@ -30,13 +31,16 @@ export default function RootLayout({
             <nav aria-label="Primary navigation">
               <Link href="/">Search research</Link>
               <Link href={"/library" as Route}>My library</Link>
+              <Link href={"/jobs" as Route}>Refresh jobs</Link>
               <a
+                className="aboutMcpLink"
                 href="https://modelcontextprotocol.io"
                 rel="noopener noreferrer"
                 target="_blank"
               >
                 About MCP<span className="srOnly"> (opens in a new tab)</span>
               </a>
+              <AuthNavigation />
             </nav>
           </div>
         </header>

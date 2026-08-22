@@ -51,6 +51,12 @@ A generic Streamable HTTP client entry looks like this:
 
 Keep client configuration containing the key outside Git. Client configuration formats differ, so use the equivalent Streamable HTTP URL and Authorization header in your host.
 
+### Hosted OIDC clients
+
+Hosted mode does not use the local key. Connect to the canonical public resource such as `https://research.example.com/mcp` and obtain a JWT access token from the deployment's external authorization server for that configured resource audience and the `openscholar.mcp` scope. A missing or insufficient token receives a bearer challenge pointing to `https://research.example.com/.well-known/oauth-protected-resource/mcp`; that document identifies the resource, authorization server, bearer-header method, and required scope. OpenScholar validates tokens but does not issue them.
+
+Hosted rate-limit identity is a hash of the validated issuer+subject. The limiter is still in-memory and per application instance, so an edge/cluster-wide aggregate control is required for public deployment. Clients that send an `Origin` header must exactly match the hosted allow-list. Real authorization-server registration and interoperability remain deployment gates; the local Inspector/conformance commands below do not prove hosted OAuth interoperability.
+
 The official MCP Inspector can list the tools from its CLI:
 
 ```bash
@@ -70,7 +76,7 @@ Version `2.2.0` is the Inspector release used for the documented smoke test; upg
 | `search_research` | Searches or reuses a bounded scholarly snapshot; returns canonical IDs, ranking rationale, provenance, warnings, and a cursor. | Possible |
 | `get_paper_details` | Reads canonical metadata, identifiers, provenance, freshness, and the full stored access resolution for one OpenScholar UUID. | No |
 | `get_legal_full_text` | Reads the stored legal-access resolution and verified links. `NOT_YET_RESOLVED` means the REST/UI verification flow has not run yet. | No |
-| `search_saved_library` | Searches the fixed local owner's saved memberships by text, collection, status, and normalized tag. | No |
+| `search_saved_library` | Searches the current owner's saved memberships by text, collection, status, and normalized tag. Local mode uses the fixed bootstrap owner; hosted mode derives it from issuer+subject. | No |
 | `export_citations` | Returns a bounded ordered BibTeX or CSL-JSON export as structured MCP content. | No |
 
 MCP-specific result and citation batches are capped at 25 items. Citation inputs must be distinct canonical UUIDs. Paper-detail lookup currently accepts the canonical OpenScholar UUID only; DOI, arXiv, and OpenAlex identifier resolution is a later catalog feature.
@@ -140,9 +146,9 @@ A search call uses the same endpoint:
 
 ## Compatibility and safety
 
-The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration.
+The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration. The production template exposes the Prometheus registry only on the backend's private `9091` management listener and monitoring network; Caddy does not route it publicly.
 
-The local shared-key/fixed-user mode is for loopback development. Its address-based limiter intentionally ignores forwarding headers. A hosted multi-user deployment requires OAuth resource-server support, trusted-proxy handling, aggregate and principal limits, audience and scope checks, and propagation of the authenticated principal into owner-scoped application services.
+The local shared-key/fixed-user mode is for loopback development, and its address-based limiter intentionally ignores forwarding headers. Hosted JWT authorization and owner propagation are implemented, but a target deployment still needs trusted-edge review and aggregate controls. In both modes, provider deadlines and the 18-second search application deadline bound their own layers; client disconnects and MCP `notifications/cancelled` do not currently cancel the tool worker. Durable REST/UI refresh jobs are not MCP Tasks or MCP job handles.
 
 ## Official conformance subset
 

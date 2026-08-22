@@ -24,6 +24,7 @@ import com.openscholar.library.SavedPaperView;
 import com.openscholar.paper.PaperCatalog;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperView;
+import com.openscholar.security.CurrentUserIdProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -51,19 +52,22 @@ class LibraryService implements LibraryUseCase {
 
 	private final Clock clock;
 
+	private final CurrentUserIdProvider currentUser;
+
 	LibraryService(LibraryCollectionRepository collectionRepository, SavedPaperRepository savedPaperRepository,
-			PaperCatalog paperCatalog, Clock clock) {
+			PaperCatalog paperCatalog, Clock clock, CurrentUserIdProvider currentUser) {
 		this.collectionRepository = collectionRepository;
 		this.savedPaperRepository = savedPaperRepository;
 		this.paperCatalog = paperCatalog;
 		this.clock = clock;
+		this.currentUser = currentUser;
 	}
 
 	@Override
 	@Transactional(readOnly = true)
 	public LibraryPage<CollectionSummaryView> listCollections(int page, int size) {
 		PageRequest request = pageRequest(page, size, Sort.by(Sort.Order.desc("updatedAt"), Sort.Order.asc("id")));
-		Page<LibraryCollectionEntity> result = collectionRepository.findByOwnerId(LocalLibraryUser.ID, request);
+		Page<LibraryCollectionEntity> result = collectionRepository.findByOwnerId(ownerId(), request);
 		Map<UUID, Long> counts = paperCounts(result.getContent());
 		return page(result, collection -> toSummary(collection, counts.getOrDefault(collection.id(), 0L)));
 	}
@@ -72,7 +76,7 @@ class LibraryService implements LibraryUseCase {
 	@Transactional
 	public CollectionSummaryView createCollection(String name, String description) {
 		LibraryCollectionEntity collection = collectionRepository
-			.save(LibraryCollectionEntity.create(LocalLibraryUser.ID, name, description, Instant.now(clock)));
+			.save(LibraryCollectionEntity.create(ownerId(), name, description, Instant.now(clock)));
 		return toSummary(collection, 0);
 	}
 
@@ -149,7 +153,7 @@ class LibraryService implements LibraryUseCase {
 		}
 		String normalizedQuery = normalizeQuery(query);
 		String normalizedTag = tag == null || tag.isBlank() ? "" : normalizeTag(tag);
-		Page<SavedPaperEntity> result = savedPaperRepository.search(LocalLibraryUser.ID, normalizedQuery, collectionId,
+		Page<SavedPaperEntity> result = savedPaperRepository.search(ownerId(), normalizedQuery, collectionId,
 				readingStatus == null ? "" : readingStatus.name(), normalizedTag,
 				pageRequest(page, size, Sort.unsorted()));
 		return mapSavedPapers(result);
@@ -157,14 +161,19 @@ class LibraryService implements LibraryUseCase {
 
 	private LibraryCollectionEntity findCollection(UUID collectionId, boolean lock) {
 		Objects.requireNonNull(collectionId, "collectionId");
-		return (lock ? collectionRepository.findLockedByIdAndOwnerId(collectionId, LocalLibraryUser.ID)
-				: collectionRepository.findByIdAndOwnerId(collectionId, LocalLibraryUser.ID))
+		UUID ownerId = ownerId();
+		return (lock ? collectionRepository.findLockedByIdAndOwnerId(collectionId, ownerId)
+				: collectionRepository.findByIdAndOwnerId(collectionId, ownerId))
 			.orElseThrow(() -> new CollectionNotFoundException(collectionId));
 	}
 
 	private PaperView findPaper(UUID paperId) {
 		Objects.requireNonNull(paperId, "paperId");
 		return paperCatalog.findById(paperId).orElseThrow(() -> new PaperNotFoundException(paperId));
+	}
+
+	private UUID ownerId() {
+		return currentUser.currentUserId();
 	}
 
 	private Map<UUID, Long> paperCounts(List<LibraryCollectionEntity> collections) {

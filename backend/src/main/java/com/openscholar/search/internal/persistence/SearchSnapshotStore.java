@@ -55,28 +55,35 @@ public class SearchSnapshotStore {
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<LatestSnapshot> findLatest(String fingerprint) {
+	public Optional<LatestSnapshot> findLatest(UUID ownerId, String fingerprint) {
 		return snapshotRepository
-				.findFirstByFingerprintAndStatusOrderBySearchedAtDesc(fingerprint, COMPLETED)
+				.findFirstByOwnerIdAndFingerprintAndStatusOrderBySearchedAtDesc(ownerId, fingerprint, COMPLETED)
 				.map(snapshot -> new LatestSnapshot(snapshot.freshUntil(), toView(snapshot, CacheDisposition.EXACT_HIT)));
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<SearchView> findById(UUID searchId) {
-		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
+	public Optional<SearchView> findById(UUID ownerId, UUID searchId) {
+		return snapshotRepository.findByIdAndOwnerIdAndStatus(searchId, ownerId, COMPLETED)
 				.map(snapshot -> toView(snapshot, CacheDisposition.EXACT_HIT));
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<SearchContinuation> findContinuation(UUID searchId) {
-		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
+	public Optional<SearchContinuation> findContinuation(UUID ownerId, UUID searchId) {
+		return snapshotRepository.findByIdAndOwnerIdAndStatus(searchId, ownerId, COMPLETED)
 				.map(snapshot -> new SearchContinuation(
 						snapshot.nextCursor(),
 						hasNextCursor(snapshot.nextCursor()) ? storedCommand(snapshot) : null));
 	}
 
+	@Transactional(readOnly = true)
+	public Optional<StoredSearch> findStoredSearch(UUID searchId) {
+		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
+				.map(snapshot -> new StoredSearch(snapshot.ownerId(), storedCommand(snapshot)));
+	}
+
 	@Transactional
 	public SearchView store(
+			UUID ownerId,
 			SearchCommand command,
 			String normalizedQuery,
 			String fingerprint,
@@ -121,6 +128,7 @@ public class SearchSnapshotStore {
 				.distinct()
 				.toList();
 		SearchSnapshotEntity snapshot = SearchSnapshotEntity.completed(
+				ownerId,
 				command.query(),
 				normalizedQuery,
 				fingerprint,
@@ -505,6 +513,9 @@ public class SearchSnapshotStore {
 					nextCursor,
 					false);
 		}
+	}
+
+	public record StoredSearch(UUID ownerId, SearchCommand command) {
 	}
 
 	private static final class CandidateAccumulator {

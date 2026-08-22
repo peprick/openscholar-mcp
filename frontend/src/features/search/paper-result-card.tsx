@@ -65,11 +65,17 @@ export function PaperResultCard({
           </p>
         )}
         <div className="resultFooter">
-          <div className="identifierList" aria-label="Paper identifiers">
-            {identifiers.map((identifier) => (
-              <code key={identifier}>{identifier}</code>
-            ))}
-          </div>
+          {identifiers.length > 0 ? (
+            <div
+              className="identifierList"
+              role="group"
+              aria-label="Paper identifiers"
+            >
+              {identifiers.map((identifier) => (
+                <code key={identifier}>{identifier}</code>
+              ))}
+            </div>
+          ) : null}
           <Link
             className="textLink"
             href={`/papers/${result.paperId}` as Route}

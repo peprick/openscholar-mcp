@@ -104,7 +104,17 @@ class PaperExternalIdEntity {
 					.replaceFirst("^doi:\\s*", "");
 		}
 		if (type == PaperIdentifierType.OPENALEX) {
-			normalized = normalized.replaceFirst("^https?://openalex\\.org/", "");
+			normalized = normalized.replaceFirst("^https?://openalex\\.org/(?:works/)?", "");
+		}
+		if (type == PaperIdentifierType.ARXIV) {
+			normalized = normalized
+					.replaceFirst("^https?://(?:export\\.)?arxiv\\.org/(?:abs|pdf)/", "")
+					.replaceFirst("^arxiv:\\s*", "")
+					.replaceFirst("\\.pdf$", "");
+			if (normalized.matches(
+					"(?:\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?/\\d{7})v\\d+")) {
+				normalized = normalized.replaceFirst("v\\d+$", "");
+			}
 		}
 		return normalized.strip();
 	}

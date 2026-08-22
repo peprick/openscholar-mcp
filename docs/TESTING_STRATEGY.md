@@ -16,7 +16,10 @@
 - Locale-independent collection/tag normalization and literal-safe saved-library queries.
 - Embedding contract invariants, exact Ollama runtime/profile/request/digest checks, no-proxy/redirect transport, response-size enforcement, failure-scope translation, and disabled-by-default configuration.
 - Backfill command/result invariants, generator selection, bounded verification/generation/stale handling, fail-fast systemic errors, deletion/failure accounting, overflow protection, non-web startup guard, nonzero incomplete-run behavior, and duplicate-generator rejection.
-- Authorization decisions.
+- Multi-provider fan-out, provider-set fingerprints, cursor composition, exact-ID merging, reciprocal-rank fusion, and partial success/failure reporting.
+- Durable refresh-job configuration, lease/claim state transitions, retry classification/backoff, stale-completion rejection, worker/scheduler guards, and safe error details.
+- OIDC property/JWT validation, route-scope decisions, issuer+subject resolution, protected-resource metadata/challenges, and principal rate-limit identity.
+- Frontend OIDC configuration, PKCE/state/nonce callback, ID-token/JWKS/token validation, encrypted session/refresh behavior, exact-Origin enforcement, and job response schemas.
 
 ## Slice tests
 
@@ -26,14 +29,17 @@
 - Collection CRUD, saved-paper mutations, owner-scoped not-found behavior, library filters/pagination, and citation-batch attachment contracts.
 - Canonical paper details, record-level provenance, immutable credited names, date/year integrity, and stored-access summaries without provider calls.
 - MCP annotation discovery and tool validation.
+- Refresh-job enqueue/list/get/retry contracts and privacy export/confirmed-delete contracts.
 
 ## Integration tests
 
-Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, deterministic repeat reads, default-off lexical equivalence, pinned HNSW hybrid ordering, exact lexical-candidate vector coverage, explicit profile/source/coverage fallback modes, operational-error propagation, identical-search miss coalescing, distinct-stripe provider concurrency, explicit concurrent force-refresh behavior, coordination-timeout snapshot rechecks without duplicate provider work, execution-deadline provider interruption with no post-timeout snapshot, successful same-query retry, same-key leader-to-follower handoff, immutable embedding profiles, exact cosine storage, source invalidation, missing-vector cursor paging, and PostgreSQL advisory-lock exclusion. Broader concurrent reconciliation and durable job-leasing tests remain later work.
+Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, deterministic repeat reads, default-off lexical equivalence, pinned HNSW hybrid ordering, exact lexical-candidate vector coverage, explicit profile/source/coverage fallback modes, operational-error propagation, identical-search miss coalescing, distinct-stripe provider concurrency, explicit concurrent force-refresh behavior, coordination-timeout snapshot rechecks without duplicate provider work, execution-deadline provider interruption with no post-timeout snapshot, successful same-query retry, same-key leader-to-follower handoff, immutable embedding profiles, exact cosine storage, source invalidation, missing-vector cursor paging, and PostgreSQL advisory-lock exclusion.
+
+The current suite also covers the `V13` refresh-job schema, active-target deduplication, `SKIP LOCKED` claims, lease expiry/reclaim and stale-token safety; the `V14` issuer+subject identity constraints; the `V15` search-owner migration/cache indexes; cross-user search/library rejection; and owner-only privacy export/deletion. Broader high-contention/load reconciliation remains later work.
 
 ## Provider contract tests
 
-Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, duplicate versions, rate limits, timeouts, malformed payloads, unsafe redirects, and tolerant schema-evolution cases. OpenAlex additionally verifies exact-limit acceptance and non-retryable rejection of oversized bodies with declared or unknown content lengths. Latch-driven real-transport tests use a loopback JDK HTTP server to stall once before response headers and once after a partial chunked body; both assert stable retryable timeout translation and exactly one upstream request, with no automatic retry.
+Spring `MockRestServiceServer` fixtures use synthetic or permitted sample responses. Every adapter covers its applicable success, pagination, empty/incomplete results, rate limits, timeouts, malformed payloads, and tolerant schema-evolution cases. OpenAlex additionally verifies exact-limit acceptance and non-retryable rejection of oversized bodies with declared or unknown content lengths. DOAJ fixtures verify keyless v4 article-search requests, literal query escaping, unsupported-filter skips, source-reported access semantics, metadata/link-only mapping, public page/window bounds, and rejection of foreign continuation URLs. CORE fixtures verify the fail-closed licence gate, optional backend bearer key, supported v3 search shape, response aliases, and deliberate omission of full text/download URLs. DataCite fixtures verify thesis/dissertation-only query construction, controlled/legacy type handling, provider-owned cursor paging, OA-only short-circuiting, and no discovery OA/PDF claim. Latch-driven real-transport tests for each discovery adapter stall before headers and after a partial body, asserting stable retryable timeout translation and exactly one upstream request with no automatic retry.
 
 Live-provider tests run manually or on a scheduled, strictly budgeted workflow—not normal pull requests.
 
@@ -58,22 +64,23 @@ The separately frozen HNSW gate uses a deterministic 10,000-vector, 1024-dimensi
 - Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, input/output schemas, annotations, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
 - Implemented: successful raw structured calls for all four database-only tools, using a canonical paper created through the search tool where required.
 - Implemented: API-key, duplicate-header, exact-Origin, response-header, and disabled-until-configured security-filter coverage.
+- Implemented: hosted missing/invalid/expired/wrong-issuer/wrong-audience/insufficient-scope JWT cases, route-scope enforcement, issuer+subject ownership, protected-resource metadata/challenges, and principal-derived MCP rate-limit keys.
 - Implemented: official MCP Inspector CLI discovery and an empty-library `search_saved_library` call against the Compose image.
 - Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios with `--spec-version 2025-11-25`; both pass without warnings through the loopback bearer-injection proxy.
-- Remaining: additional invalid/oversized input and response-size cases.
-- Remaining: access-restricted results and provider partial failure at the MCP wire boundary.
+- Implemented: raw-wire malformed/schema-invalid input, oversized request rejection, oversized result rejection without sensitive-content leakage, restricted-access results, and mixed provider success/failure coverage.
 - Current limitation: the configured 20-second MCP request timeout is not enforced by the stateless MCP Java SDK 2.0 path; the separate 18-second application deadline bounds search use-case execution instead.
-- Remaining: client-disconnect and MCP `notifications/cancelled` propagation, framework parsing/serialization and socket-lifetime deadlines, in-flight JDBC persistence cancellation guarantees, and duplicate-request behavior at the MCP wire boundary.
-- Hosted follow-up: token audience/scope/principal ownership; local API-key and Origin behavior are already covered.
+- Implemented: repeated JSON-RPC identifiers are shown not to act as idempotency keys; ordinary search fingerprint caching still yields one provider call followed by an exact hit.
+- Remaining SDK/transport limitation: client-disconnect and MCP `notifications/cancelled` propagation, framework parsing/serialization and socket-lifetime deadlines, and in-flight JDBC persistence cancellation guarantees.
+- Hosted follow-up: live authorization-server/client interoperability, signing-key rotation, token refresh/revocation, and public-edge behavior. Audience/scope/principal ownership is covered synthetically in the application suite.
 - Track the canonical frozen `2025-11-25` requirements set as the official runner advances beyond its current fixture-oriented release.
 
 If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 ## End-to-end tests
 
-Planned Playwright coverage includes search/filter/provenance, repeat-query caching, legal PDF or external fallback, collections, reading status, citation export, keyboard navigation, provider warnings, and restricted-paper handling.
+The offline Playwright suite covers search/cache/provider warnings/provenance, immutable continuation, verified versus restricted access, direct PDF.js rendering and keyboard/focus/text controls, individual citation download, paper save, collection creation, reading status/tags, and selected citation export. Every scenario blocks unexpected external requests and runs serious/critical WCAG 2.2 axe checks.
 
-The current frontend slice has Vitest/React Testing Library coverage for runtime API validation, bounded search submission, server-derived cursor continuation, continuation errors and loop rejection, RFC 9457 errors, verified-versus-unverified access links, reader-source policy selection, PDF.js loading/render lifecycle, controls, cleanup, generic external fallback, normalized library tags, collection mutations, and bounded citation-batch downloads. Backend integration coverage verifies that continuation preserves stored filters and page size, advances only the opaque cursor, creates a distinct immutable snapshot, reuses a fresh continued page, and rejects missing or exhausted source snapshots without provider calls. Manual browser smoke verification covers desktop/mobile layout, the live search → paper → arXiv access path, the persistent collection flow, and a controlled CORS-allowed render versus CORS-blocked fallback. Automating those reader and library cases with Playwright remains a CI follow-up.
+The separate Compose Playwright lane drives the production Next.js build against Spring Boot, PostgreSQL, and a deterministic OpenAlex fixture. It asserts the cold `201/MISS_FETCHED` and repeated `200/EXACT_HIT` boundary, three provider records becoming two canonical DOI-deduplicated results, collection persistence/filtering, BibTeX download, and WCAG scans across search, paper, library, and collection pages. Vitest/React Testing Library retains narrower component/contract coverage. A live IdP login/refresh/logout browser run remains an external interoperability gate because it requires an actual registered client and issuer.
 
 ## Evaluation fixtures
 
@@ -94,7 +101,8 @@ The versioned `related-metadata-baseline-v1.json` development corpus contains on
 
 ## Performance tests
 
-- Cached search latency/throughput.
+- A checked-in loopback-safe harness measures one forced cold search, repeated exact-cache searches, repeated paper-detail reads, cache-hit ratio, and Prometheus provider error rate. Its 40-sample synthetic Compose reference run passed at 6.944 ms cached-search p95 and 7.305 ms paper-detail p95; see [Local performance evidence](PERFORMANCE_EVIDENCE.md).
+- Cached search throughput and concurrent-client capacity remain deployment tests.
 - Provider fan-out with simulated delays.
 - Connection-pool saturation.
 - Large normalization/persistence batches.
@@ -104,6 +112,8 @@ The versioned `related-metadata-baseline-v1.json` development corpus contains on
 Use synthetic metadata; commit no copyrighted corpus.
 
 ## CI gates
+
+The list below is the target release gate. Unit/integration/frontend checks, container builds, MCP conformance, dependency review, CodeQL, Trivy, secret scanning, SBOM generation, an offline Playwright workflow, and a deterministic Compose-backed Playwright workflow have checked-in workflows. A checked-in workflow is not evidence that an unpushed revision passed on GitHub; local results are reported separately.
 
 1. Formatting and static checks.
 2. Backend unit/slice/integration tests.

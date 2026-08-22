@@ -1,0 +1,156 @@
+groups:
+  - name: openscholar-availability
+    rules:
+      - alert: OpenScholarEndpointDown
+        expr: probe_success{job=~"openscholar-(internal|public)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenScholar endpoint is unavailable"
+          description: "Probe {{ $labels.job }} / {{ $labels.instance }} has failed for more than two minutes."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#endpoint-down"
+
+      - alert: OpenScholarProbeMissing
+        expr: absent(probe_success{job="openscholar-internal"}) or absent(probe_success{job="openscholar-public"}) or absent(probe_success{job="openscholar-postgres"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar probe series is missing"
+          description: "Prometheus is missing an internal, public, or PostgreSQL OpenScholar probe series. Check target discovery and blackbox-exporter."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#monitoring-pipeline-down"
+
+      - alert: OpenScholarEndpointSlow
+        expr: probe_duration_seconds{job=~"openscholar-(internal|public)"} > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar endpoint is responding slowly"
+          description: "Probe {{ $labels.instance }} has taken longer than five seconds for ten minutes."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#slow-or-saturated-service"
+
+      - alert: OpenScholarTlsCertificateExpiring
+        expr: (probe_ssl_earliest_cert_expiry{job="openscholar-public"} - time()) < 1209600 and probe_ssl_earliest_cert_expiry{job="openscholar-public"} > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar TLS certificate expires within 14 days"
+          description: "The earliest certificate presented by {{ $labels.instance }} expires in less than 14 days."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#tls-renewal-failure"
+
+      - alert: OpenScholarDatabaseTcpDown
+        expr: probe_success{job="openscholar-postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenScholar cannot establish a PostgreSQL TCP connection"
+          description: "The internal PostgreSQL socket has been unreachable for more than two minutes."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#endpoint-down"
+
+  - name: openscholar-monitoring
+    rules:
+      - alert: OpenScholarBlackboxExporterDown
+        expr: up{job="blackbox-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenScholar blackbox exporter is down"
+          description: "Prometheus cannot scrape the blackbox exporter, so endpoint alerts are incomplete."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#monitoring-pipeline-down"
+
+      - alert: OpenScholarAlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenScholar Alertmanager is down"
+          description: "Prometheus cannot deliver alerts to Alertmanager. Use independent checks until notification is restored."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#monitoring-pipeline-down"
+
+      - alert: OpenScholarPrometheusReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rejected its latest configuration"
+          description: "Keep the last known-good configuration active and validate the proposed files before retrying."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#monitoring-pipeline-down"
+
+  - name: openscholar-application
+    rules:
+      - alert: OpenScholarBackendMetricsDown
+        expr: up{job="openscholar-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenScholar application metrics are unavailable"
+          description: "Prometheus has been unable to scrape the private backend management listener for two minutes."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#monitoring-pipeline-down"
+
+      - alert: OpenScholarProviderFailureRateHigh
+        expr: |
+          (
+            sum(rate(openscholar_provider_requests_total{outcome="failure"}[10m]))
+            /
+            clamp_min(sum(rate(openscholar_provider_requests_total[10m])), 0.001)
+          ) > 0.25
+          and sum(rate(openscholar_provider_requests_total[10m])) > 0.01
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar provider failure rate is elevated"
+          description: "More than 25% of discovery-provider requests have failed during sustained traffic."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#provider-outage-or-rate-limit"
+
+      - alert: OpenScholarProviderP95Slow
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(openscholar_provider_request_duration_seconds_bucket[10m]))
+          ) > 8
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar provider p95 latency is high"
+          description: "Discovery-provider p95 latency has exceeded eight seconds for fifteen minutes."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#provider-outage-or-rate-limit"
+
+      - alert: OpenScholarRefreshJobFailed
+        expr: increase(openscholar_refresh_jobs_completed_total{status="FAILED"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An OpenScholar refresh job reached terminal failure"
+          description: "At least one durable metadata or access refresh exhausted its attempt budget."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#refresh-job-failures-or-backlog"
+
+      - alert: OpenScholarMcpRejectionsHigh
+        expr: sum(rate(openscholar_mcp_rejections_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar MCP rejection volume is elevated"
+          description: "The MCP boundary is rejecting more than one request every ten seconds."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#mcp-authentication-or-rate-limit-failures"
+
+      - alert: OpenScholarHttpServerErrors
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenScholar HTTP 5xx responses are sustained"
+          description: "The backend is returning more than one server error every twenty seconds."
+          runbook_url: "https://github.com/peprick/openscholar-mcp/blob/main/docs/OPERATIONS_RUNBOOK.md#slow-or-saturated-service"

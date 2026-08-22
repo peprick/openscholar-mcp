@@ -1,0 +1,304 @@
+name: Security and SBOM
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependency change review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Reject vulnerable dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+          show-openssf-scorecard: true
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Java 21
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Build Java for analysis
+        if: matrix.language == 'java-kotlin'
+        working-directory: backend
+        run: ./mvnw --batch-mode --no-transfer-progress package -DskipTests
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  filesystem-security:
+    name: Repository vulnerability scan and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Prepare report directory
+        run: mkdir -p security-reports
+
+      - name: Generate CycloneDX source SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: security-reports/openscholar-source.cdx.json
+
+      - name: Scan dependencies, secrets, and configuration
+        id: trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: security-reports/trivy-results.sarif
+          exit-code: "1"
+
+      - name: Upload Trivy results to code scanning
+        if: always() && hashFiles('security-reports/trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: security-reports/trivy-results.sarif
+          category: trivy-filesystem
+
+      - name: Retain SBOM and scan report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: security-reports-${{ github.run_attempt }}
+          path: security-reports/
+          if-no-files-found: error
+          retention-days: 30
+
+  container-security:
+    name: Runtime image scans and SBOMs
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Build final runtime images
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag openscholar-backend:security backend
+          docker build --pull \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag openscholar-frontend:security frontend
+          mkdir -p security-reports
+
+      - name: Generate backend image SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: openscholar-backend:security
+          format: cyclonedx
+          output: security-reports/openscholar-backend.cdx.json
+
+      - name: Generate frontend image SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: openscholar-frontend:security
+          format: cyclonedx
+          output: security-reports/openscholar-frontend.cdx.json
+
+      - name: Scan backend runtime image
+        id: backend_image_scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: openscholar-backend:security
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: security-reports/backend-image.sarif
+          exit-code: "1"
+
+      - name: Scan frontend runtime image
+        id: frontend_image_scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: openscholar-frontend:security
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: security-reports/frontend-image.sarif
+          exit-code: "1"
+
+      - name: Upload backend image findings
+        if: always() && hashFiles('security-reports/backend-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: security-reports/backend-image.sarif
+          category: trivy-backend-image
+
+      - name: Upload frontend image findings
+        if: always() && hashFiles('security-reports/frontend-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: security-reports/frontend-image.sarif
+          category: trivy-frontend-image
+
+      - name: Retain runtime SBOMs and scan reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: container-security-reports-${{ github.run_attempt }}
+          path: security-reports/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce runtime vulnerability gate
+        if: always()
+        env:
+          BACKEND_SCAN_OUTCOME: ${{ steps.backend_image_scan.outcome }}
+          FRONTEND_SCAN_OUTCOME: ${{ steps.frontend_image_scan.outcome }}
+        run: |
+          if [[ "${BACKEND_SCAN_OUTCOME}" != "success" || "${FRONTEND_SCAN_OUTCOME}" != "success" ]]; then
+            echo "At least one runtime image contains an unapproved high/critical finding." >&2
+            exit 1
+          fi
+
+  third-party-runtime-security:
+    name: Third-party runtime scan (${{ matrix.name }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: postgres
+            image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+          - name: caddy
+            image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+          - name: blackbox-exporter
+            image: prom/blackbox-exporter:v0.28.0@sha256:e753ff9f3fc458d02cca5eddab5a77e1c175eee484a8925ac7d524f04366c2fc
+          - name: alertmanager
+            image: prom/alertmanager:v0.32.1@sha256:51a825c2a40acc3e338fdd00d622e01ec090f72be2b3ea46be0839cd47a4d286
+          - name: prometheus
+            image: prom/prometheus:v3.5.5@sha256:332c2f43e7e389d74d3893b55bb02fbbd684208e681eeb604641d5d769c0fe2a
+    steps:
+      - name: Prepare report directory
+        run: mkdir -p security-reports
+
+      - name: Generate third-party image SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          format: cyclonedx
+          output: security-reports/${{ matrix.name }}.cdx.json
+
+      - name: Scan third-party runtime image
+        id: third_party_image_scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: security-reports/${{ matrix.name }}.sarif
+          exit-code: "1"
+
+      - name: Upload third-party image findings
+        if: always() && hashFiles(format('security-reports/{0}.sarif', matrix.name)) != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        with:
+          sarif_file: security-reports/${{ matrix.name }}.sarif
+          category: trivy-third-party-${{ matrix.name }}
+
+      - name: Retain third-party SBOM and scan report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: third-party-${{ matrix.name }}-security-reports-${{ github.run_attempt }}
+          path: security-reports/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce third-party runtime vulnerability gate
+        if: always()
+        env:
+          IMAGE_SCAN_OUTCOME: ${{ steps.third_party_image_scan.outcome }}
+        run: |
+          if [[ "${IMAGE_SCAN_OUTCOME}" != "success" ]]; then
+            echo "${{ matrix.image }} contains an unapproved high/critical finding." >&2
+            exit 1
+          fi

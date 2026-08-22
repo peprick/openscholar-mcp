@@ -20,6 +20,16 @@ export type VerifiedPdfLocation = PaperAccessLocation & {
   verifiedAt: string;
 };
 
+export function isReadablePdfAccessStatus(
+  status: PaperAccessLocation["accessStatus"],
+): boolean {
+  return (
+    status === "OPEN_PDF" ||
+    status === "REPOSITORY_COPY" ||
+    status === "PREPRINT"
+  );
+}
+
 function secureReaderUrl(value: string): URL | null {
   try {
     const url = new URL(value);
@@ -68,7 +78,7 @@ export function selectVerifiedPdfLocation(
     location === undefined ||
     location.verificationStatus !== "VERIFIED" ||
     location.verifiedAt === null ||
-    location.accessStatus !== "OPEN_PDF" ||
+    !isReadablePdfAccessStatus(location.accessStatus) ||
     location.pdfUrl === null ||
     secureReaderUrl(location.pdfUrl) === null
   ) {

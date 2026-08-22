@@ -8,6 +8,8 @@ Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
 - PostgreSQL persistence through Spring Data JPA
 - Flyway-managed schema
 - OpenAlex topic search with bounded filters and opaque cursor paging
+- Disabled-by-default DOAJ v4 article discovery with keyless, metadata/link-only mapping
+- Licence-gated, disabled-by-default CORE API v3 metadata discovery
 - Canonical DOI/OpenAlex deduplication, authors, and provider provenance
 - Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
 - Paper-specific credited author names and publication date/year integrity enforced by Flyway
@@ -138,6 +140,23 @@ OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
 
 OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
 
+DOAJ discovery is opt-in. Set `DOAJ_ENABLED=true` to add the public, keyless DOAJ v4 article-search adapter; `DOAJ_CONTACT_EMAIL` is optional and is used only in the backend-owned `User-Agent`. The adapter searches DOAJ's open-access article index, maps typed metadata plus reported landing/PDF links, and never downloads or stores article bytes. DOAJ's collection status is retained only as a source-reported open-access claim; normal access verification still determines whether a link is currently usable and does not infer retention or redistribution rights. Citation thresholds and language filters cause this adapter to skip a query because its article-search result does not provide citation counts and its journal language is not a defensible article-language field. A document-type filter that excludes `ARTICLE` also skips it. Requests use an adapter-owned opaque page cursor, a 10-second whole-exchange deadline, a 100-record page cap, DOAJ's public 1,000-result window, and an 8 MiB streamed response limit. Override those deployment bounds with the positive `DOAJ_CONNECT_TIMEOUT`, `DOAJ_REQUEST_TIMEOUT`, and `DOAJ_MAX_RESPONSE_BYTES` settings; `DOAJ_BASE_URL` exists for controlled tests and mirrors.
+
+CORE discovery is separately opt-in and deliberately fails startup unless both `CORE_ENABLED=true` and `CORE_LICENSE_CONFIRMED=true` are set. Before setting them, the operator must review the current CORE terms, obtain any licence applicable to the deployment, and implement the required attribution. CORE specifically asks projects or products related to its existing API, search, or discovery services to contact CORE. This repository's confirmation switch records an operator decision; it does not grant a licence or replace legal review.
+
+`CORE_API_KEY` is optional and, when supplied, is sent only by the backend as a Bearer credential. CORE's published free allowances currently distinguish unauthenticated access (100 requests/day, at most 10/minute), registered personal use (1,000/day, at most 25/minute), and registered academic use (5,000/day, at most 10/minute); confirm the current service page before deployment. The adapter observes CORE's `X-RateLimit-*` response headers, uses no automatic retry, bounds each whole exchange to 10 seconds and each streamed response to 8 MiB, and exposes a validated opaque cursor within CORE's 10,000-result search window. Override those bounds only with positive `CORE_CONNECT_TIMEOUT`, `CORE_REQUEST_TIMEOUT`, and `CORE_MAX_RESPONSE_BYTES` values.
+
+The CORE integration calls only the supported API v3 work-search route. It maps normalized metadata and a safe landing page, discards `fullText` and download URLs, never calls CORE's download/full-text endpoints, and always leaves its discovery `pdfUrl` empty. It does not scrape CORE or systematically harvest documents. A CORE-reported full-text signal is provenance, not verified legal access or permission to download, retain, mine, or redistribute a paper; the normal access-verification flow remains authoritative.
+
+After completing the operator review, an explicitly authorized local run can be started with:
+
+```bash
+CORE_ENABLED=true \
+CORE_LICENSE_CONFIRMED=true \
+CORE_API_KEY=your-optional-key \
+./mvnw spring-boot:run
+```
+
 Searches waiting to acquire one of the same-instance coordination stripes stop after 12 seconds by default. Override this acquisition-only bound with `SEARCH_COORDINATION_WAIT_TIMEOUT`. A timeout never cancels the leader or starts a duplicate provider request: an available snapshot is returned as an exact hit or stale fallback, while a cold miss returns retryable `SEARCH_COORDINATION_TIMEOUT`. Provider work, persistence, serialization, and the complete REST/MCP request remain outside this coordination-wait limit.
 
 Every `SearchResearchUseCase` `search`, `next`, and `get` execution has a shared 18-second application deadline. Override it with `SEARCH_EXECUTION_TIMEOUT`; values must be at least one millisecond. The deadline starts when the validated operation is dispatched and covers cache and coordination work, provider exchange and deserialization, persistence, and construction of the `SearchView`. It excludes request parsing/schema validation, REST/MCP DTO and framework serialization, and the socket lifetime. Expiration interrupts the dedicated virtual-thread worker, uses cooperative checkpoints, and returns retryable `SEARCH_DEADLINE_EXCEEDED` without `Retry-After`; caller or server interruption returns `SEARCH_EXECUTION_INTERRUPTED`. Deadline expiration is terminal and does not start a post-deadline stale fallback. Persistence already in progress at the boundary may continue and commit, so a new immutable snapshot may later become visible, because JDBC interruption is not guaranteed.
@@ -150,7 +169,7 @@ UNPAYWALL_EMAIL=backend-contact@example.org ./mvnw spring-boot:run
 
 The arXiv adapter needs no credential. It uses an exact `id_list` lookup with one result and enforces at least three seconds between requests. Provider base URLs can be overridden for local tests through the variables documented in the [root environment example](../.env.example).
 
-The root `.env.example` documents the full-stack variables; `backend/.env.example` documents direct backend development variables. Never commit `.env` or credentials. OpenAlex authorization and the Unpaywall contact email remain server-side and are never exposed through REST responses.
+The root `.env.example` documents the full-stack variables; `backend/.env.example` documents direct backend development variables. Never commit `.env` or credentials. OpenAlex and CORE authorization plus the Unpaywall contact email remain server-side and are never exposed through REST responses.
 
 The MCP endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set. See the [MCP quickstart](../docs/MCP_QUICKSTART.md) for discovery, tool calls, Origin policy, and client configuration.
 

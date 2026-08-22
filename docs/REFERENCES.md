@@ -1,6 +1,6 @@
 # Official References
 
-These links support version and architecture decisions reviewed through 2026-08-19. Re-check them when application scaffolding, model selection, or a dependency upgrade begins.
+These links support version and architecture decisions reviewed through 2026-08-22. Re-check them when application scaffolding, model selection, or a dependency upgrade begins.
 
 ## Java and Spring
 
@@ -37,8 +37,18 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [Unpaywall REST API, exact DOI endpoint, email, and limits](https://unpaywall.org/api)
 - [arXiv API manual, `id_list`, Atom responses, and request pacing](https://info.arxiv.org/help/api/user-manual.html)
 - [arXiv API terms of use and content restrictions](https://info.arxiv.org/help/api/tou.html)
-- [CORE API](https://core.ac.uk/services/api)
-- [Directory of Open Access Journals](https://doaj.org/)
+- [CORE API v3 documentation](https://api.core.ac.uk/docs/v3)
+- [CORE API v3 OpenAPI contract](https://api.core.ac.uk/swagger/v3.json)
+- [CORE API service, registration, and current quotas](https://core.ac.uk/services/api)
+- [CORE terms and licence eligibility](https://core.ac.uk/terms)
+- [CORE attribution guidance](https://core.ac.uk/acknowledge)
+- [DOAJ current API documentation](https://doaj.org/api)
+- [DOAJ v4 current-API cutover notice](https://blog.doaj.org/2024/07/16/were-cutting-over-to-the-new-api/)
+- [DOAJ v4 article-search route source](https://github.com/DOAJ/doaj/blob/develop/portality/view/api_v4.py)
+- [DOAJ current discovery implementation and public paging bounds](https://github.com/DOAJ/doaj/blob/develop/portality/api/current/discovery.py)
+- [DOAJ current article discovery schema](https://github.com/DOAJ/doaj/blob/develop/portality/api/current/discovery_api_article_swag.json)
+- [DOAJ FAQ, metadata CC0 terms, and underlying-work copyright](https://doaj.org/docs/faq/)
+- [DOAJ OAI-PMH article metadata notes](https://doaj.org/docs/oai-pmh/)
 - [Open Access Theses and Dissertations](https://www.oatd.org/)
 - [NDLTD thesis resources](https://ndltd.org/thesis-resources/find-etds/)
 
@@ -78,6 +88,22 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [PDF.js getting started](https://mozilla.github.io/pdf.js/getting_started/)
 - [PDF.js examples](https://mozilla.github.io/pdf.js/examples/)
 - [PDF.js cross-origin FAQ](https://github.com/mozilla/pdf.js/wiki/frequently-asked-questions)
+
+## Deployment and operations
+
+- [Docker Compose production guidance](https://docs.docker.com/compose/how-tos/production/)
+- [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)
+- [Caddy automatic HTTPS](https://caddyserver.com/docs/automatic-https)
+- [Caddy global server options](https://caddyserver.com/docs/caddyfile/options)
+- [Caddy request-body limits](https://caddyserver.com/docs/caddyfile/directives/request_body)
+- [Caddy access-log filtering](https://caddyserver.com/docs/caddyfile/directives/log#filter)
+- [Prometheus configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/)
+- [Prometheus alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
+- [PostgreSQL `pg_dump`](https://www.postgresql.org/docs/17/app-pgdump.html)
+- [PostgreSQL `pg_restore`](https://www.postgresql.org/docs/17/app-pgrestore.html)
+- [GitHub dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review)
+- [GitHub CodeQL code scanning](https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning-with-codeql)
+- [CycloneDX specification](https://cyclonedx.org/specification/overview/)
 
 ## Version caveat
 

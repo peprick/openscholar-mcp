@@ -8,6 +8,15 @@
 - Results include provenance, freshness, and warnings.
 - Useful partial provider results survive individual provider failures.
 - REST versioning begins at `/api/v1`.
+- Hosted user-owned reads/writes are authorized by the OIDC issuer/subject-derived owner, not by possession of a UUID.
+
+The complete machine-readable REST contract is the checked-in [OpenAPI 3.1 specification](openapi.yaml). It covers every current `/api/v1` operation, hosted scopes and principal visibility, request bounds, success representations, and stable Problem Details responses. The backend CI suite validates that its documented method/path inventory continues to match the REST controllers; run the focused check from `backend/` with `./mvnw -Dtest=OpenApiContractTests test`.
+
+## Authentication modes
+
+Local development keeps REST on the fixed local owner and protects `/mcp` with `MCP_LOCAL_API_KEY`. When `OIDC_SECURITY_ENABLED=true`, Spring Boot becomes a stateless JWT resource server: it validates signature, expiry, issuer, and audience, then applies `openscholar.search`, `openscholar.library`, `openscholar.jobs`, `openscholar.privacy`, `openscholar.mcp`, or `openscholar.ops` by route. Search snapshots and library collections are resolved through the authenticated issuer+subject owner; unauthorized owned identifiers return not found rather than revealing another principal's object.
+
+Hosted MCP publishes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Its `401`/`403` challenges identify that metadata document and the required `openscholar.mcp` scope. The issuer remains the authorization server; OpenScholar does not issue tokens.
 
 ## REST endpoints
 
@@ -40,7 +49,9 @@ Example:
 
 Responses include search ID, query fingerprint, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, and pagination.
 
-The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the stored snapshot without contacting OpenAlex. `POST /api/v1/searches/{searchId}/next` derives the continuation from that immutable snapshot: it reuses the stored query, filters, and page size, replaces the current cursor with the stored opaque `nextCursor`, and disables forced refresh. A newly fetched continuation returns `201`; replaying a fresh continuation returns `200 EXACT_HIT`; a missing source snapshot returns `404 SEARCH_NOT_FOUND`; and a snapshot without another page returns `409 SEARCH_PAGE_EXHAUSTED`. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
+The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the current owner's stored snapshot without contacting a provider. `POST /api/v1/searches/{searchId}/next` derives the continuation from that immutable snapshot: it reuses the stored query, filters, and page size, replaces the current cursor with the stored opaque multi-provider continuation, and disables forced refresh. A newly fetched continuation returns `201`; replaying a fresh continuation returns `200 EXACT_HIT`; a missing or other-owner source snapshot returns `404 SEARCH_NOT_FOUND`; and a snapshot without another page returns `409 SEARCH_PAGE_EXHAUSTED`. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
+
+OpenAlex is enabled by default. DataCite, DOAJ, and CORE are operator opt-ins; CORE additionally requires the licence-confirmation guard. Enabled providers run concurrently. A successful provider is preserved when another fails, coverage/warnings describe both outcomes, exact identifiers merge duplicate works, and a multi-provider page is ranked by deterministic reciprocal-rank fusion with provider contributions retained. DataCite is thesis/dissertation metadata-only discovery and never returns a discovery PDF or open-access claim.
 
 Open-access flags and PDF URLs in this search response are explicitly provider-reported, not independently verified legal-access claims. Use the implemented `POST /api/v1/papers/{paperId}/access/verify` flow to resolve and independently verify stored legal-access locations.
 
@@ -77,13 +88,13 @@ Access resolution uses exact identifiers already attached to the canonical paper
 
 Results contain overall access status, freshness, provider coverage, warnings, a best-location ID, and verified version records with source, host/version classification, licence when reported, landing/PDF link, and verification timestamps. All current locations use `LINK_ONLY`: the API returns links but never PDF bytes.
 
-The web reader can load a fresh, verified `OPEN_PDF` HTTPS location directly from the source into PDF.js in the user's browser. This is not an API byte endpoint: Next.js and Spring Boot do not fetch or relay the document, and a source without compatible browser CORS headers falls back to its external link.
+The web reader can load a fresh, verified HTTPS PDF location classified as `OPEN_PDF`, `REPOSITORY_COPY`, or `PREPRINT` directly from the source into PDF.js in the user's browser. The latter two statuses still require a non-null verified PDF link; landing-page-only records remain external. This is not an API byte endpoint: Next.js and Spring Boot do not fetch or relay the document, and a source without compatible browser CORS headers falls back to its external link.
 
 Access results remain fresh for 24 hours by default. The cache carries a fingerprint of the paper's DOI, arXiv ID, and abstract availability, so later catalog enrichment invalidates an incompatible negative result. Provider failures are isolated. If no provider can complete a refresh—or reported candidates cannot be safely re-verified—and a compatible older resolution exists, the API returns it unchanged as `STALE_FALLBACK` with machine-readable warnings rather than renewing stale links as fresh.
 
-The implemented access-status vocabulary is `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, and `UNAVAILABLE`. Link verification accepts only provider candidates and validates every redirect before a location can become active.
+The implemented access-status vocabulary is `OPEN_PDF`, `OPEN_LANDING_PAGE`, `REPOSITORY_COPY`, `PREPRINT`, `ABSTRACT_ONLY`, `RESTRICTED`, `UNKNOWN`, and `UNAVAILABLE`. Verified arXiv candidates are classified as `PREPRINT`; verified Unpaywall locations reported with repository host evidence are `REPOSITORY_COPY`; other verified PDFs and landing pages retain `OPEN_PDF` and `OPEN_LANDING_PAGE`. Link verification accepts only provider candidates and validates every redirect before a location can become active.
 
-Current access verification returns `404 PAPER_NOT_FOUND` for an unknown canonical paper, `429 ACCESS_REFRESH_RATE_LIMITED` for a forced-refresh cooldown violation, and `503 ACCESS_PROVIDERS_UNAVAILABLE` only when no provider can complete and there is no stored fallback. The 503 problem preserves aggregate retryability and an upstream `Retry-After` when available. An asynchronous access job is deferred until interactive provider coverage needs it.
+Current access verification returns `404 PAPER_NOT_FOUND` for an unknown canonical paper, `429 ACCESS_REFRESH_RATE_LIMITED` for a forced-refresh cooldown violation, and `503 ACCESS_PROVIDERS_UNAVAILABLE` only when no provider can complete and there is no stored fallback. The 503 problem preserves aggregate retryability and an upstream `Retry-After` when available. The durable `PAPER_ACCESS` refresh job can run the same bounded resolution outside the interactive request when the default-off worker is enabled.
 
 ### Collections
 
@@ -100,7 +111,7 @@ GET    /api/v1/library/papers
 POST   /api/v1/citations/export
 ```
 
-These endpoints are implemented for the fixed local development user, and every collection read/write is owner-scoped. Collection names contain 1–120 characters; descriptions are optional and bounded to 1,000 characters. `PUT` creates or replaces a paper membership, while `PATCH` requires an existing membership. A membership records `UNREAD`, `READING`, or `COMPLETED` and zero to ten canonical tags. Tags are trimmed, internal whitespace is collapsed, values are lowercased with locale-independent rules, and each tag is limited to 40 characters. Deleting a paper membership is idempotent; an unknown or unauthorized collection returns `404 COLLECTION_NOT_FOUND`.
+Every collection read/write is owner-scoped. Local mode resolves the fixed development owner; OIDC mode resolves or creates an internal user for the validated issuer+subject. Collection names contain 1–120 characters; descriptions are optional and bounded to 1,000 characters. `PUT` creates or replaces a paper membership, while `PATCH` requires an existing membership. A membership records `UNREAD`, `READING`, or `COMPLETED` and zero to ten canonical tags. Tags are trimmed, internal whitespace is collapsed, values are lowercased with locale-independent rules, and each tag is limited to 40 characters. Deleting a paper membership is idempotent; an unknown or other-owner collection returns `404 COLLECTION_NOT_FOUND`.
 
 `GET /api/v1/library/papers` supports bounded `q`, `collectionId`, `readingStatus`, `tag`, `page`, and `size` parameters. Lexical matching covers collection name, paper title, abstract, venue, and credited author name. `%`, `_`, and `\` in `q` are treated literally rather than as SQL wildcards. Results are deterministic and retain one row per collection membership; a canonical paper saved in two collections therefore appears twice.
 
@@ -108,14 +119,37 @@ These endpoints are implemented for the fixed local development user, and every 
 
 Notes/highlights follow after the core library.
 
+### Durable refresh jobs
+
+```http
+POST /api/v1/refresh-jobs
+GET  /api/v1/refresh-jobs?page=0&size=20
+GET  /api/v1/refresh-jobs/{jobId}
+POST /api/v1/refresh-jobs/{jobId}/retry
+```
+
+The REST API and `/jobs` UI expose durable `SEARCH_METADATA` and `PAPER_ACCESS` refresh records. Enqueue validates the target, returns `202 Accepted`, and deduplicates an already `QUEUED`/`RUNNING` type+target. PostgreSQL stores `QUEUED`, `RUNNING`, `SUCCEEDED`, and `FAILED` states, attempt budget, lease timestamps, and bounded safe error details. The default-off worker claims with `FOR UPDATE SKIP LOCKED`, uses an expiring tokened lease, applies bounded exponential retry to classified transient failures, and rejects stale completions that lost their lease. Failed jobs can be manually retried; optional default-off scheduling enqueues stale search/access targets and is invalid unless the worker is enabled.
+
+These are operational REST/UI refresh jobs, not MCP Tasks or per-user MCP job handles. The table has no `owner_id` and deduplicates by type+target. Under the `openscholar.jobs` scope, `SEARCH_METADATA` list/get/retry visibility follows the target snapshot's current owner, while `PAPER_ACCESS` jobs remain visible/retryable to every jobs-scoped principal because canonical papers and access evidence are shared catalog data.
+
+### Privacy
+
+```http
+GET    /api/v1/privacy/export
+DELETE /api/v1/privacy/account
+```
+
+OIDC mode requires `openscholar.privacy`. Export returns a no-store JSON attachment containing only the current principal's identity display data, search snapshots/filters, collections, and saved-paper memberships. Account deletion requires the exact `DELETE_MY_DATA` confirmation and deletes that principal's search snapshots, search-refresh jobs, collections/memberships/tags, and OIDC user row. Shared canonical paper/provider/access metadata and global access-refresh jobs are not personal-account records and are not deleted. A later valid token for the same issuer+subject provisions a new empty internal account. Local mode preserves the fixed bootstrap user while deleting its personal search/library data.
+
 ### Operations
 
 ```http
 GET /actuator/health
 GET /actuator/info
+GET /actuator/prometheus
 ```
 
-Only `health` and `info` are exposed. Health details are never shown, and the Micrometer MCP metrics are recorded internally without exposing an Actuator metrics endpoint. Administrative authentication is required before broader diagnostics can be exposed in a hosted deployment.
+`health`, `info`, and the Prometheus registry are exposed by Actuator. Health details are never shown. Local mode remains loopback-bound; production moves all management endpoints to a separate private `9091` listener attached to the monitoring network, where Prometheus scrapes them. Caddy does not publish or route `/actuator/*`. Any broader diagnostics require a separately reviewed private or authenticated management boundary.
 
 ## Error model
 
@@ -129,9 +163,9 @@ The outer search execution deadline defaults to 18 seconds and applies to `searc
 
 The implemented transport is stateless Streamable HTTP through `spring-ai-starter-mcp-server-webmvc` at `/mcp`. It is synchronous, advertises tools only, and does not expose legacy SSE, resources, prompts, completions, sampling, elicitation, or STDIO.
 
-Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Every request requires the configured local bearer key; present `Origin` headers must exactly match the configured allow-list.
+Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Local mode requires the configured MCP bearer key. OIDC mode delegates bearer validation to the JWT resource server and requires `openscholar.mcp`; present `Origin` headers must still exactly match the configured allow-list.
 
-The initial adapter registers five read-oriented tools. Search may contact OpenAlex and update internal metadata/search caches. Its OpenAlex exchange has a configurable 10-second default deadline covering request transmission, response headers, and streamed response-body consumption. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+The adapter registers five read-oriented tools. Search may contact the enabled discovery-provider set and update internal metadata/search caches. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
@@ -166,7 +200,7 @@ Accepts one canonical OpenScholar UUID and returns the stored access classificat
 
 ### `search_saved_library`
 
-Searches the fixed local owner's saved collection memberships using optional lexical text, collection UUID, reading status, normalized tag, page, and size. Results preserve one row per collection membership. The application-service lookup is owner-scoped; authenticated principal propagation replaces the fixed local owner in multi-user mode.
+Searches the current owner's saved collection memberships using optional lexical text, collection UUID, reading status, normalized tag, page, and size. Results preserve one row per collection membership. Local mode uses the fixed owner; OIDC mode uses the authenticated issuer+subject owner.
 
 ### `export_citations`
 
@@ -174,7 +208,7 @@ Accepts one to 25 distinct canonical paper UUIDs plus `bibtex` or `csl-json`. It
 
 ## Deferred MCP tools
 
-`build_reading_list`, provider-backed access verification, collection/note mutations, and job handles are not advertised until their application services, confirmation model, ownership, and timeout behavior are implemented and tested.
+`build_reading_list`, provider-backed access verification, collection/note mutations, and MCP job handles are not advertised until their confirmation, ownership, and timeout behavior are implemented and tested. Durable REST/UI refresh jobs already exist but are intentionally not represented as MCP Tasks.
 
 ### Long-running jobs
 
@@ -205,8 +239,8 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 - JSON Schema validation and strict bounds.
 - Tool descriptions state side effects/access constraints.
 - External document text is never interpreted as tool instructions.
-- Implemented local MCP limits per server-observed remote address; hosted mode adds aggregate and authenticated-principal limits.
-- arXiv has an implemented three-second outbound request gate. OpenAlex uses a configurable 10-second whole-exchange deadline, and Unpaywall uses bounded timeouts; both propagate applicable upstream rate-limit information. Broader per-provider budgets remain planned.
+- Local MCP limits use the server-observed remote address. OIDC MCP limits use a hash of validated issuer+subject; an independent aggregate hosted limit remains external work.
+- arXiv has an implemented three-second outbound request gate. All discovery adapters have configurable whole-exchange deadlines/body limits; access providers use bounded timeouts and applicable upstream rate-limit information is propagated.
 - Search coordination uses a configurable 12-second lock-acquisition limit. Timing out prevents that follower from invoking duplicate work and does not cancel the leader; snapshot fallback is used when available.
 - Search application execution uses a configurable 18-second default deadline with interrupting virtual-thread cancellation and cooperative checkpoints. MCP exposes retryable `SEARCH_DEADLINE_EXCEEDED` and `SEARCH_EXECUTION_INTERRUPTED` safe prefixes without guessed retry-after values.
 - Every protected MCP response carries a request ID that is also placed in logging context.

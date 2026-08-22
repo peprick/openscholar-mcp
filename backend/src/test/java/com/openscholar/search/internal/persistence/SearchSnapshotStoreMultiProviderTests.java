@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import com.openscholar.TestcontainersConfiguration;
 import com.openscholar.paper.DocumentType;
@@ -34,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 class SearchSnapshotStoreMultiProviderTests {
 
 	private static final Instant NOW = Instant.parse("2026-08-21T08:00:00Z");
+	private static final UUID LOCAL_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	@Autowired
 	private SearchSnapshotStore snapshotStore;
@@ -63,6 +65,7 @@ class SearchSnapshotStoreMultiProviderTests {
 				NOW.plusSeconds(1));
 
 		SearchView stored = snapshotStore.store(
+				LOCAL_USER_ID,
 				command(),
 				"graph models",
 				"a".repeat(64),
@@ -91,7 +94,7 @@ class SearchSnapshotStoreMultiProviderTests {
 				});
 		assertThat(stored.results()).extracting(result -> result.paper().title())
 				.containsExactly("Shared enriched", "OpenAlex only", "CORE only");
-		assertThat(snapshotStore.findById(stored.searchId())).hasValueSatisfying(reloaded -> {
+		assertThat(snapshotStore.findById(LOCAL_USER_ID, stored.searchId())).hasValueSatisfying(reloaded -> {
 			assertThat(reloaded.cacheDisposition()).isEqualTo(CacheDisposition.EXACT_HIT);
 			assertThat(reloaded.results()).isEqualTo(stored.results());
 		});
@@ -114,6 +117,7 @@ class SearchSnapshotStoreMultiProviderTests {
 				null);
 
 		SearchView stored = snapshotStore.store(
+				LOCAL_USER_ID,
 				command(),
 				"graph models",
 				"b".repeat(64),
@@ -147,6 +151,7 @@ class SearchSnapshotStoreMultiProviderTests {
 				NOW);
 
 		SearchView stored = snapshotStore.store(
+				LOCAL_USER_ID,
 				command(),
 				"graph models",
 				"c".repeat(64),

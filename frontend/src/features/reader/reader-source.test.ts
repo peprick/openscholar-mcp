@@ -13,18 +13,58 @@ import {
 const now = new Date("2026-08-18T12:00:00Z");
 
 describe("reader source selection", () => {
-  it("selects an exact, fresh, verified HTTPS PDF location", () => {
-    const access = paperAccessResponseFixture({
-      freshUntil: "2026-08-19T12:00:00Z",
-    });
-
-    expect(selectReaderSource(access, testIds.paper, testIds.location, now)).toMatchObject({
-      paperId: testIds.paper,
-      locationId: testIds.location,
-      pdfUrl: "https://repository.example.edu/items/paper-42.pdf",
+  it.each([
+    {
+      label: "publisher",
+      accessStatus: "OPEN_PDF",
       source: "UNPAYWALL",
-    });
-  });
+      hostType: "PUBLISHER",
+      versionType: "PUBLISHED",
+      pdfUrl: "https://publisher.example/article.pdf",
+    },
+    {
+      label: "repository",
+      accessStatus: "REPOSITORY_COPY",
+      source: "UNPAYWALL",
+      hostType: "REPOSITORY",
+      versionType: "ACCEPTED_MANUSCRIPT",
+      pdfUrl: "https://repository.example.edu/items/paper-42.pdf",
+    },
+    {
+      label: "arXiv preprint",
+      accessStatus: "PREPRINT",
+      source: "ARXIV",
+      hostType: "PREPRINT_SERVER",
+      versionType: "PREPRINT",
+      pdfUrl: "https://arxiv.org/pdf/2608.12345",
+    },
+  ] as const)(
+    "selects an exact, fresh, verified $label PDF location",
+    ({ accessStatus, hostType, pdfUrl, source, versionType }) => {
+      const access = paperAccessResponseFixture({
+        status: accessStatus,
+        freshUntil: "2026-08-19T12:00:00Z",
+        locations: [
+          paperAccessLocationFixture({
+            accessStatus,
+            hostType,
+            pdfUrl,
+            source,
+            versionType,
+          }),
+        ],
+      });
+
+      expect(
+        selectReaderSource(access, testIds.paper, testIds.location, now),
+      ).toMatchObject({
+        paperId: testIds.paper,
+        locationId: testIds.location,
+        pdfUrl,
+        source,
+      });
+    },
+  );
 
   it.each(["UNVERIFIED", "FAILED"] as const)(
     "rejects a %s location",
@@ -68,21 +108,25 @@ describe("reader source selection", () => {
     ).toBeNull();
   });
 
-  it("rejects landing-page-only and non-PDF access records", () => {
-    const access = paperAccessResponseFixture({
-      freshUntil: "2026-08-19T12:00:00Z",
-      locations: [
-        paperAccessLocationFixture({
-          accessStatus: "OPEN_LANDING_PAGE",
-          pdfUrl: null,
-        }),
-      ],
-    });
+  it.each(["OPEN_LANDING_PAGE", "REPOSITORY_COPY", "PREPRINT"] as const)(
+    "rejects a landing-page-only %s access record",
+    (accessStatus) => {
+      const access = paperAccessResponseFixture({
+        status: accessStatus,
+        freshUntil: "2026-08-19T12:00:00Z",
+        locations: [
+          paperAccessLocationFixture({
+            accessStatus,
+            pdfUrl: null,
+          }),
+        ],
+      });
 
-    expect(
-      selectVerifiedPdfLocation(access, testIds.paper, testIds.location),
-    ).toBeNull();
-  });
+      expect(
+        selectVerifiedPdfLocation(access, testIds.paper, testIds.location),
+      ).toBeNull();
+    },
+  );
 
   it.each([
     "http://repository.example.edu/paper.pdf",

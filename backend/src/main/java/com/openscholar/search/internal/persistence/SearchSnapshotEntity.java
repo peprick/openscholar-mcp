@@ -19,6 +19,9 @@ class SearchSnapshotEntity {
 	@Id
 	private UUID id;
 
+	@Column(name = "owner_id", nullable = false, updatable = false)
+	private UUID ownerId;
+
 	@Column(name = "original_query", nullable = false)
 	private String originalQuery;
 
@@ -72,6 +75,7 @@ class SearchSnapshotEntity {
 
 	private SearchSnapshotEntity(
 			UUID id,
+			UUID ownerId,
 			String originalQuery,
 			String normalizedQuery,
 			String fingerprint,
@@ -86,6 +90,7 @@ class SearchSnapshotEntity {
 			int resultCount,
 			String nextCursor) {
 		this.id = id;
+		this.ownerId = ownerId;
 		this.originalQuery = originalQuery;
 		this.normalizedQuery = normalizedQuery;
 		this.fingerprint = fingerprint;
@@ -104,6 +109,7 @@ class SearchSnapshotEntity {
 	}
 
 	static SearchSnapshotEntity completed(
+			UUID ownerId,
 			String originalQuery,
 			String normalizedQuery,
 			String fingerprint,
@@ -119,6 +125,7 @@ class SearchSnapshotEntity {
 			String nextCursor) {
 		return new SearchSnapshotEntity(
 				UUID.randomUUID(),
+				ownerId,
 				originalQuery,
 				normalizedQuery,
 				fingerprint,
@@ -136,6 +143,10 @@ class SearchSnapshotEntity {
 
 	UUID id() {
 		return id;
+	}
+
+	UUID ownerId() {
+		return ownerId;
 	}
 
 	String originalQuery() {
