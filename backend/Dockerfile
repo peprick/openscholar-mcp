@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk@sha256:32a5f68f3bb3ace880243c9e55c89ad8fb09e5de904b6c8990693b103840c4d3 AS build
+FROM eclipse-temurin:24-jdk@sha256:7493205ffe6caa8074fa8a06a276bb1c5ac41d3dd0fd43a0db66d7f776e80b3e AS build
 
 WORKDIR /workspace
 COPY .mvn .mvn
@@ -10,7 +10,7 @@ COPY src src
 RUN --mount=type=cache,target=/root/.m2 \
     ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
-FROM eclipse-temurin:21-jre@sha256:fcd44c3caa637c915b17688363b90cc9b0a5b7b66fac76fc5bc6d4e216abc16f
+FROM eclipse-temurin:24-jre@sha256:8cb2387a28af84cf0db0948d9c67d4480192f4e567027a3963f145d218e8b4f2
 
 WORKDIR /app
 COPY --from=build /workspace/target/openscholar-backend-*.jar application.jar
