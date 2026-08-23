@@ -146,7 +146,7 @@ services:
       OPENSCHOLAR_OIDC_CLIENT_AUTH_METHOD: client_secret_basic
       OPENSCHOLAR_OIDC_REDIRECT_URI: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}/api/auth/callback
       OPENSCHOLAR_OIDC_POST_LOGOUT_REDIRECT_URI: https://${PUBLIC_HOST:?Set PUBLIC_HOST to the externally served DNS name}/
-      OPENSCHOLAR_OIDC_SCOPES: ${OPENSCHOLAR_OIDC_SCOPES:-openid profile openscholar.search openscholar.library openscholar.jobs openscholar.privacy}
+      OPENSCHOLAR_OIDC_SCOPES: ${OPENSCHOLAR_OIDC_SCOPES:-openid profile openscholar.search openscholar.library openscholar.privacy}
       OPENSCHOLAR_OIDC_ID_TOKEN_ALGS: ${OPENSCHOLAR_OIDC_ID_TOKEN_ALGS:-RS256}
     entrypoint: ["/usr/local/bin/openscholar-frontend-entrypoint"]
     secrets:

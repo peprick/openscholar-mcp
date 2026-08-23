@@ -157,7 +157,7 @@ The related-paper endpoint remains database-only. Its opt-in hybrid read consume
 - Implemented provider-neutral pgvector profile/storage, missing-work paging, exact same-profile cosine operations, the pinned partial/expression HNSW index, exact scoring for bounded candidate IDs, an explicit offline population job, and a default-off hybrid related-paper read.
 - Flyway as the only production schema-change mechanism.
 - PostgreSQL session advisory lock for same-profile embedding backfill.
-- Durable `PAPER_ACCESS` and `SEARCH_METADATA` refresh rows with active-target deduplication, `SKIP LOCKED` claims, expiring lease tokens, bounded exponential retry, terminal safe errors, optional stale-target scheduling, REST/UI inspection, and manual retry. Worker and scheduler are default-off.
+- Durable `PAPER_ACCESS` and `SEARCH_METADATA` refresh rows with active-target deduplication, `SKIP LOCKED` claims, expiring lease tokens, bounded exponential retry, terminal safe errors, optional stale-target scheduling, REST inspection, and manual retry. Worker and scheduler are default-off.
 - JSONB for bounded provenance fragments; core searchable data remains normalized.
 
 ## MCP architecture
@@ -166,7 +166,7 @@ The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spr
 
 Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; legal-access retrieval is stored-only. Local mode uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
 
-The configured MCP SDK request timeout still does not provide whole-tool cancellation. Discovery-provider exchange deadlines, the 12-second coordination limit, and the 18-second search application deadline bound their own layers, but framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not cancel the tool worker. Durable refresh jobs are REST/UI operations and are not MCP Tasks or owned MCP job handles.
+The configured MCP SDK request timeout still does not provide whole-tool cancellation. Discovery-provider exchange deadlines, the 12-second coordination limit, and the 18-second search application deadline bound their own layers, but framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not cancel the tool worker. Durable refresh jobs are REST operations and are not MCP Tasks or owned MCP job handles.
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions through `2025-11-25`. OpenScholar records `2025-11-25` as its maximum tested revision and does not hand-build newer Tasks/Apps features before official Java/Spring support exists.
 

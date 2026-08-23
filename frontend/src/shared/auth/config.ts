@@ -90,7 +90,7 @@ function parseClientAuthMethod(): OidcClientAuthMethod {
 function parseScopes(): readonly string[] {
   const configured =
     optional("OPENSCHOLAR_OIDC_SCOPES") ??
-    "openid profile openscholar.search openscholar.library openscholar.jobs openscholar.privacy";
+    "openid profile openscholar.search openscholar.library openscholar.privacy";
   const scopes = [...new Set(configured.split(/\s+/u).filter(Boolean))];
   if (!scopes.includes("openid")) {
     throw new AuthConfigurationError(

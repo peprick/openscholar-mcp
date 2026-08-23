@@ -10,8 +10,8 @@
 	</parent>
 	<groupId>com.openscholar</groupId>
 	<artifactId>openscholar-backend</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>OpenScholarBackend</name>
+	<version>0.1.0-SNAPSHOT</version>
+	<name>OpenScholar Backend</name>
 	<description>Open-access research discovery and MCP backend</description>
 	<url>https://github.com/peprick/openscholar-mcp</url>
 	<properties>

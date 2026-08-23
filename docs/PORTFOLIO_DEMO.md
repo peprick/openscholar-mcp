@@ -32,6 +32,7 @@ cd frontend
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 PORTFOLIO_SCREENSHOT_DIR=../docs/images \
+PLAYWRIGHT_RUN_KEY=portfolio \
 PLAYWRIGHT_COMPOSE_ORIGIN=http://127.0.0.1:3300 \
 pnpm test:e2e:compose
 ```

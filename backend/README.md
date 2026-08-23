@@ -1,100 +1,34 @@
 # OpenScholar Backend
 
-Java 21 and Spring Boot 4.1 backend for OpenScholar MCP.
+Java 21 and Spring Boot 4.1 backend for the OpenScholar research workspace and MCP server. It exposes REST and stateless Streamable HTTP MCP adapters over the same application services.
 
-## Current capabilities
+The backend is responsible for:
 
-- Spring MVC and validation
-- PostgreSQL persistence through Spring Data JPA
-- Flyway-managed schema
-- OpenAlex topic search with bounded filters and opaque cursor paging
-- Disabled-by-default DataCite thesis/dissertation discovery with keyless, metadata-only mapping
-- Disabled-by-default DOAJ v4 article discovery with keyless, metadata/link-only mapping
-- Licence-gated, disabled-by-default CORE API v3 metadata discovery
-- Concurrent provider fan-out, isolated partial failures, exact-identifier merging, reciprocal-rank fusion, and combined cursors
-- Canonical DOI/arXiv/OpenAlex/provider-record deduplication, authors, and provider provenance
-- Read-only canonical paper details with metadata completeness, record-level provenance, and stored-access summary
-- Paper-specific credited author names and publication date/year integrity enforced by Flyway
-- Immutable 24-hour search snapshots with exact-cache hits, stale fallback, bounded same-instance coordination waits, and an 18-second application execution deadline
-- Exact DOI legal-access lookup through Unpaywall when a backend contact email is configured
-- Exact arXiv-ID access lookup with canonical entry matching and a three-second request gate
-- Provider-isolated access resolution with a 24-hour cache, forced refresh, and stale fallback
-- SSRF-resistant PDF/landing-link verification with bounded requests and manually checked redirects
-- Link-only paper-version persistence; the backend never proxies or stores complete PDF documents
-- Deterministic single-paper BibTeX and CSL-JSON citation downloads from canonical metadata
-- Owner-scoped local or OIDC collections/search snapshots with persisted reading status and normalized tags
-- Literal-safe saved-library search across papers, authors, venues, and collection names
-- Ordered, bounded multi-paper BibTeX and CSL-JSON citation downloads
-- Five typed, non-destructive, read-oriented MCP tools over stateless Streamable HTTP
-- Local MCP bearer-key authentication, exact Origin validation, per-address rate limiting, request IDs, and Micrometer request metrics
-- Hosted OIDC issuer/audience/scope validation, issuer+subject ownership, protected-resource metadata, and principal rate limiting
-- Durable metadata/access refresh jobs with leased claims, bounded retry, optional scheduling, REST inspection, and manual retry
-- No-store personal-data export and confirmed owner-data deletion
-- RFC 9457 validation, not-found, and provider-failure responses
-- Spring Boot Actuator health/info plus a Prometheus registry; production uses a private management listener
-- A checked-in OpenAPI 3.1 contract whose REST method/path inventory is verified against controllers
-- Spring Modulith boundary verification
-- Testcontainers integration tests
-- Docker Compose PostgreSQL/pgvector service
-- Provider-neutral, checksum-guarded paper embedding profiles and vector storage
-- Disabled-by-default, artifact-and-runtime-pinned local Ollama embedding adapter
-- Explicit, resumable offline embedding backfill with per-profile PostgreSQL locking
-- Java 21 virtual threads
+- scholarly metadata discovery, normalization, exact-identifier deduplication, ranking, and cached search snapshots;
+- legal-access resolution through independently verified provider links;
+- canonical paper metadata, related-paper retrieval, citations, collections, and reading state;
+- durable metadata/access refresh jobs and owner-scoped privacy operations;
+- PostgreSQL/pgvector persistence managed by Flyway; and
+- local bearer-key or hosted OIDC authorization for the MCP and REST boundaries.
 
-The Next.js search, details, verified-version, PDF.js reader, citation, and research-library UI is available in `../frontend`. Semantic generation is an offline maintenance capability. The related-paper API remains database-only and lexical by default; a measured hybrid read over precomputed pinned-profile vectors is available only through an explicit default-off feature flag.
+It stores metadata and verified links. It does not proxy, retain, or return research PDF bytes.
+
+## Prerequisites
+
+- JDK 21
+- Docker Engine or Docker Desktop with Compose v2
+
+Maven does not need to be installed globally; use the committed Maven Wrapper.
 
 ## Run locally
 
-Start Docker Desktop/Engine, then run:
+From this directory:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Spring Boot detects `compose.yaml`, starts PostgreSQL when required, runs Flyway, and exposes:
-
-- Application status: `http://localhost:8080/api/v1/system/status`
-- Create/reuse a search: `POST http://localhost:8080/api/v1/searches`
-- Retrieve a saved snapshot: `GET http://localhost:8080/api/v1/searches/{searchId}`
-- Read canonical paper details: `GET http://localhost:8080/api/v1/papers/{paperId}`
-- Read related canonical papers: `GET http://localhost:8080/api/v1/papers/{paperId}/related`
-- Read stored access versions: `GET http://localhost:8080/api/v1/papers/{paperId}/versions`
-- Resolve or refresh legal access: `POST http://localhost:8080/api/v1/papers/{paperId}/access/verify`
-- Download a citation: `GET http://localhost:8080/api/v1/papers/{paperId}/citation?format=bibtex`
-- List/create collections: `GET|POST http://localhost:8080/api/v1/collections`
-- Manage one collection: `GET|PATCH|DELETE http://localhost:8080/api/v1/collections/{collectionId}`
-- Search saved papers: `GET http://localhost:8080/api/v1/library/papers`
-- Export a citation batch: `POST http://localhost:8080/api/v1/citations/export`
-- Enqueue/list durable refresh jobs: `POST|GET http://localhost:8080/api/v1/refresh-jobs`
-- Inspect/retry a refresh job: `GET http://localhost:8080/api/v1/refresh-jobs/{jobId}` and `POST http://localhost:8080/api/v1/refresh-jobs/{jobId}/retry`
-- Export current-owner data: `GET http://localhost:8080/api/v1/privacy/export`
-- Delete current-owner data with confirmation: `DELETE http://localhost:8080/api/v1/privacy/account`
-- MCP endpoint: `POST http://localhost:8080/mcp`
-- Actuator health: `http://localhost:8080/actuator/health`
-- Actuator info: `http://localhost:8080/actuator/info`
-- Actuator Prometheus registry: `http://localhost:8080/actuator/prometheus`
-
-The complete REST schema is [the checked-in OpenAPI 3.1 document](../docs/openapi.yaml). Hosted scope and deployment behavior are documented in [REST and MCP contracts](../docs/API_AND_MCP.md) and [the deployment template](../docs/DEPLOYMENT.md).
-
-The server binds to `127.0.0.1` by default. Set `SERVER_ADDRESS=0.0.0.0` only in a container or deployment that also supplies the appropriate network and authentication controls.
-
-Example search:
-
-```bash
-curl --request POST http://localhost:8080/api/v1/searches \
-  --header 'Content-Type: application/json' \
-  --data '{
-    "query": "graph neural networks for drug discovery",
-    "filters": {
-      "yearFrom": 2021,
-      "yearTo": 2026,
-      "documentTypes": ["ARTICLE", "PREPRINT"],
-      "openAccessOnly": true,
-      "languages": ["en"]
-    },
-    "pageSize": 20
-  }'
-```
+Spring Boot starts the PostgreSQL/pgvector service in `compose.yaml`, applies Flyway migrations, and binds the application to `127.0.0.1:8080` by default.
 
 To manage PostgreSQL separately:
 
@@ -103,111 +37,113 @@ docker compose up -d postgres
 SPRING_DOCKER_COMPOSE_ENABLED=false ./mvnw spring-boot:run
 ```
 
-Use a canonical paper ID returned by search to resolve legal access:
+Do not run this directory's Compose service at the same time as the repository-root stack unless their PostgreSQL ports differ.
+
+Check the running service:
 
 ```bash
-PAPER_ID='replace-with-a-paper-id-from-search'
-
-curl --request POST \
-  "http://localhost:8080/api/v1/papers/${PAPER_ID}/access/verify?forceRefresh=false"
-
-curl \
-  "http://localhost:8080/api/v1/papers/${PAPER_ID}/versions"
-
-curl \
-  "http://localhost:8080/api/v1/papers/${PAPER_ID}"
+curl --fail http://127.0.0.1:8080/api/v1/system/status
+curl --fail http://127.0.0.1:8080/actuator/health
 ```
 
-`forceRefresh=false` reuses a fresh access result. Set it to `true` to bypass the fresh-cache check and contact applicable providers; refreshing an existing resolution reports `FORCED_REFRESH`, while an initial resolution reports `RESOLVED`. Repeated forced refreshes for the same paper are limited by `openscholar.access.force-refresh-cooldown`, which defaults to five minutes; an early retry returns `429 ACCESS_REFRESH_RATE_LIMITED` with `Retry-After`. `GET /versions` is read-only and never contacts a provider.
+## API surface
 
-`GET /papers/{paperId}` is also database-only. It returns canonical metadata, ordered credited authors, every stored identifier, record-level provider provenance, metadata freshness/completeness, and a compact summary of the currently stored access result. Provider payload fragments and unverified provider PDF links are deliberately excluded; use `/versions` for verified legal locations.
+| Area | Routes |
+|---|---|
+| Status | `GET /api/v1/system/status` |
+| Search snapshots | `POST /api/v1/searches`, `GET /api/v1/searches/{searchId}`, `POST /api/v1/searches/{searchId}/next` |
+| Papers | `GET /api/v1/papers/{paperId}`, `GET /api/v1/papers/{paperId}/related` |
+| Legal access | `GET /api/v1/papers/{paperId}/versions`, `POST /api/v1/papers/{paperId}/access/verify` |
+| Citations | `GET /api/v1/papers/{paperId}/citation`, `POST /api/v1/citations/export` |
+| Library | `/api/v1/collections/**`, `GET /api/v1/library/papers` |
+| Refresh jobs | `/api/v1/refresh-jobs/**` |
+| Privacy | `GET /api/v1/privacy/export`, `DELETE /api/v1/privacy/account` |
+| MCP | `POST /mcp` |
+| Operations | `/actuator/health`, `/actuator/info`, `/actuator/prometheus` |
 
-Export that paper's current canonical metadata without a provider call:
+The complete REST contract is the checked-in [OpenAPI 3.1 specification](../docs/openapi.yaml). See [REST and MCP contracts](../docs/API_AND_MCP.md) for request semantics, status codes, ownership, and authorization scopes.
+
+Example search:
 
 ```bash
-curl --remote-header-name --remote-name \
-  "http://localhost:8080/api/v1/papers/${PAPER_ID}/citation?format=bibtex"
-
-curl --remote-header-name --remote-name \
-  "http://localhost:8080/api/v1/papers/${PAPER_ID}/citation?format=csl-json"
+curl --request POST http://127.0.0.1:8080/api/v1/searches \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "query": "graph neural networks for drug discovery",
+    "filters": {
+      "yearFrom": 2021,
+      "documentTypes": ["ARTICLE", "PREPRINT"],
+      "openAccessOnly": true,
+      "languages": ["en"]
+    },
+    "pageSize": 20
+  }'
 ```
-
-BibTeX is the default format. Both responses are raw importable documents with deterministic UUID-based citation keys and attachment filenames. Exports omit unavailable fields; author names remain literal display names because the current catalog does not safely distinguish given, family, particle, suffix, and organization names.
-
-Local mode seeds one fixed development user. Hosted mode lazily resolves an internal owner from the validated OIDC issuer+subject, and every collection/search lookup and mutation enforces that owner rather than trusting a caller-supplied user ID. A saved paper stores only its canonical paper reference, collection membership, reading status, and up to ten normalized tags; it does not copy or retain the PDF.
-
-## Verify
-
-```bash
-./mvnw verify
-```
-
-Integration tests use a real PostgreSQL/pgvector Testcontainer; Docker must be running.
 
 ## Configuration
 
-OpenAlex permits limited keyless trials, but a free API key provides a larger daily allowance. Supply it only through the server environment:
+Safe local defaults live in `src/main/resources/application.yaml`. Use environment variables for deployment-specific values and credentials; never commit a populated `.env` file.
+
+| Area | Main settings |
+|---|---|
+| Database/server | `SPRING_DATASOURCE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SPRING_DOCKER_COMPOSE_ENABLED`, `SERVER_ADDRESS` |
+| Search limits | `SEARCH_COORDINATION_WAIT_TIMEOUT`, `SEARCH_EXECUTION_TIMEOUT` |
+| Legal access | `UNPAYWALL_EMAIL`, `UNPAYWALL_BASE_URL`, `ARXIV_BASE_URL` |
+| Local MCP | `MCP_LOCAL_API_KEY`, `MCP_ALLOWED_ORIGINS`, `MCP_RATE_LIMIT_*`, `MCP_MAX_*_BYTES` |
+| Hosted auth | `OIDC_SECURITY_ENABLED`, `OIDC_ISSUER_URI`, `OIDC_JWK_SET_URI`, `OIDC_AUDIENCE`, `OIDC_MCP_RESOURCE_URI` |
+| Refresh jobs | `REFRESH_JOBS_WORKER_ENABLED`, `REFRESH_JOBS_SCHEDULED_ENABLED`, and the associated lease, retry, and batch settings |
+| Related papers | `RELATED_PAPERS_HYBRID_ENABLED`, `RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE` |
+
+The [backend environment example](.env.example) lists direct-development variables. The [root environment example](../.env.example) is authoritative for the full Docker Compose stack.
+
+### Research providers
+
+| Provider | Purpose | Default | Configuration |
+|---|---|---:|---|
+| OpenAlex | General scholarly discovery | Enabled | `OPENALEX_API_KEY` is optional; transport limits are configurable |
+| DataCite | Thesis/dissertation metadata | Disabled | `DATACITE_ENABLED=true`; optional contact email |
+| DOAJ | Open-access article metadata and reported links | Disabled | `DOAJ_ENABLED=true`; optional contact email |
+| CORE | Metadata-only work discovery | Disabled | Requires `CORE_ENABLED=true` and `CORE_LICENSE_CONFIRMED=true`; optional API key |
+| Unpaywall | Exact-DOI legal-access evidence | Needs configuration | Requires a backend-owned `UNPAYWALL_EMAIL` |
+| arXiv | Exact-arXiv-ID legal-access evidence | Enabled | No credential |
+
+Optional providers are isolated during concurrent fan-out, so an applicable provider failure can be reported alongside useful results from another provider. Enabling CORE records an operator configuration decision; it does not replace the required terms, licence, and attribution review. Provider policy and document-handling boundaries are documented in [Security and legal](../docs/SECURITY_AND_LEGAL.md).
+
+### MCP
+
+The `/mcp` endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set in local mode. It exposes five bounded tools over stateless Streamable HTTP. Use the [MCP quickstart](../docs/MCP_QUICKSTART.md) for key generation, client configuration, tool discovery, and protocol smoke checks.
+
+## Verify
+
+With Docker running:
 
 ```bash
-OPENALEX_API_KEY=your-key ./mvnw spring-boot:run
+./mvnw --batch-mode --no-transfer-progress verify
 ```
 
-OpenAlex requests have a 10-second whole-exchange deadline, including response-body consumption, and response bodies are capped at 8 MiB before JSON deserialization. Override the positive deadline with `OPENALEX_REQUEST_TIMEOUT` and the positive byte limit with `OPENALEX_MAX_RESPONSE_BYTES` only when the deployment or bounded result shape requires it. `OPENALEX_READ_TIMEOUT` and `openscholar.providers.openalex.read-timeout` remain temporary compatibility fallbacks when the new deadline setting is unset.
+The suite includes unit, MVC, module-boundary, migration, persistence, provider-contract, raw MCP, and PostgreSQL/pgvector Testcontainers coverage. Normal verification does not contact live research providers or Ollama.
 
-DataCite discovery is opt-in. Set `DATACITE_ENABLED=true` to add keyless thesis/dissertation metadata search through the DOI API; `DATACITE_CONTACT_EMAIL` is an optional backend-owned contact identity. The adapter accepts controlled and legacy thesis/dissertation types, owns its bounded cursor paging, emits canonical DOI landing links, skips `openAccessOnly` queries, and deliberately makes no discovery PDF or open-access claim. It never downloads a deposited work. Deployment bounds can be adjusted with positive `DATACITE_CONNECT_TIMEOUT`, `DATACITE_REQUEST_TIMEOUT`, and `DATACITE_MAX_RESPONSE_BYTES`; `DATACITE_BASE_URL` is for controlled tests and approved mirrors.
+## Optional local embeddings
 
-DOAJ discovery is opt-in. Set `DOAJ_ENABLED=true` to add the public, keyless DOAJ v4 article-search adapter; `DOAJ_CONTACT_EMAIL` is optional and is used only in the backend-owned `User-Agent`. The adapter searches DOAJ's open-access article index, maps typed metadata plus reported landing/PDF links, and never downloads or stores article bytes. DOAJ's collection status is retained only as a source-reported open-access claim; normal access verification still determines whether a link is currently usable and does not infer retention or redistribution rights. Citation thresholds and language filters cause this adapter to skip a query because its article-search result does not provide citation counts and its journal language is not a defensible article-language field. A document-type filter that excludes `ARTICLE` also skips it. Requests use an adapter-owned opaque page cursor, a 10-second whole-exchange deadline, a 100-record page cap, DOAJ's public 1,000-result window, and an 8 MiB streamed response limit. Override those deployment bounds with the positive `DOAJ_CONNECT_TIMEOUT`, `DOAJ_REQUEST_TIMEOUT`, and `DOAJ_MAX_RESPONSE_BYTES` settings; `DOAJ_BASE_URL` exists for controlled tests and mirrors.
+Embedding generation is an offline maintenance workflow and is disabled during normal startup and CI. The current profile is pinned to a separately installed loopback Ollama `0.31.1` process and the exact `qwen3-embedding:0.6b` artifact. OpenScholar never pulls the model automatically.
 
-CORE discovery is separately opt-in and deliberately fails startup unless both `CORE_ENABLED=true` and `CORE_LICENSE_CONFIRMED=true` are set. Before setting them, the operator must review the current CORE terms, obtain any licence applicable to the deployment, and implement the required attribution. CORE specifically asks projects or products related to its existing API, search, or discovery services to contact CORE. This repository's confirmation switch records an operator decision; it does not grant a licence or replace legal review.
+Before a run:
 
-`CORE_API_KEY` is optional and, when supplied, is sent only by the backend as a Bearer credential. CORE's published free allowances currently distinguish unauthenticated access (100 requests/day, at most 10/minute), registered personal use (1,000/day, at most 25/minute), and registered academic use (5,000/day, at most 10/minute); confirm the current service page before deployment. The adapter observes CORE's `X-RateLimit-*` response headers, uses no automatic retry, bounds each whole exchange to 10 seconds and each streamed response to 8 MiB, and exposes a validated opaque cursor within CORE's 10,000-result search window. Override those bounds only with positive `CORE_CONNECT_TIMEOUT`, `CORE_REQUEST_TIMEOUT`, and `CORE_MAX_RESPONSE_BYTES` values.
-
-The CORE integration calls only the supported API v3 work-search route. It maps normalized metadata and a safe landing page, discards `fullText` and download URLs, never calls CORE's download/full-text endpoints, and always leaves its discovery `pdfUrl` empty. It does not scrape CORE or systematically harvest documents. A CORE-reported full-text signal is provenance, not verified legal access or permission to download, retain, mine, or redistribute a paper; the normal access-verification flow remains authoritative.
-
-After completing the operator review, an explicitly authorized local run can be started with:
+1. Configure `OLLAMA_NO_CLOUD=1` on the Ollama server process and verify its startup log.
+2. Install the pinned model yourself with `ollama pull qwen3-embedding:0.6b`.
+3. Inspect the local runtime and installed models, then copy the complete
+   `models[].digest` value for `qwen3-embedding:0.6b` into
+   `OLLAMA_EMBEDDING_MODEL_DIGEST`:
 
 ```bash
-CORE_ENABLED=true \
-CORE_LICENSE_CONFIRMED=true \
-CORE_API_KEY=your-optional-key \
-./mvnw spring-boot:run
+curl -fsS http://127.0.0.1:11434/api/version
+curl -fsS http://127.0.0.1:11434/api/tags
 ```
 
-Searches waiting to acquire one of the same-instance coordination stripes stop after 12 seconds by default. Override this acquisition-only bound with `SEARCH_COORDINATION_WAIT_TIMEOUT`. A timeout never cancels the leader or starts a duplicate provider request: an available snapshot is returned as an exact hit or stale fallback, while a cold miss returns retryable `SEARCH_COORDINATION_TIMEOUT`. Provider work, persistence, serialization, and the complete REST/MCP request remain outside this coordination-wait limit.
+Keep the service on a numeric loopback URL and reject a changed runtime or
+artifact digest until it has been reviewed as a new immutable profile.
 
-Every `SearchResearchUseCase` `search`, `next`, and `get` execution has a shared 18-second application deadline. Override it with `SEARCH_EXECUTION_TIMEOUT`; values must be at least one millisecond. The deadline starts when the validated operation is dispatched and covers cache and coordination work, provider exchange and deserialization, persistence, and construction of the `SearchView`. It excludes request parsing/schema validation, REST/MCP DTO and framework serialization, and the socket lifetime. Expiration interrupts the dedicated virtual-thread worker, uses cooperative checkpoints, and returns retryable `SEARCH_DEADLINE_EXCEEDED` without `Retry-After`; caller or server interruption returns `SEARCH_EXECUTION_INTERRUPTED`. Deadline expiration is terminal and does not start a post-deadline stale fallback. Persistence already in progress at the boundary may continue and commit, so a new immutable snapshot may later become visible, because JDBC interruption is not guaranteed.
-
-Unpaywall's exact DOI endpoint requires a contact email. The application can start without one, but Unpaywall then reports `NOT_CONFIGURED`; arXiv resolution remains available for papers with an arXiv ID. Configure a backend-owned address, never an end-user address:
-
-```bash
-UNPAYWALL_EMAIL=backend-contact@example.org ./mvnw spring-boot:run
-```
-
-The arXiv adapter needs no credential. It uses an exact `id_list` lookup with one result and enforces at least three seconds between requests. Provider base URLs can be overridden for local tests through the variables documented in the [root environment example](../.env.example).
-
-The root `.env.example` documents the full-stack variables; `backend/.env.example` documents direct backend development variables. Never commit `.env` or credentials. OpenAlex and CORE authorization plus the Unpaywall contact email remain server-side and are never exposed through REST responses.
-
-The MCP endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set. See the [MCP quickstart](../docs/MCP_QUICKSTART.md) for discovery, tool calls, Origin policy, and client configuration.
-
-## Generate local paper embeddings
-
-Embedding generation is optional and disabled by default. Ordinary application startup, REST/MCP reads, and CI do not contact Ollama or download a model. This profile requires the separately installed [Ollama server version `0.31.1`](https://github.com/ollama/ollama/releases/tag/v0.31.1); a runtime upgrade is a new vector space and requires a code/profile change. Configure `OLLAMA_NO_CLOUD=1` on the **Ollama server process**, restart that process, and confirm its startup log contains `Ollama cloud disabled: true` before installing the fixed model tag:
-
-```bash
-ollama pull qwen3-embedding:0.6b
-```
-
-OpenScholar never calls Ollama's pull endpoint. Verify the runtime, then inspect the local tags response and copy the full lowercase 64-character digest for the exact `qwen3-embedding:0.6b` entry:
-
-```bash
-OLLAMA_BASE_URL='http://127.0.0.1:11434'
-curl --noproxy '*' --fail-with-body --silent --show-error "${OLLAMA_BASE_URL}/api/version"
-curl --noproxy '*' --fail-with-body --silent --show-error "${OLLAMA_BASE_URL}/api/tags"
-```
-
-Use the same numeric-loopback `OLLAMA_BASE_URL` for preflight and backfill. The version response's JSON `version` field must equal `0.31.1`. Setting `OLLAMA_NO_CLOUD=1` only on the Maven command does not reconfigure an already-running Ollama server. `OLLAMA_LOCAL_ONLY_CONFIRMED=true` below is an operator attestation; set it only after checking the server log. See the [Ollama local-only configuration](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features).
-
-Run one bounded maintenance page from the `backend` directory. If the root stack or another PostgreSQL instance is already running, prevent Spring from starting `backend/compose.yaml` as well:
+Run one bounded backfill page against an already running database:
 
 ```bash
 SPRING_MAIN_WEB_APPLICATION_TYPE=none \
@@ -220,58 +156,19 @@ EMBEDDING_BACKFILL_LIMIT=100 \
 ./mvnw spring-boot:run
 ```
 
-If no PostgreSQL service is already running, omit `SPRING_DOCKER_COMPOSE_ENABLED=false` and Spring will start the backend Compose database. Do not run the root and backend Compose stacks together because both publish PostgreSQL on the same port. Maven launched from `backend` does not load the root `.env`; if the running database uses non-default ports or credentials, also pass an explicit `SPRING_DATASOURCE_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. The datasource pool must permit at least two connections; the default Hikari pool does.
+Omit `SPRING_DOCKER_COMPOSE_ENABLED=false` when no database is already running and the backend Compose service should start it. The process reports a `nextCursor` for another page; resume with `EMBEDDING_BACKFILL_AFTER_EXCLUSIVE`. Do not enable the backfill in a web application.
 
-The adapter accepts only a numeric loopback HTTP root URL, bypasses system proxies, refuses redirects, and caps every response at 2 MiB. It verifies Ollama `0.31.1`, the exact `qwen3-embedding:0.6b` tag and full digest, embedding capability, context/output dimensions, and both the runtime and digest again after inference; requests use `truncate=false`. Verification retries are bounded, and systemic runtime/model drift aborts the page instead of being recorded as an isolated paper failure. After verification, it registers a digest/runtime-derived profile key of the form `paper-semantic-v1-<full-digest>-ollama-0-31-1`; its immutable model revision is `sha256:<full-digest>;ollama:0.31.1`.
+`GET /api/v1/papers/{paperId}/related` never invokes Ollama. Its optional hybrid mode reads only precomputed vectors and remains off by default. The immutable profile design and measured evaluation are documented in [ADR 0005](../docs/decisions/0005-versioned-embedding-profiles.md), [Search quality](../docs/SEARCH_QUALITY.md), and the [HNSW evaluation protocol](../docs/HNSW_EVALUATION_PROTOCOL.md).
 
-Leave `EMBEDDING_BACKFILL_PROFILE_KEY` empty when Ollama is the sole enabled generator; the runner selects it and logs the exact derived key. An exact key is required only if multiple generators are enabled. Each cursor belongs to that exact profile identity. Each invocation scans at most 500 canonical papers and logs a `nextCursor` when another page exists. Resume with `EMBEDDING_BACKFILL_AFTER_EXCLUSIVE=<nextCursor>`. A PostgreSQL session advisory lock prevents two runs for the same profile; lock identities for different profiles remain independent. Run only one maintenance invocation per backend process so its leased lock connection cannot compete with another local job for the pool. Retryable provider failures and source changes share a bounded `EMBEDDING_BACKFILL_MAX_ATTEMPTS` budget (`1..3`). The runner logs all isolated failures and then exits nonzero; lock contention and systemic provider/profile failures also exit nonzero. A cursor advances past per-paper failures, deletions, and newly invalidated work below it, so complete the paged run and then start a fresh sweep with an empty cursor to catch any still-missing vectors.
+## Architecture and operations
 
-Maintenance mode requires `spring.main.web-application-type=none`; startup fails if backfill is enabled in a web application. This command performs generation only. `GET /api/v1/papers/{paperId}/related` never invokes Ollama. It returns the existing lexical result by default.
+The backend is a Spring Modulith modular monolith. Feature modules expose application-facing types while implementations remain below their `internal` packages. See:
 
-After the pinned profile has been fully populated and reviewed, the default-off production-readiness path can be enabled for a backend process with:
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Data model](../docs/DATA_MODEL.md)
+- [Development guide](../docs/DEVELOPMENT.md)
+- [Hosted deployment](../docs/DEPLOYMENT.md)
+- [Operations runbook](../docs/OPERATIONS_RUNBOOK.md)
+- [Threat model](../docs/THREAT_MODEL.md)
 
-```bash
-RELATED_PAPERS_HYBRID_ENABLED=true \
-RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE=100 \
-./mvnw spring-boot:run
-```
-
-The pool must be in `25..100`. The hybrid path unions that bounded lexical pool with a bounded pinned HNSW pool, verifies exact cosine coverage for every lexical candidate, and applies the frozen 50/50 lexical/clamped-cosine formula. Missing profile/source vectors or incomplete lexical-candidate coverage return the unchanged lexical order with a typed fallback reason. Operational/database failures are not converted into fallbacks. This setting reads stored vectors only; it does not enable the Ollama adapter or backfill runner.
-
-### Evaluate exact vector and hybrid quality
-
-After completing the same local-only checks and installing the exact model, run the gated relevance evaluation against an ephemeral Testcontainers database:
-
-```bash
-RUN_OLLAMA_VECTOR_EVALUATION=true \
-SPRING_DOCKER_COMPOSE_ENABLED=false \
-OLLAMA_EMBEDDING_ENABLED=true \
-OLLAMA_LOCAL_ONLY_CONFIRMED=true \
-OLLAMA_QWEN3_EMBEDDING_DIGEST='replace-with-the-full-64-character-digest' \
-./mvnw -Dtest=MetadataFullTextSearchEvaluationTests test
-```
-
-Do not set `EMBEDDING_BACKFILL_ENABLED` for this test. The evaluation creates 18 synthetic papers, invokes the backfill use case programmatically, measures exact vector-only retrieval twice for stability, reports a five-weight exploratory lexical/vector sensitivity sweep, and then discards the Testcontainer. The sweep is evidence only; it neither selects a production hybrid weight nor changes the live lexical endpoint. Without `RUN_OLLAMA_VECTOR_EVALUATION=true`, the real-model method is skipped and the normal lexical evaluation still runs. The pinned baselines, formulas, caveats, and current quality floors are recorded in the [search-quality document](../docs/SEARCH_QUALITY.md).
-
-After the development run, the hybrid transform, `w = 0.50` weight, candidate rule, tie-break, and advancement gates were frozen before the independently authored holdout was scored. Run that separate 26-paper, seven-query evaluation with the exact pinned digest:
-
-```bash
-RUN_OLLAMA_HOLDOUT_EVALUATION=true \
-SPRING_DOCKER_COMPOSE_ENABLED=false \
-OLLAMA_EMBEDDING_ENABLED=true \
-OLLAMA_LOCAL_ONLY_CONFIRMED=true \
-OLLAMA_QWEN3_EMBEDDING_DIGEST='ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d' \
-./mvnw -Dtest=MetadataHybridHoldoutEvaluationTests test
-```
-
-This run also requires the local `qwen3-embedding:0.6b` tag to resolve to that full digest under Ollama `0.31.1`; it never pulls a model or touches a development database. The completed run passed every frozen gate. Macro lexical results were Recall 0.857, nDCG 0.648, Precision@1 0.286, and MRR 0.571; exact vector produced 1.000, 0.893, 1.000, and 1.000; the frozen hybrid produced 1.000, 0.917, 0.857, and 0.929. Five query groups strictly improved nDCG and none regressed. The later pinned HNSW mechanics run also passed, but hybrid ranking remains an explicit default-off operator choice.
-
-## Legal-access behavior
-
-Access candidates are accepted only from configured providers. Each redirect hop must remain on an absolute HTTPS URL with no credentials, fragment, or non-default port, and DNS must resolve exclusively to public addresses. PDF candidates receive only a bounded range probe and must report `application/pdf` or begin with `%PDF-`; landing pages use `HEAD` with a bounded `GET` fallback when `HEAD` is unsupported.
-
-Successful locations are returned with `contentHandling: LINK_ONLY`; `retention_allowed = false` is additionally enforced as a database invariant and is not an API field. Responses expose verified landing/PDF links, provenance, licence metadata when reported, verification time/status, provider coverage, warnings, and cache disposition—not document bytes.
-
-## Package layout
-
-Top-level packages are Spring Modulith application modules. Feature internals live below `internal` packages and are not exported to other modules.
+The Next.js application is documented in the [frontend README](../frontend/README.md).

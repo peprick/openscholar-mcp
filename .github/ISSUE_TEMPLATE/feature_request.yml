@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a focused improvement to OpenScholar.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or operator problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the desired behavior without prescribing unnecessary implementation detail.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or smaller approaches did you consider?
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Data and access boundaries
+      description: Note provider terms, authentication, privacy, PDF/document handling, or MCP write behavior that may be affected.
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Project principles
+      options:
+        - label: This proposal does not require paywall bypassing, publisher scraping, or indiscriminate document collection.
+          required: true

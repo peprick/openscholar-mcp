@@ -56,7 +56,14 @@ describe("getAuthConfig", () => {
     expect(config.redirectUri.toString()).toBe(
       "https://research.test/api/auth/callback",
     );
-    expect(config.scopes).toContain("openid");
+    expect(config.scopes).toEqual([
+      "openid",
+      "profile",
+      "openscholar.search",
+      "openscholar.library",
+      "openscholar.privacy",
+    ]);
+    expect(config.scopes).not.toContain("openscholar.jobs");
     expect(config.sessionKey).toEqual(Buffer.alloc(32, 7));
   });
 

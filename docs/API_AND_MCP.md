@@ -128,9 +128,9 @@ GET  /api/v1/refresh-jobs/{jobId}
 POST /api/v1/refresh-jobs/{jobId}/retry
 ```
 
-The REST API and `/jobs` UI expose durable `SEARCH_METADATA` and `PAPER_ACCESS` refresh records. Enqueue validates the target, returns `202 Accepted`, and deduplicates an already `QUEUED`/`RUNNING` type+target. PostgreSQL stores `QUEUED`, `RUNNING`, `SUCCEEDED`, and `FAILED` states, attempt budget, lease timestamps, and bounded safe error details. The default-off worker claims with `FOR UPDATE SKIP LOCKED`, uses an expiring tokened lease, applies bounded exponential retry to classified transient failures, and rejects stale completions that lost their lease. Failed jobs can be manually retried; optional default-off scheduling enqueues stale search/access targets and is invalid unless the worker is enabled.
+The operational REST API exposes durable `SEARCH_METADATA` and `PAPER_ACCESS` refresh records. Enqueue validates the target, returns `202 Accepted`, and deduplicates an already `QUEUED`/`RUNNING` type+target. PostgreSQL stores `QUEUED`, `RUNNING`, `SUCCEEDED`, and `FAILED` states, attempt budget, lease timestamps, and bounded safe error details. The default-off worker claims with `FOR UPDATE SKIP LOCKED`, uses an expiring tokened lease, applies bounded exponential retry to classified transient failures, and rejects stale completions that lost their lease. Failed jobs can be manually retried through REST; optional default-off scheduling enqueues stale search/access targets and is invalid unless the worker is enabled.
 
-These are operational REST/UI refresh jobs, not MCP Tasks or per-user MCP job handles. The table has no `owner_id` and deduplicates by type+target. Under the `openscholar.jobs` scope, `SEARCH_METADATA` list/get/retry visibility follows the target snapshot's current owner, while `PAPER_ACCESS` jobs remain visible/retryable to every jobs-scoped principal because canonical papers and access evidence are shared catalog data.
+These are operational REST refresh jobs, not MCP Tasks or per-user MCP job handles. The table has no `owner_id` and deduplicates by type+target. Under the `openscholar.jobs` scope, `SEARCH_METADATA` list/get/retry visibility follows the target snapshot's current owner, while `PAPER_ACCESS` jobs remain visible/retryable to every jobs-scoped principal because canonical papers and access evidence are shared catalog data. The consumer browser client does not request this scope by default.
 
 ### Privacy
 
@@ -208,7 +208,7 @@ Accepts one to 25 distinct canonical paper UUIDs plus `bibtex` or `csl-json`. It
 
 ## Deferred MCP tools
 
-`build_reading_list`, provider-backed access verification, collection/note mutations, and MCP job handles are not advertised until their confirmation, ownership, and timeout behavior are implemented and tested. Durable REST/UI refresh jobs already exist but are intentionally not represented as MCP Tasks.
+`build_reading_list`, provider-backed access verification, collection/note mutations, and MCP job handles are not advertised until their confirmation, ownership, and timeout behavior are implemented and tested. Durable REST refresh jobs already exist but are intentionally not represented as MCP Tasks.
 
 ### Long-running jobs
 

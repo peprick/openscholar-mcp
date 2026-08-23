@@ -164,7 +164,7 @@ The default-off related-paper hybrid read unions bounded lexical and HNSW candid
 
 `research_refresh_job` stores `SEARCH_METADATA` and `PAPER_ACCESS` work with a target UUID, `MANUAL`/`SCHEDULED`/`RETRY` trigger, `QUEUED`/`RUNNING`/`SUCCEEDED`/`FAILED` state, availability and lifecycle timestamps, bounded attempt budget, expiring lease token, and safe terminal error code/detail. A partial unique index permits only one queued/running row per type+target. Workers claim due or expired rows with `FOR UPDATE SKIP LOCKED`; token matching prevents a worker that lost its lease from completing the job.
 
-The worker and stale-target scheduler are default-off. The scheduler is invalid unless the worker is enabled. Job rows deliberately have no `owner_id`: visibility is derived from the polymorphic target. `SEARCH_METADATA` enqueue/list/get/retry follows the target snapshot's owner; `PAPER_ACCESS` rows are visible/retryable to every `openscholar.jobs` principal because papers/access evidence are shared. This remains an operational REST/UI model, not MCP Tasks or private job handles.
+The worker and stale-target scheduler are default-off. The scheduler is invalid unless the worker is enabled. Job rows deliberately have no `owner_id`: visibility is derived from the polymorphic target. `SEARCH_METADATA` enqueue/list/get/retry follows the target snapshot's owner; `PAPER_ACCESS` rows are visible/retryable to every `openscholar.jobs` principal because papers/access evidence are shared. This remains an operational REST model, not MCP Tasks or private job handles.
 
 ## Planned operations data
 

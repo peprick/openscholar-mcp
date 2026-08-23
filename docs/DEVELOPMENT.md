@@ -1,4 +1,4 @@
-# Development Plan
+# Development guide
 
 ## Full-stack workflow
 
@@ -30,7 +30,7 @@ SPRING_DOCKER_COMPOSE_ENABLED=false ./mvnw spring-boot:run
 
 Run `./mvnw verify` for the unit, web, architecture, and PostgreSQL Testcontainers tests.
 
-The optional embedding workflow uses a separately installed, local-only Ollama `0.31.1` process and an explicit one-page non-web maintenance runner. It is disabled during normal startup and CI, is not part of the root Compose stack, and never pulls a model automatically. See [the backend embedding instructions](../backend/README.md#generate-local-paper-embeddings).
+The optional embedding workflow uses a separately installed, local-only Ollama `0.31.1` process and an explicit one-page non-web maintenance runner. It is disabled during normal startup and CI, is not part of the root Compose stack, and never pulls a model automatically. See [the backend embedding instructions](../backend/README.md#optional-local-embeddings).
 
 ## Frontend workflow
 
@@ -162,7 +162,6 @@ The embedding variables apply to direct backend development only; the root conta
 - No provider DTOs outside provider modules.
 - No persistence entities returned through REST/MCP.
 - Flyway for schema; Hibernate DDL disabled outside tests.
-- Automated formatting/import order.
 
 ## Frontend conventions
 
@@ -210,10 +209,3 @@ The embedding variables apply to direct backend development only; the root conta
 - Metrics/logs reveal success/failure.
 - Security, privacy, access, and provider terms are reviewed.
 - Compose and CI remain reproducible.
-
-## Local readiness at creation
-
-- Git and Docker 29.6.1 are available.
-- Java 26 is installed; builds will target Java 21.
-- GitHub CLI is authenticated for repository publishing and CI inspection.
-- No global Maven is required; the backend commits Maven Wrapper 3.9.16.

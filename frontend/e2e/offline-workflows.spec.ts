@@ -105,7 +105,6 @@ test("search keeps diagnostics private while preserving useful next-page context
   });
   await expect(primaryNavigation.getByRole("link", { name: "Search research" })).toBeVisible();
   await expect(primaryNavigation.getByRole("link", { name: "My library" })).toBeVisible();
-  await expect(primaryNavigation.getByRole("link", { name: "Refresh jobs" })).toHaveCount(0);
   await expect(primaryNavigation.getByRole("link", { name: "About MCP" })).toHaveCount(0);
 
   await page

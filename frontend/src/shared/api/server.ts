@@ -19,12 +19,6 @@ import {
   type UpdateCollectionRequest,
 } from "@/shared/api/library-schemas";
 import {
-  researchRefreshJobPageSchema,
-  researchRefreshJobSchema,
-  type ResearchRefreshJob,
-  type ResearchRefreshJobPage,
-} from "@/shared/api/jobs-schemas";
-import {
   apiProblemSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
@@ -179,29 +173,6 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
     systemStatusResponseSchema,
     "system status",
     { signal: AbortSignal.timeout(2_500) },
-  )).data;
-}
-
-export async function getResearchRefreshJobs(
-  page = 0,
-  size = 20,
-): Promise<ResearchRefreshJobPage> {
-  const query = paginationQuery(page, size);
-  return (await requestJson(
-    `/api/v1/refresh-jobs?${query}`,
-    researchRefreshJobPageSchema,
-    "refresh job list",
-  )).data;
-}
-
-export async function retryResearchRefreshJob(
-  jobId: string,
-): Promise<ResearchRefreshJob> {
-  return (await requestJson(
-    `/api/v1/refresh-jobs/${encodeURIComponent(jobId)}/retry`,
-    researchRefreshJobSchema,
-    "refresh job",
-    { method: "POST" },
   )).data;
 }
 

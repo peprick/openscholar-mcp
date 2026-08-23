@@ -1,102 +1,113 @@
 # OpenScholar MCP
 
-OpenScholar MCP is an open-access research discovery and reading workspace. A user describes a research topic, and the platform searches scholarly indexes and repositories, finds legal full-text versions, removes duplicates, ranks the results, and saves reusable knowledge in PostgreSQL. Its core read use cases are also exposed to AI agents through the Model Context Protocol (MCP).
+[![Backend CI](https://github.com/peprick/openscholar-mcp/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-ci.yml)
+[![End-to-end tests](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-e2e.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-e2e.yml)
+[![Security](https://github.com/peprick/openscholar-mcp/actions/workflows/security.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/security.yml)
 
-> Status: the end-to-end web flow, owner-scoped persistent library/search snapshots, read-oriented MCP adapter, privacy export/deletion, and durable metadata/access refresh jobs are implemented. OpenAlex is the default discovery source; DataCite, DOAJ, and licence-gated CORE adapters are explicit opt-ins and participate in isolated concurrent fan-out, exact-identifier merging, reciprocal-rank fusion, coverage, and warning reporting. Unpaywall/arXiv provide exact-identifier legal-access evidence, while PDF.js reads only fresh verified CORS-compatible links directly in the browser. Local mode remains loopback/fixed-user with a separate MCP key. Hosted mode has a tested Spring Security OIDC resource server, issuer/audience/scope validation, MCP protected-resource discovery, per-principal ownership, and a Next.js authorization-code/PKCE BFF with encrypted HttpOnly sessions. A hardened single-host Compose/Caddy template, project-owned Caddy and blackbox-exporter scratch-runtime builds, private application and blackbox monitoring, and guarded PostgreSQL backup/restore scripts are included. Production deployment remains image-gated until all four project-owned runtime images are published and pinned as reviewed registry digests; no cloud deployment or public-production readiness is claimed. The API never returns PDF bytes, and the application retains no PDF documents.
+OpenScholar is a self-hosted research discovery workspace and MCP server. It searches scholarly metadata, combines duplicate records, caches reusable results, verifies legal open-access links, and helps readers organize papers and export citations.
 
-## Product goals
+OpenScholar stores metadata, search and library state, and verified links—not research PDFs. It does not scrape publisher pages, bypass paywalls, or proxy document bytes.
 
-- Find papers, preprints, theses, and dissertations by topic.
-- Prefer legal open-access versions and clearly label restricted material.
-- Cache normalized results so exact repeated searches avoid unnecessary provider calls.
-- Provide an in-app research library, PDF reader, collections, citation exports, and later personal notes.
-- Provide explainable PostgreSQL full-text related-paper discovery and an explicitly enabled, evaluated pgvector hybrid mode.
-- Expose safe, typed tools through an MCP server implemented in Spring Boot.
-- Preserve provenance: every record and document link must show where it came from.
+![OpenScholar search results with canonical papers and source provenance](docs/images/readme-preview.png)
 
-## Current stack
+## What it does
 
-- Java 21 LTS
-- Spring Boot 4.1.x
-- Spring MVC REST API
-- Spring AI 2.0 and the official MCP Java SDK 2.0
-- Stateless Streamable HTTP MCP at `/mcp`
-- Maven Wrapper
-- PostgreSQL with pgvector
-- Optional loopback Ollama for explicit offline embedding generation
-- Flyway migrations
-- Next.js 16.3.1, React 19.2.8, and strict TypeScript for the web client
-- PDF.js 6.2 for direct, supported-source browser reading
-- Docker Compose for local development
-- Testcontainers, JUnit, Vitest, and Testing Library for verification
-- Spring Security OAuth 2.0 resource server plus an optional Next.js OIDC BFF
-- Optional single-host Caddy/Prometheus/Alertmanager/blackbox-exporter deployment artifacts and guarded PostgreSQL backup/restore scripts
+- Searches OpenAlex by default, with optional DataCite, DOAJ, and licence-gated CORE discovery adapters.
+- Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, and provider identity.
+- Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
+- Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
+- Provides collections, reading status, tags, saved-library search, and BibTeX or CSL-JSON exports.
+- Opens fresh, verified, HTTPS, CORS-compatible PDFs in a browser PDF.js reader and falls back to the source site when embedded reading is not supported.
+- Exposes five bounded research tools to agents over stateless Streamable HTTP MCP.
 
-Local evidence now includes automated offline and Compose-backed Playwright workflows, WCAG 2.2 axe scans, frozen relevance/deduplication gates, a loopback performance harness, and portfolio screenshots. Broader representative/load evaluation, additional approved repository sources, and target-production evidence remain future work.
+## Architecture
 
-## Repository layout
-
-```text
-openscholar-mcp/
-├── backend/                    # Spring Boot REST/MCP adapters, providers, and persistence
-├── frontend/                   # Next.js web application
-├── deploy/                     # Loopback-first hosted/observability templates
-├── docs/                       # Product, architecture, security and delivery plans
-├── scripts/                    # Conformance and safe database operations
-├── .github/workflows/          # CI pipelines
-├── compose.yaml
-└── README.md
+```mermaid
+flowchart LR
+    Reader["Reader"] --> Web["Next.js UI and BFF"]
+    Agent["MCP client or agent"] -->|"Streamable HTTP /mcp"| App["Spring Boot modular monolith"]
+    Web -->|"Server-side REST"| App
+    App --> DB[("PostgreSQL + pgvector")]
+    App --> Discovery["OpenAlex · DataCite · DOAJ · CORE"]
+    App --> Access["Unpaywall · arXiv"]
 ```
 
-The backend is a modular monolith. REST, MCP, provider integrations, persistence, and scheduled work share one deployable application while remaining separated by package boundaries.
+The browser talks to same-origin Next.js route handlers. Those handlers and the MCP adapter call the same Spring application use cases, so authentication, ownership, validation, and provider policies stay centralized.
 
-## Research sources
+## Quick start
 
-The implemented backend providers are OpenAlex for default discovery; disabled-by-default DataCite thesis/dissertation metadata discovery; disabled-by-default DOAJ v4 article discovery; a separately licence-gated, disabled-by-default CORE API v3 metadata adapter; Unpaywall for exact DOI access evidence; and arXiv for exact identifier access evidence. DataCite is keyless metadata discovery and deliberately emits no open-access or PDF claim. DOAJ contributes metadata and source-reported links only. CORE discards full text/download URLs and never calls document-download endpoints. None of these adapters authorizes OpenScholar to copy or retain an underlying work. PubMed Central, OATD, Shodhganga, and compatible institutional repositories remain external follow-ups.
-
-The platform will use supported APIs and legal repository links. It will not bypass paywalls, authentication, CAPTCHAs, robots restrictions, or publisher controls.
-
-## Documentation
-
-- [Project plan](docs/PROJECT_PLAN.md)
-- [Product requirements](docs/PRODUCT_REQUIREMENTS.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Technical prerequisites](docs/TECHNICAL_PREREQUISITES.md)
-- [Data model](docs/DATA_MODEL.md)
-- [REST and MCP contracts](docs/API_AND_MCP.md)
-- [OpenAPI 3.1 REST specification](docs/openapi.yaml)
-- [MCP quickstart](docs/MCP_QUICKSTART.md)
-- [Security, privacy, and legal boundaries](docs/SECURITY_AND_LEGAL.md)
-- [Hosted deployment template](docs/DEPLOYMENT.md)
-- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
-- [Hosted threat model](docs/THREAT_MODEL.md)
-- [Supply-chain security](docs/SUPPLY_CHAIN_SECURITY.md)
-- [Testing strategy](docs/TESTING_STRATEGY.md)
-- [Search quality baseline](docs/SEARCH_QUALITY.md)
-- [Local performance evidence](docs/PERFORMANCE_EVIDENCE.md)
-- [Portfolio demo evidence](docs/PORTFOLIO_DEMO.md)
-- [Delivery roadmap](docs/ROADMAP.md)
-- [Local development plan](docs/DEVELOPMENT.md)
-- [Official references](docs/REFERENCES.md)
-- [Architecture decisions](docs/decisions/)
-
-## Initial success criteria
-
-The original local MVP success criteria are complete: a user can search an academic topic, receive normalized/deduplicated results, resolve legal full-text availability through Unpaywall or arXiv, revisit cached results, save papers to a collection, open supported PDFs in the web reader, and invoke the core read operations through an MCP client. Hosted release criteria remain separate and require published and verified project-owned runtime images, an actual identity-provider registration, deployment, restore/alert/load/accessibility/security evidence, and provider/legal approval.
-
-## Run the full stack
-
-With Docker running:
+You need Git and Docker Desktop or Docker Engine with Compose v2.
 
 ```bash
+git clone https://github.com/peprick/openscholar-mcp.git
+cd openscholar-mcp
 cp .env.example .env
-# Set MCP_LOCAL_API_KEY in .env to a long random value before using /mcp.
 docker compose up --build
 ```
 
-Open `http://localhost:3000`. The root stack binds PostgreSQL, the backend, and the frontend only to `127.0.0.1`. Provider credentials are passed only to the backend. Stop it with `docker compose down`; add `--volumes` only when you intentionally want to delete the local PostgreSQL data.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). PostgreSQL, Spring Boot, and Next.js bind to loopback by default. The web application works without provider credentials or an MCP key.
 
-For faster component development, run Spring Boot and Next.js separately:
+Stop the stack without deleting your library or cached searches:
+
+```bash
+docker compose down
+```
+
+Delete the local PostgreSQL volume only when you intentionally want a clean database:
+
+```bash
+docker compose down --volumes
+```
+
+### Optional local configuration
+
+Edit the ignored `.env` file to enable additional capabilities:
+
+| Variable | Purpose | Required? |
+|---|---|---|
+| `OPENALEX_API_KEY` | Raises the OpenAlex allowance | No |
+| `UNPAYWALL_EMAIL` | Enables DOI-based legal-access lookup | Only for Unpaywall |
+| `MCP_LOCAL_API_KEY` | Enables the local `/mcp` endpoint | Only for MCP |
+| `DATACITE_ENABLED` | Adds thesis/dissertation metadata discovery | No; default `false` |
+| `DOAJ_ENABLED` | Adds DOAJ article metadata discovery | No; default `false` |
+| `CORE_ENABLED`, `CORE_LICENSE_CONFIRMED` | Adds CORE metadata discovery | Both must be `true` after a separate licence review |
+
+Generate a local MCP key with `openssl rand -hex 32`. Never commit the generated value. The complete configuration surface is documented in [.env.example](.env.example).
+
+## Use it from an agent
+
+With `MCP_LOCAL_API_KEY` configured, connect a Streamable HTTP client to `http://127.0.0.1:8080/mcp`:
+
+```json
+{
+  "mcpServers": {
+    "openscholar": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer replace-with-your-local-key"
+      }
+    }
+  }
+}
+```
+
+The server advertises:
+
+- `search_research`
+- `get_paper_details`
+- `get_legal_full_text`
+- `search_saved_library`
+- `export_citations`
+
+See the [MCP quickstart](docs/MCP_QUICKSTART.md) for Inspector commands, raw protocol examples, security behavior, and the supported conformance subset.
+
+## Develop locally
+
+### Backend
+
+Requires JDK 21 and Docker for PostgreSQL/Testcontainers.
 
 ```bash
 cd backend
@@ -104,20 +115,66 @@ cd backend
 ```
 
 ```bash
+cd backend
+./mvnw --batch-mode --no-transfer-progress verify
+```
+
+### Frontend
+
+Requires Node.js 22.13 or newer; Node.js 24 LTS is recommended. Start the backend first.
+
+```bash
 cd frontend
+corepack enable
+pnpm install --frozen-lockfile
 cp .env.example .env.local
-pnpm install
 pnpm dev
 ```
 
-## Verification
+```bash
+cd frontend
+pnpm check
+```
 
-Run `./mvnw verify` from `backend` and `pnpm check` from `frontend`. See the [backend README](backend/README.md), [frontend README](frontend/README.md), and [development guide](docs/DEVELOPMENT.md) for details.
+`pnpm check` runs the container-entrypoint check, ESLint, strict TypeScript, Vitest, and a production Next.js build. See the [development guide](docs/DEVELOPMENT.md) for component and browser-test workflows.
 
-## Remaining work
+## Repository layout
 
-Typed publication/citation metadata and durable REST/UI refresh jobs are implemented. MCP job-handle/cancellation tools remain deferred; the existing durable jobs are operational refresh records, not MCP Tasks. The local MCP boundary enforces bearer authentication, exact Origin checks, bounded per-address request rates, request IDs, and safe response headers. Hosted MCP accepts audience/scope-validated JWTs and publishes OAuth protected-resource metadata, but client disconnects and MCP `notifications/cancelled` still do not propagate through the pinned stateless SDK. Offline and real-Compose Playwright coverage, WCAG 2.2 axe evidence, local performance/deduplication evidence, screenshots, immutable third-party Action/container references, locked conformance tooling, checked-in hardened proxy/prober builds, a production image-policy preflight, expiring scoped VEX validation, CSP, operations validation, and guarded backup/restore tests are checked in. CI-built, registry-published, digest-rescanned, signed/attested backend, frontend, Caddy, and blackbox-exporter images; a configured alert receiver; real OIDC-provider interoperability; managed backup/PITR decisions; target-environment load/assistive-technology/penetration/disaster-recovery exercises; and an actual deployment remain launch gates.
+```text
+backend/      Spring Boot REST/MCP application, providers, jobs, and persistence
+frontend/     Next.js UI, BFF route handlers, PDF.js reader, and browser tests
+deploy/       Hardened single-host deployment and private monitoring templates
+docs/         Architecture, contracts, operations, security, and evidence
+scripts/      Conformance, supply-chain, performance, backup, and restore tooling
+security/     Checked vulnerability exceptions and OpenVEX records
+```
+
+Start with the [documentation index](docs/README.md), or jump directly to:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [REST and MCP contracts](docs/API_AND_MCP.md) and [OpenAPI 3.1](docs/openapi.yaml)
+- [Data model](docs/DATA_MODEL.md)
+- [Security and legal boundaries](docs/SECURITY_AND_LEGAL.md)
+- [Deployment guide](docs/DEPLOYMENT.md)
+- [Testing strategy](docs/TESTING_STRATEGY.md)
+
+## Current status
+
+| Surface | Status |
+|---|---|
+| Local web application, REST API, and PostgreSQL persistence | Implemented |
+| Five-tool MCP server | Implemented |
+| Optional hosted OIDC mode | Implemented; synthetically tested |
+| Single-host deployment and monitoring templates | Implemented and locally validated |
+| Public hosted deployment | Not published |
+| PDF storage or proxying | Intentionally not implemented |
+
+Production use still requires real identity-provider registration, published and reviewed runtime images, alert routing, backups, provider/legal approval, and target-environment security and accessibility validation. See the concise [roadmap](docs/ROADMAP.md).
+
+## Contributing and security
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vulnerabilities through the private process in [.github/SECURITY.md](.github/SECURITY.md), not through a public issue.
 
 ## License
 
-No open-source license has been selected yet. Until one is added, normal copyright rules apply.
+No open-source license has been selected. Until the repository owner adds one, normal copyright rules apply; public source availability does not grant permission to copy, modify, or redistribute the project.

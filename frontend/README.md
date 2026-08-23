@@ -11,7 +11,8 @@ Start the Java backend on `http://localhost:8080`, then run:
 
 ```bash
 cp .env.example .env.local
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -32,7 +33,8 @@ refreshed without starting or building Next.js.
 pnpm check
 ```
 
-This runs ESLint, strict TypeScript, Vitest, and a production Next.js build.
+This runs the container-entrypoint check, ESLint, strict TypeScript, Vitest, and
+a production Next.js build.
 
 After installing Chromium once with `pnpm exec playwright install chromium`, run the deterministic offline browser suite with:
 
@@ -53,7 +55,6 @@ That suite blocks unexpected external traffic and covers search/cache/provenance
 - Create, rename, and delete persistent research collections.
 - Save canonical papers with reading status and normalized tags.
 - Filter the saved library and export selected papers as BibTeX or CSL-JSON.
-- Inspect durable metadata/access refresh jobs and retry terminal failures.
 
 Provider-reported PDF URLs from search results are never rendered as verified downloads. Legal-access actions use only the backend `/versions` contract. The reader does not proxy or retain document bytes: the browser requests a selected, fresh verified source directly. Sources that do not permit cross-origin reading fail closed to the external-link fallback.
 
@@ -98,9 +99,9 @@ Supported token-endpoint client authentication methods are `none` (the
 default), `client_secret_basic`, and `client_secret_post`. A client secret is
 required for the latter two. Supported ID-token signature algorithms are
 RS256, PS256, and ES256; allow only the algorithms enabled for the registered
-client. The default requested scopes match the hosted backend route groups and
-can be narrowed with `OPENSCHOLAR_OIDC_SCOPES` when the UI is deployed with a
-smaller feature set.
+client. The default requested scopes cover only the consumer search, library,
+and privacy routes. Operational clients must request additional scopes such as
+`openscholar.jobs` explicitly.
 
 The current hosted session is intentionally stateless and limited to a
 3.8&nbsp;KB encrypted cookie value. Identity providers that return unusually

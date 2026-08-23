@@ -10,6 +10,7 @@ const collectionName = `Compose evidence ${runKey}`;
 async function capturePortfolioScreenshot(
   page: Page,
   filename: string,
+  fullPage = true,
 ): Promise<void> {
   const configuredDirectory = process.env.PORTFOLIO_SCREENSHOT_DIR;
   if (configuredDirectory === undefined) return;
@@ -26,7 +27,7 @@ async function capturePortfolioScreenshot(
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     animations: "disabled",
-    fullPage: true,
+    fullPage,
     path: path.join(outputDirectory, filename),
   });
 }
@@ -99,6 +100,7 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   const firstSearchUrl = page.url();
   await expectNoSeriousAccessibilityViolations(page);
   await capturePortfolioScreenshot(page, "search-results.png");
+  await capturePortfolioScreenshot(page, "readme-preview.png", false);
 
   await page.goto("/");
   await page.getByRole("searchbox", { name: "Research topic" }).fill(topic);
@@ -113,8 +115,8 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   await expect(cachedSearch.json()).resolves.toMatchObject({
     cacheDisposition: "EXACT_HIT",
   });
+  await expect(page).toHaveURL(firstSearchUrl);
   await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);
-  expect(page.url()).toBe(firstSearchUrl);
 
   await page
     .getByRole("link", { name: "Compose-backed graph retrieval study" })

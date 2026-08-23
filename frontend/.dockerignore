@@ -2,7 +2,11 @@
 .env*
 !.env.example
 coverage
+playwright-report
+playwright-compose-report
+test-results
 public/pdfjs
 node_modules
 npm-debug.log*
 pnpm-debug.log*
+*.tsbuildinfo
