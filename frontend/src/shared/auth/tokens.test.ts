@@ -54,8 +54,7 @@ function oidcClaims(overrides: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
-function mockJwks(publicKey: KeyObject): void {
-  const jwk = publicKey.export({ format: "jwk" });
+function mockJwksValue(jwk: JsonWebKey): void {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockImplementation(async () =>
@@ -64,6 +63,10 @@ function mockJwks(publicKey: KeyObject): void {
       }),
     ),
   );
+}
+
+function mockJwks(publicKey: KeyObject): void {
+  mockJwksValue(publicKey.export({ format: "jwk" }));
 }
 
 afterEach(() => {
@@ -114,10 +117,14 @@ describe("verifyIdToken", () => {
   });
 
   it("rejects RSA verification keys smaller than 2048 bits", async () => {
-    const { privateKey, publicKey } = generateKeyPairSync("rsa", {
-      modulusLength: 1_024,
+    const { privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2_048,
     });
-    mockJwks(publicKey);
+    mockJwksValue({
+      e: "AQAB",
+      kty: "RSA",
+      n: Buffer.alloc(128, 0xff).toString("base64url"),
+    });
 
     await expect(
       verifyIdToken(

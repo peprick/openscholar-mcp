@@ -32,6 +32,9 @@ class SecurityConfiguration {
 
 	@Bean
 	SecurityFilterChain applicationSecurity(HttpSecurity http, OidcSecurityProperties properties) throws Exception {
+		// This boundary accepts no cookie or ambient browser authentication: hosted
+		// requests use Authorization bearer tokens and local mode is unauthenticated.
+		// The browser-facing Next.js BFF remains a separate same-origin boundary.
 		http.csrf(AbstractHttpConfigurer::disable);
 		if (!properties.enabled()) {
 			return http.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll()).build();

@@ -190,7 +190,7 @@ function labelsFromMetric(line) {
   const opening = line.indexOf("{");
   const closing = line.indexOf("}");
   if (opening < 0 || closing < opening) return labels;
-  const pattern = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"])*)"/g;
+  const pattern = /([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"/g;
   for (const match of line.slice(opening + 1, closing).matchAll(pattern)) {
     labels.set(match[1], match[2]);
   }
