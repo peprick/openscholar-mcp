@@ -14,6 +14,8 @@ import com.openscholar.privacy.PrivacyExport;
 import com.openscholar.privacy.PrivacyUseCase;
 import com.openscholar.security.CurrentUserIdProvider;
 import com.openscholar.security.OidcSecurityProperties;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,7 +67,8 @@ class PrivacyService implements PrivacyUseCase {
 						instant(resultSet, "updated_at")))
 				.list();
 		List<PrivacyExport.PrivacySearch> searches = jdbcClient.sql("""
-				SELECT id, original_query, searched_at, fresh_until, result_count,
+				SELECT id, original_query, requested_mode, result_origin,
+				       searched_at, fresh_until, result_count,
 				       (filters ->> 'yearFrom')::integer AS year_from,
 				       (filters ->> 'yearTo')::integer AS year_to,
 				       (filters ->> 'openAccessOnly')::boolean AS open_access_only,
@@ -139,6 +142,10 @@ class PrivacyService implements PrivacyUseCase {
 		return new PrivacyExport.PrivacySearch(
 				resultSet.getObject("id", UUID.class),
 				resultSet.getString("original_query"),
+				SearchMode.valueOf(resultSet.getString("requested_mode")),
+				"LOCAL_CATALOG".equals(resultSet.getString("result_origin"))
+						? SearchExecutionSource.LOCAL_CATALOG
+						: SearchExecutionSource.PROVIDER_FETCH,
 				new PrivacyExport.PrivacySearchFilters(
 						nullableInteger(resultSet, "year_from"),
 						nullableInteger(resultSet, "year_to"),

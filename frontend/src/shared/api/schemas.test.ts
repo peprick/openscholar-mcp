@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createSearchRequestSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
   relatedPapersResponseSchema,
@@ -14,6 +15,36 @@ import {
 } from "@/test/fixtures";
 
 describe("backend response schemas", () => {
+  it("defaults search mode to AUTO and accepts every supported mode", () => {
+    const automatic = createSearchRequestSchema.parse({
+      query: "graph neural networks",
+    });
+    expect(automatic.mode).toBe("AUTO");
+
+    for (const mode of ["AUTO", "ONLINE", "LOCAL"] as const) {
+      expect(
+        createSearchRequestSchema.safeParse({
+          query: "graph neural networks",
+          mode,
+        }).success,
+      ).toBe(true);
+    }
+
+    expect(
+      createSearchRequestSchema.safeParse({
+        query: "graph neural networks",
+        mode: "OFFLINE",
+      }).success,
+    ).toBe(false);
+    expect(
+      createSearchRequestSchema.safeParse({
+        query: "graph neural networks",
+        mode: "LOCAL",
+        forceRefresh: true,
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts representative search, paper-details, and access payloads", () => {
     expect(searchResponseSchema.safeParse(searchResponseFixture()).success).toBe(
       true,
@@ -27,6 +58,15 @@ describe("backend response schemas", () => {
     expect(
       relatedPapersResponseSchema.safeParse(relatedPapersResponseFixture()).success,
     ).toBe(true);
+  });
+
+  it("rejects unknown search execution sources", () => {
+    const search = {
+      ...searchResponseFixture(),
+      executionSource: "BROWSER_CACHE",
+    };
+
+    expect(searchResponseSchema.safeParse(search).success).toBe(false);
   });
 
   it("strictly rejects unexpected related-paper response fields", () => {

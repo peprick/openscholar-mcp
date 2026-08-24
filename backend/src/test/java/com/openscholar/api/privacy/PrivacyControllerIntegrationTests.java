@@ -105,6 +105,8 @@ class PrivacyControllerIntegrationTests {
 				.andExpect(jsonPath("$.displayName").value("Local OpenScholar User"))
 				.andExpect(jsonPath("$.searches.length()").value(1))
 				.andExpect(jsonPath("$.searches[0].query").value("private doctoral topic"))
+				.andExpect(jsonPath("$.searches[0].requestedMode").value("AUTO"))
+				.andExpect(jsonPath("$.searches[0].executionSource").value("PROVIDER_FETCH"))
 				.andExpect(jsonPath("$.searches[0].filters.yearFrom").value(2020))
 				.andExpect(jsonPath("$.searches[0].filters.yearTo").doesNotExist())
 				.andExpect(jsonPath("$.searches[0].filters.documentTypes[0]").value("THESIS"))

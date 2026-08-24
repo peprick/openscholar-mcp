@@ -2,7 +2,7 @@
 
 ## Scope
 
-Milestone 5 starts with a deliberately small, reproducible PostgreSQL full-text baseline for related-paper retrieval. It does not change OpenAlex-backed topic search, its exact-cache fingerprint, or its immutable result snapshots.
+Milestone 5 started with a deliberately small, reproducible PostgreSQL full-text baseline for related-paper retrieval and did not change provider-backed topic search. [ADR 0006](decisions/0006-owner-scoped-metadata-only-local-search.md) later adds a separately fingerprinted `local-catalog-v1` topic-search path. It does not blend mutable local candidates into a provider snapshot or reuse provider ranking claims.
 
 The endpoint uses a canonical paper as the seed:
 
@@ -175,7 +175,7 @@ Candidate work includes:
 - compare `english`, `simple`, and language-aware lexical configurations;
 - evaluate the default-off mode on a larger and more representative relevance set before considering a default change;
 - persist feature-level reasons if hybrid results enter immutable search snapshots;
-- bump the search pipeline/fingerprint version before blending local retrieval into provider-backed topic search.
+- evaluate local-catalog topic ranking on a separate owner-scoped query fixture before changing its ranking formula or combining it with provider scores.
 
 The frozen hybrid has cleared the first independent holdout plus the pinned HNSW mechanics gate and now has deterministic database-only fallback behavior and honest feature values. Lexical remains the default product ranker until an explicit later review changes the flag default.
 

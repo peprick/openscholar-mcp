@@ -438,6 +438,16 @@ button:disabled {
   padding-inline: 24px;
 }
 
+.searchActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.searchActions .button {
+  white-space: nowrap;
+}
+
 .filterPanel {
   border-bottom: 1px solid var(--line);
   margin-top: 14px;
@@ -775,6 +785,20 @@ button:disabled {
 
 .warningPanel--compact {
   margin: 16px 0;
+}
+
+.searchNotice {
+  background: var(--blue-soft);
+  border: 1px solid rgb(49 95 119 / 23%);
+  border-radius: var(--radius);
+  color: var(--blue);
+  font-size: 0.82rem;
+  margin: 20px 0;
+  padding: 16px 18px;
+}
+
+.searchNotice p {
+  margin: 5px 0 0;
 }
 
 .resultList {
@@ -2347,8 +2371,13 @@ button:disabled {
     margin-left: 6px;
   }
 
-  .searchButton {
+  .searchActions {
+    flex-direction: column;
     grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .searchActions .button {
     width: 100%;
   }
 

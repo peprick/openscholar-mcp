@@ -86,6 +86,8 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   expect(coldSearch.status()).toBe(201);
   await expect(coldSearch.json()).resolves.toMatchObject({
     cacheDisposition: "MISS_FETCHED",
+    requestedMode: "AUTO",
+    executionSource: "PROVIDER_FETCH",
   });
 
   await expect(page.getByRole("heading", { level: 1, name: topic })).toBeVisible();
@@ -114,6 +116,8 @@ test("Compose stack persists, deduplicates, caches, saves, and exports research"
   expect(cachedSearch.status()).toBe(200);
   await expect(cachedSearch.json()).resolves.toMatchObject({
     cacheDisposition: "EXACT_HIT",
+    requestedMode: "AUTO",
+    executionSource: "EXACT_CACHE",
   });
   await expect(page).toHaveURL(firstSearchUrl);
   await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);

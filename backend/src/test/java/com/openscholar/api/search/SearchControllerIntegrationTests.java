@@ -98,11 +98,13 @@ class SearchControllerIntegrationTests {
 		String searchId = JsonPath.read(response, "$.searchId");
 
 		mockMvc.perform(post("/api/v1/searches")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content(request("  " + query.toUpperCase() + "  ", false)))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request("  " + query.toUpperCase() + "  ", false)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.searchId").value(searchId))
-				.andExpect(jsonPath("$.cacheDisposition").value("EXACT_HIT"));
+				.andExpect(jsonPath("$.cacheDisposition").value("EXACT_HIT"))
+				.andExpect(jsonPath("$.requestedMode").value("AUTO"))
+				.andExpect(jsonPath("$.executionSource").value("EXACT_CACHE"));
 
 		mockMvc.perform(get("/api/v1/searches/{searchId}", searchId))
 				.andExpect(status().isOk())
@@ -110,6 +112,42 @@ class SearchControllerIntegrationTests {
 				.andExpect(jsonPath("$.results[0].provenance[0].providerRecordId").value(provider.recordId()));
 
 		org.assertj.core.api.Assertions.assertThat(provider.calls()).isEqualTo(1);
+	}
+
+	@Test
+	void keepsAutoAndOnlineSnapshotResourcesSemanticallyConsistent() throws Exception {
+		String query = "mode-specific cache " + UUID.randomUUID();
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request(query, false)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.requestedMode").value("AUTO"));
+
+		String onlineResponse = mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request(query, false, "ONLINE")))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.cacheDisposition").value("MISS_FETCHED"))
+				.andExpect(jsonPath("$.requestedMode").value("ONLINE"))
+				.andExpect(jsonPath("$.executionSource").value("PROVIDER_FETCH"))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String onlineSearchId = JsonPath.read(onlineResponse, "$.searchId");
+
+		mockMvc.perform(get("/api/v1/searches/{searchId}", onlineSearchId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.requestedMode").value("ONLINE"));
+
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request(query, false, "ONLINE")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.searchId").value(onlineSearchId))
+				.andExpect(jsonPath("$.requestedMode").value("ONLINE"))
+				.andExpect(jsonPath("$.executionSource").value("EXACT_CACHE"));
+
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isEqualTo(2);
 	}
 
 	@Test
@@ -180,10 +218,135 @@ class SearchControllerIntegrationTests {
 
 		mockMvc.perform(post("/api/v1/searches")
 						.contentType(MediaType.APPLICATION_JSON)
-						.content(request("unavailable " + UUID.randomUUID(), false)))
+						.content(request("unavailable " + UUID.randomUUID(), false, "ONLINE")))
 				.andExpect(status().isServiceUnavailable())
 				.andExpect(jsonPath("$.code").value("SEARCH_PROVIDER_UNAVAILABLE"))
 				.andExpect(jsonPath("$.retryable").value(true));
+	}
+
+	@Test
+	void localSearchReturnsKnownMetadataWithoutCallingTheProviderAndPersistsItsSource() throws Exception {
+		String title = "Known local metadata " + UUID.randomUUID().toString().replace("-", "");
+		provider.changeTitle(title);
+		mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request("seed local metadata " + UUID.randomUUID(), false, "ONLINE")))
+				.andExpect(status().isCreated());
+		provider.clearObservations();
+
+		String response = mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request(title, false, "LOCAL")))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.cacheDisposition").value("LOCAL_RESULT"))
+				.andExpect(jsonPath("$.requestedMode").value("LOCAL"))
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.providerCoverage").isEmpty())
+				.andExpect(jsonPath("$.warnings").isEmpty())
+				.andExpect(jsonPath("$.results[0].title").value(title))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String searchId = JsonPath.read(response, "$.searchId");
+
+		mockMvc.perform(get("/api/v1/searches/{searchId}", searchId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.cacheDisposition").value("EXACT_HIT"))
+				.andExpect(jsonPath("$.requestedMode").value("LOCAL"))
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.results[0].title").value(title));
+
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isZero();
+	}
+
+	@Test
+	void autoSearchFallsBackToTheOwnerScopedLocalCatalogWhenTheProviderIsUnavailable() throws Exception {
+		String title = "Automatic local fallback " + UUID.randomUUID().toString().replace("-", "");
+		provider.changeTitle(title);
+		mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request("seed automatic fallback " + UUID.randomUUID(), false, "ONLINE")))
+				.andExpect(status().isCreated());
+		provider.clearObservations();
+		provider.fail();
+
+		mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request(title, false)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.cacheDisposition").value("LOCAL_RESULT"))
+				.andExpect(jsonPath("$.requestedMode").value("AUTO"))
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.warnings", org.hamcrest.Matchers.hasItems(
+						"OPENALEX_UNAVAILABLE", "SHOWING_LOCAL_RESULTS")))
+				.andExpect(jsonPath("$.results[0].title").value(title));
+
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isOne();
+	}
+
+	@Test
+	void rejectsForceRefreshForLocalMode() throws Exception {
+		mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request("invalid local refresh", true, "LOCAL")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isZero();
+	}
+
+	@Test
+	void continuesLocalSearchWithABoundedCursorWithoutCallingTheProvider() throws Exception {
+		String token = "paging" + UUID.randomUUID().toString().replace("-", "");
+		for (int index = 1; index <= 3; index++) {
+			provider.reset();
+			provider.changeTitle("Offline " + token + " paper " + index);
+			mockMvc.perform(post("/api/v1/searches")
+							.contentType(MediaType.APPLICATION_JSON)
+							.content(request("seed " + token + " " + index, false, "ONLINE")))
+						.andExpect(status().isCreated());
+		}
+		provider.clearObservations();
+
+		String firstResponse = mockMvc.perform(post("/api/v1/searches")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(request("offline " + token, false, "LOCAL", 2)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.requestedMode").value("LOCAL"))
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.results", org.hamcrest.Matchers.hasSize(2)))
+				.andExpect(jsonPath("$.nextCursor", org.hamcrest.Matchers.startsWith("oslocal1.")))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String firstSearchId = JsonPath.read(firstResponse, "$.searchId");
+		List<String> firstPageTitles = JsonPath.read(firstResponse, "$.results[*].title");
+
+		String newlyDiscoveredTitle = "offline " + token;
+		provider.reset();
+		provider.changeTitle(newlyDiscoveredTitle);
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request("seed newer local candidate " + UUID.randomUUID(), false, "ONLINE")))
+				.andExpect(status().isCreated());
+		provider.clearObservations();
+
+		String nextResponse = mockMvc.perform(post("/api/v1/searches/{searchId}/next", firstSearchId))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.requestedMode").value("LOCAL"))
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.results", org.hamcrest.Matchers.hasSize(1)))
+				.andExpect(jsonPath("$.nextCursor").value(org.hamcrest.Matchers.nullValue()))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		List<String> nextPageTitles = JsonPath.read(nextResponse, "$.results[*].title");
+		org.assertj.core.api.Assertions.assertThat(nextPageTitles)
+				.hasSize(1)
+				.doesNotContainAnyElementsOf(firstPageTitles)
+				.doesNotContain(newlyDiscoveredTitle);
+
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isZero();
 	}
 
 	@Test
@@ -285,6 +448,15 @@ class SearchControllerIntegrationTests {
 	}
 
 	private static String request(String query, boolean forceRefresh) {
+		return request(query, forceRefresh, null, 20);
+	}
+
+	private static String request(String query, boolean forceRefresh, String mode) {
+		return request(query, forceRefresh, mode, 20);
+	}
+
+	private static String request(String query, boolean forceRefresh, String mode, int pageSize) {
+		String modeProperty = mode == null ? "" : ",\n  \"mode\": \"" + mode + "\"";
 		return """
 				{
 				  "query": "%s",
@@ -296,10 +468,10 @@ class SearchControllerIntegrationTests {
 				    "minimumCitations": 0,
 				    "languages": ["en"]
 				  },
-				  "pageSize": 20,
-				  "forceRefresh": %s
+				  "pageSize": %d,
+				  "forceRefresh": %s%s
 				}
-				""".formatted(query, forceRefresh);
+				""".formatted(query, pageSize, forceRefresh, modeProperty);
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)
@@ -403,6 +575,11 @@ class SearchControllerIntegrationTests {
 
 		void fail() {
 			failing.set(true);
+		}
+
+		void clearObservations() {
+			calls.set(0);
+			queries.clear();
 		}
 
 		int calls() {

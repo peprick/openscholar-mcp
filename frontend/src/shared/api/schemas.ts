@@ -15,9 +15,19 @@ export const documentTypes = [
 
 export const documentTypeSchema = z.enum(documentTypes);
 
+export const searchModeSchema = z.enum(["AUTO", "ONLINE", "LOCAL"]);
+
+export const searchExecutionSourceSchema = z.enum([
+  "PROVIDER_FETCH",
+  "EXACT_CACHE",
+  "STALE_CACHE",
+  "LOCAL_CATALOG",
+]);
+
 export const createSearchRequestSchema = z
   .object({
     query: z.string().trim().min(3).max(500),
+    mode: searchModeSchema.default("AUTO"),
     filters: z
       .object({
         yearFrom: z.number().int().min(1000).max(9999).optional(),
@@ -54,7 +64,16 @@ export const createSearchRequestSchema = z
     cursor: z.string().max(4096).optional(),
     forceRefresh: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((request, context) => {
+    if (request.mode === "LOCAL" && request.forceRefresh) {
+      context.addIssue({
+        code: "custom",
+        message: "Local searches cannot force an online refresh.",
+        path: ["forceRefresh"],
+      });
+    }
+  });
 
 const httpUrlSchema = z
   .string()
@@ -78,12 +97,15 @@ export const searchResponseSchema = z.object({
   searchId: z.string().uuid(),
   query: z.string(),
   queryFingerprint: z.string(),
+  requestedMode: searchModeSchema,
+  executionSource: searchExecutionSourceSchema,
   cacheDisposition: z.enum([
     "EXACT_HIT",
     "MISS_FETCHED",
     "STALE_REFRESHED",
     "FORCED_REFRESH",
     "STALE_FALLBACK",
+    "LOCAL_RESULT",
   ]),
   searchedAt: instantSchema,
   freshUntil: instantSchema,
@@ -358,6 +380,7 @@ export const systemStatusResponseSchema = z.object({
 });
 
 export type CreateSearchRequest = z.infer<typeof createSearchRequestSchema>;
+export type SearchMode = z.infer<typeof searchModeSchema>;
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 export type SearchResult = SearchResponse["results"][number];
 export type PaperDetailsResponse = z.infer<typeof paperDetailsResponseSchema>;

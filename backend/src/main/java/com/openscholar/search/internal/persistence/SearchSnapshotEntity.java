@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.openscholar.search.SearchMode;
+import com.openscholar.search.SearchResultOrigin;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -44,6 +46,12 @@ class SearchSnapshotEntity {
 	@Column(nullable = false, length = 24)
 	private String status;
 
+	@Column(name = "requested_mode", nullable = false, length = 16)
+	private String requestedMode;
+
+	@Column(name = "result_origin", nullable = false, length = 24)
+	private String resultOrigin;
+
 	@Column(name = "searched_at", nullable = false)
 	private Instant searchedAt;
 
@@ -82,6 +90,8 @@ class SearchSnapshotEntity {
 			int fingerprintVersion,
 			String pipelineVersion,
 			Map<String, Object> filters,
+			SearchMode requestedMode,
+			SearchResultOrigin resultOrigin,
 			Instant searchedAt,
 			Instant freshUntil,
 			List<Map<String, Object>> providerCoverage,
@@ -98,6 +108,8 @@ class SearchSnapshotEntity {
 		this.pipelineVersion = pipelineVersion;
 		this.filters = filters;
 		this.status = "COMPLETED";
+		this.requestedMode = requestedMode.name();
+		this.resultOrigin = resultOrigin.name();
 		this.searchedAt = searchedAt;
 		this.freshUntil = freshUntil;
 		this.providerCoverage = providerCoverage;
@@ -116,6 +128,8 @@ class SearchSnapshotEntity {
 			int fingerprintVersion,
 			String pipelineVersion,
 			Map<String, Object> filters,
+			SearchMode requestedMode,
+			SearchResultOrigin resultOrigin,
 			Instant searchedAt,
 			Instant freshUntil,
 			List<Map<String, Object>> providerCoverage,
@@ -132,6 +146,8 @@ class SearchSnapshotEntity {
 				fingerprintVersion,
 				pipelineVersion,
 				filters,
+				requestedMode,
+				resultOrigin,
 				searchedAt,
 				freshUntil,
 				providerCoverage,
@@ -159,6 +175,14 @@ class SearchSnapshotEntity {
 
 	Map<String, Object> filters() {
 		return filters;
+	}
+
+	SearchMode requestedMode() {
+		return SearchMode.valueOf(requestedMode);
+	}
+
+	SearchResultOrigin resultOrigin() {
+		return SearchResultOrigin.valueOf(resultOrigin);
 	}
 
 	Instant searchedAt() {

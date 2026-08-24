@@ -8,6 +8,7 @@ import java.util.Set;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchMode;
 import org.junit.jupiter.api.Test;
 
 class QueryFingerprinterTests {
@@ -60,6 +61,36 @@ class QueryFingerprinterTests {
 				.isNotEqualTo(fingerprinter.fingerprint(command));
 		assertThat(fingerprinter.pipelineVersion()).isEqualTo("openalex-v1");
 		assertThat(orderedProviders.pipelineVersion()).isEqualTo("provider-fanout-v1");
+	}
+
+	@Test
+	void isolatesExecutionModesAndTheLocalPipeline() {
+		SearchCommand auto = command("Graph Neural Networks", false, Set.of(), Set.of());
+		SearchCommand online = new SearchCommand(
+				auto.query(), null, null, Set.of(), false, 0, Set.of(), 20, "*", false,
+				SearchMode.ONLINE);
+
+		assertThat(fingerprinter.onlineFingerprint(auto))
+				.isNotEqualTo(fingerprinter.onlineFingerprint(online));
+		assertThat(fingerprinter.localFingerprint(auto))
+				.isNotEqualTo(fingerprinter.onlineFingerprint(auto));
+		assertThat(fingerprinter.fingerprintVersion()).isEqualTo(2);
+		assertThat(fingerprinter.localPipelineVersion()).isEqualTo("local-catalog-v1");
+	}
+
+	@Test
+	void localScopeFingerprintStaysStableAcrossPagesWhileSnapshotFingerprintsDoNot() {
+		SearchCommand first = new SearchCommand(
+				"Graph Neural Networks", null, null, Set.of(), false, 0, Set.of(), 20, "*", false,
+				SearchMode.LOCAL);
+		SearchCommand next = new SearchCommand(
+				first.query(), null, null, Set.of(), false, 0, Set.of(), 20,
+				"oslocal1.placeholder", false, SearchMode.LOCAL);
+
+		assertThat(fingerprinter.localScopeFingerprint(first))
+				.isEqualTo(fingerprinter.localScopeFingerprint(next));
+		assertThat(fingerprinter.localFingerprint(first))
+				.isNotEqualTo(fingerprinter.localFingerprint(next));
 	}
 
 	private static SearchCommand command(

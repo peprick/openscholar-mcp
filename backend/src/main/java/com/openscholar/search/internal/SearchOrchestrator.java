@@ -11,6 +11,8 @@ import com.openscholar.provider.ProviderSearchQuery;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationTimeoutException;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchResearchUseCase;
@@ -29,6 +31,7 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 	private final ResearchProviderFanout providerFanout;
 	private final QueryFingerprinter fingerprinter;
 	private final SearchSnapshotStore snapshotStore;
+	private final LocalCatalogSearch localCatalogSearch;
 	private final SearchProperties properties;
 	private final SearchRequestCoordinator requestCoordinator;
 	private final SearchExecutionDeadline executionDeadline;
@@ -40,6 +43,7 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 			ResearchProviderFanout providerFanout,
 			QueryFingerprinter fingerprinter,
 			SearchSnapshotStore snapshotStore,
+			LocalCatalogSearch localCatalogSearch,
 			SearchProperties properties,
 			SearchRequestCoordinator requestCoordinator,
 			SearchExecutionDeadline executionDeadline,
@@ -49,6 +53,7 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 		this.providerFanout = providerFanout;
 		this.fingerprinter = fingerprinter;
 		this.snapshotStore = snapshotStore;
+		this.localCatalogSearch = localCatalogSearch;
 		this.properties = properties;
 		this.requestCoordinator = requestCoordinator;
 		this.executionDeadline = executionDeadline;
@@ -67,13 +72,20 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 
 	private SearchView searchWithinDeadline(UUID ownerId, SearchCommand command) {
 		executionDeadline.checkpoint();
+		if (command.mode() == SearchMode.ONLINE && localCatalogSearch.isLocalCursor(command.cursor())) {
+			throw new IllegalArgumentException("A local search cursor cannot be used for online search");
+		}
+		if (command.mode() == SearchMode.LOCAL || localCatalogSearch.isLocalCursor(command.cursor())) {
+			return searchLocal(ownerId, command, java.util.List.of());
+		}
 		String normalizedQuery = fingerprinter.normalizedQuery(command);
-		String fingerprint = fingerprinter.fingerprint(command);
+		String fingerprint = fingerprinter.onlineFingerprint(command);
 		Instant now = Instant.now(clock);
-		var latest = snapshotStore.findLatest(ownerId, fingerprint);
+		var latest = snapshotStore.findLatestProvider(ownerId, fingerprint);
 		executionDeadline.checkpoint();
 		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
-			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
+			return withDisposition(
+					latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, command.mode(), null);
 		}
 		try {
 			return requestCoordinator.execute(
@@ -91,18 +103,22 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 			String fingerprint,
 			SearchCoordinationTimeoutException exception) {
 		executionDeadline.checkpoint();
-		var latest = snapshotStore.findLatest(ownerId, fingerprint);
+		var latest = snapshotStore.findLatestProvider(ownerId, fingerprint);
 		executionDeadline.checkpoint();
 		if (latest.isEmpty()) {
+			if (canFallbackLocally(command)) {
+				return searchLocal(ownerId, command, java.util.List.of(COORDINATION_TIMEOUT_WARNING));
+			}
 			throw exception;
 		}
 		var snapshot = latest.orElseThrow();
 		if (!command.forceRefresh() && snapshot.isFreshAt(Instant.now(clock))) {
-			return withDisposition(snapshot.view(), CacheDisposition.EXACT_HIT, null);
+			return withDisposition(snapshot.view(), CacheDisposition.EXACT_HIT, command.mode(), null);
 		}
 		return withDisposition(
 				snapshot.view(),
 				CacheDisposition.STALE_FALLBACK,
+				command.mode(),
 				COORDINATION_TIMEOUT_WARNING);
 	}
 
@@ -110,13 +126,14 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 			UUID ownerId, SearchCommand command, String normalizedQuery, String fingerprint) {
 		executionDeadline.checkpoint();
 		Instant now = Instant.now(clock);
-		var latest = snapshotStore.findLatest(ownerId, fingerprint);
+		var latest = snapshotStore.findLatestProvider(ownerId, fingerprint);
 		executionDeadline.checkpoint();
 		// A normal caller that waited for an identical request reuses the snapshot just
 		// written by the leader. forceRefresh is an explicit provider-fetch instruction:
 		// it is serialized for same-key safety but intentionally never becomes a cache hit.
 		if (!command.forceRefresh() && latest.isPresent() && latest.orElseThrow().isFreshAt(now)) {
-			return withDisposition(latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, null);
+			return withDisposition(
+					latest.orElseThrow().view(), CacheDisposition.EXACT_HIT, command.mode(), null);
 		}
 		try {
 			executionDeadline.checkpoint();
@@ -152,7 +169,11 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 				return withDispositionAndWarnings(
 						latest.orElseThrow().view(),
 						CacheDisposition.STALE_FALLBACK,
+						command.mode(),
 						exception.warningCodes());
+			}
+			if (canFallbackLocally(command)) {
+				return searchLocal(ownerId, command, exception.warningCodes());
 			}
 			throw new SearchUnavailableException(
 					"Research provider is temporarily unavailable",
@@ -160,6 +181,44 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 					exception.retryAfter(),
 					exception);
 		}
+	}
+
+	private SearchView searchLocal(
+			UUID ownerId, SearchCommand command, java.util.List<String> providerWarnings) {
+		executionDeadline.checkpoint();
+		String normalizedQuery = fingerprinter.normalizedQuery(command);
+		String scopeFingerprint = fingerprinter.localScopeFingerprint(command);
+		var page = localCatalogSearch.search(
+				ownerId, command, normalizedQuery, scopeFingerprint);
+		executionDeadline.checkpoint();
+		var warnings = new ArrayList<String>();
+		for (String warning : providerWarnings) {
+			if (warning != null && !warnings.contains(warning)) {
+				warnings.add(warning);
+			}
+		}
+		if (command.mode() == SearchMode.AUTO && !warnings.contains("SHOWING_LOCAL_RESULTS")) {
+			warnings.add("SHOWING_LOCAL_RESULTS");
+		}
+		SearchView stored = snapshotStore.storeLocal(
+				ownerId,
+				command,
+				normalizedQuery,
+				fingerprinter.localFingerprint(command),
+				fingerprinter.fingerprintVersion(),
+				fingerprinter.localPipelineVersion(),
+				Instant.now(clock),
+				page.nextCursor(),
+				warnings,
+				page.results());
+		executionDeadline.checkpoint();
+		return stored;
+	}
+
+	private static boolean canFallbackLocally(SearchCommand command) {
+		return command.mode() == SearchMode.AUTO
+				&& !command.forceRefresh()
+				&& "*".equals(command.cursor());
 	}
 
 	@Override
@@ -203,6 +262,11 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 					.orElseThrow(() -> new SearchNotFoundException(searchId));
 			executionDeadline.checkpoint();
 			SearchCommand command = stored.command();
+			boolean localSnapshot = stored.resultOrigin() == com.openscholar.search.SearchResultOrigin.LOCAL_CATALOG;
+			String refreshCursor = localSnapshot
+					? "*"
+					: command.cursor();
+			SearchMode refreshMode = localSnapshot ? SearchMode.ONLINE : command.mode();
 			return searchWithinDeadline(stored.ownerId(), new SearchCommand(
 					command.query(),
 					command.yearFrom(),
@@ -212,8 +276,9 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 					command.minimumCitations(),
 					command.languages(),
 					command.pageSize(),
-					command.cursor(),
-					true));
+					refreshCursor,
+					true,
+					refreshMode));
 		}));
 	}
 
@@ -238,15 +303,22 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 	}
 
 	private static SearchView withDisposition(
-			SearchView view, CacheDisposition disposition, String additionalWarning) {
+			SearchView view,
+			CacheDisposition disposition,
+			SearchMode requestedMode,
+			String additionalWarning) {
 		return withDispositionAndWarnings(
 				view,
 				disposition,
+				requestedMode,
 				additionalWarning == null ? java.util.List.of() : java.util.List.of(additionalWarning));
 	}
 
 	private static SearchView withDispositionAndWarnings(
-			SearchView view, CacheDisposition disposition, java.util.List<String> additionalWarnings) {
+			SearchView view,
+			CacheDisposition disposition,
+			SearchMode requestedMode,
+			java.util.List<String> additionalWarnings) {
 		var warnings = new ArrayList<>(view.warnings());
 		for (String warning : additionalWarnings) {
 			if (warning != null && !warnings.contains(warning)) {
@@ -258,11 +330,25 @@ class SearchOrchestrator implements SearchResearchUseCase, SearchRefreshUseCase 
 				view.query(),
 				view.queryFingerprint(),
 				disposition,
+				requestedMode,
+				executionSource(view, disposition),
 				view.searchedAt(),
 				view.freshUntil(),
 				view.nextCursor(),
 				view.providerCoverage(),
 				warnings,
 				view.results());
+	}
+
+	private static SearchExecutionSource executionSource(
+			SearchView view, CacheDisposition disposition) {
+		if (view.executionSource() == SearchExecutionSource.LOCAL_CATALOG) {
+			return SearchExecutionSource.LOCAL_CATALOG;
+		}
+		return switch (disposition) {
+			case EXACT_HIT -> SearchExecutionSource.EXACT_CACHE;
+			case STALE_FALLBACK -> SearchExecutionSource.STALE_CACHE;
+			default -> SearchExecutionSource.PROVIDER_FETCH;
+		};
 	}
 }

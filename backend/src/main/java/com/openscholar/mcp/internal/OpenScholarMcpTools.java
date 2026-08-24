@@ -42,6 +42,7 @@ import com.openscholar.paper.PaperProviderRecordView;
 import com.openscholar.paper.PaperView;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.CacheDisposition;
+import com.openscholar.search.ProviderContributionView;
 import com.openscholar.search.ProviderCoverageView;
 import com.openscholar.search.RankingReason;
 import com.openscholar.search.SearchCommand;
@@ -49,6 +50,8 @@ import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchDeadlineExceededException;
 import com.openscholar.search.SearchExecutionInterruptedException;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchUnavailableException;
@@ -96,7 +99,7 @@ public class OpenScholarMcpTools {
 	}
 
 	@McpTool(name = "search_research", title = "Search research",
-			description = "Search scholarly metadata through OpenScholar's bounded cache/provider pipeline. "
+			description = "Search scholarly metadata through OpenScholar's bounded provider/cache/local pipeline. "
 					+ "Provider-reported access links are discovery hints; use get_legal_full_text for verified legal locations.",
 			generateOutputSchema = true,
 			annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false,
@@ -120,13 +123,16 @@ public class OpenScholarMcpTools {
 			@McpToolParam(description = "Opaque cursor from an earlier search_research result",
 					required = false) String cursor,
 			@McpToolParam(description = "Bypass an exact fresh cache hit; defaults to false",
-					required = false) Boolean forceRefresh) {
+					required = false) Boolean forceRefresh,
+			@McpToolParam(description = "AUTO, ONLINE, or LOCAL execution mode; defaults to AUTO. "
+					+ "LOCAL never contacts a provider and is incompatible with forceRefresh=true",
+					required = false) SearchMode mode) {
 		return execute("search_research",
 				() -> SearchResearchToolResult.from(searchUseCase.search(new SearchCommand(topic, yearFrom, yearTo,
 						validateDocumentTypes(documentTypes),
 						Boolean.TRUE.equals(openAccessOnly), defaulted(minimumCitations, 0),
 						validateLanguages(languages), boundedPageSize(limit, 20), cursor,
-						Boolean.TRUE.equals(forceRefresh)))));
+						Boolean.TRUE.equals(forceRefresh), mode == null ? SearchMode.AUTO : mode))));
 	}
 
 	@McpTool(name = "get_paper_details", title = "Get paper details",
@@ -341,13 +347,15 @@ public class OpenScholarMcpTools {
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SearchResearchToolResult(UUID searchId, String query, String queryFingerprint,
-			CacheDisposition cacheDisposition, Instant searchedAt, Instant freshUntil,
+			CacheDisposition cacheDisposition, SearchMode requestedMode, SearchExecutionSource executionSource,
+			Instant searchedAt, Instant freshUntil,
 			@JsonProperty(required = false) String nextCursor,
 			List<SearchProviderCoverage> providerCoverage, List<String> warnings, List<SearchPaperToolResult> results) {
 
 		private static SearchResearchToolResult from(SearchView view) {
 			return new SearchResearchToolResult(view.searchId(), view.query(), view.queryFingerprint(),
-					view.cacheDisposition(), view.searchedAt(), view.freshUntil(), view.nextCursor(),
+					view.cacheDisposition(), view.requestedMode(), view.executionSource(),
+					view.searchedAt(), view.freshUntil(), view.nextCursor(),
 					view.providerCoverage().stream().map(SearchProviderCoverage::from).toList(), view.warnings(),
 					view.results().stream().map(SearchPaperToolResult::from).toList());
 		}
@@ -391,7 +399,7 @@ public class OpenScholarMcpTools {
 			@JsonProperty(required = false) URI providerLandingPageUrl,
 			@JsonProperty(required = false) URI providerReportedPdfUrl,
 			@JsonProperty(required = false) Double score, List<RankingReasonToolResult> rankingReasons, ProviderId provider,
-			String providerRecordId, Instant retrievedAt) {
+			String providerRecordId, Instant retrievedAt, List<SearchProvenanceToolResult> provenance) {
 
 		private static SearchPaperToolResult from(SearchResultView result) {
 			PaperView paper = result.paper();
@@ -404,7 +412,8 @@ public class OpenScholarMcpTools {
 					paper.authors().stream().map(PaperAuthorToolResult::from).toList(), result.reportedOpenAccess(),
 					result.landingPageUrl(), result.pdfUrl(), result.score(),
 					result.rankingReasons().stream().map(RankingReasonToolResult::from).toList(), result.provider(),
-					result.providerRecordId(), result.retrievedAt());
+					result.providerRecordId(), result.retrievedAt(),
+					result.providerContributions().stream().map(SearchProvenanceToolResult::from).toList());
 		}
 
 		public SearchPaperToolResult {
@@ -413,6 +422,16 @@ public class OpenScholarMcpTools {
 			isbn = isbn == null ? null : List.copyOf(isbn);
 			issn = issn == null ? null : List.copyOf(issn);
 			rankingReasons = rankingReasons == null ? List.of() : List.copyOf(rankingReasons);
+			provenance = provenance == null ? List.of() : List.copyOf(provenance);
+		}
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record SearchProvenanceToolResult(ProviderId provider, String providerRecordId, Instant retrievedAt) {
+
+		private static SearchProvenanceToolResult from(ProviderContributionView contribution) {
+			return new SearchProvenanceToolResult(contribution.provider(), contribution.providerRecordId(),
+					contribution.retrievedAt());
 		}
 	}
 

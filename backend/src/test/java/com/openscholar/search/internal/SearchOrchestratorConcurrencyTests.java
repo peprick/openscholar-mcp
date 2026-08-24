@@ -32,6 +32,7 @@ import com.openscholar.provider.ResearchProvider;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
 import com.openscholar.search.SearchCoordinationTimeoutException;
+import com.openscholar.search.SearchMode;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchRefreshUseCase;
 import com.openscholar.search.SearchView;
@@ -170,7 +171,11 @@ class SearchOrchestratorConcurrencyTests {
 
 	@Test
 	void coldFollowerTimesOutWithoutCallingTheProviderAndRecoversFromTheLeaderSnapshot() throws Exception {
-		SearchCommand command = command("cold timeout " + UUID.randomUUID(), false);
+		SearchCommand base = command("cold timeout " + UUID.randomUUID(), false);
+		SearchCommand command = new SearchCommand(
+				base.query(), base.yearFrom(), base.yearTo(), base.documentTypes(),
+				base.openAccessOnly(), base.minimumCitations(), base.languages(), base.pageSize(),
+				base.cursor(), base.forceRefresh(), SearchMode.ONLINE);
 		String fingerprint = fingerprinter.fingerprint(command);
 
 		try (BlockedSearchRun leader = startBlockedSearch(command)) {

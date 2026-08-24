@@ -11,15 +11,17 @@ import java.util.stream.Collectors;
 
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchFingerprintVersion;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 class QueryFingerprinter {
 
-	static final int FINGERPRINT_VERSION = 1;
+	static final int FINGERPRINT_VERSION = SearchFingerprintVersion.CURRENT;
 	static final String OPENALEX_PIPELINE_VERSION = "openalex-v1";
 	static final String FANOUT_PIPELINE_VERSION = "provider-fanout-v1";
+	static final String LOCAL_PIPELINE_VERSION = "local-catalog-v1";
 
 	private final QueryNormalizer normalizer;
 	private final List<ProviderId> providers;
@@ -49,6 +51,23 @@ class QueryFingerprinter {
 	}
 
 	String fingerprint(SearchCommand command) {
+		return onlineFingerprint(command);
+	}
+
+	String onlineFingerprint(SearchCommand command) {
+		return fingerprint(command, pipelineVersion(), command.cursor(), true);
+	}
+
+	String localFingerprint(SearchCommand command) {
+		return fingerprint(command, LOCAL_PIPELINE_VERSION, command.cursor(), false);
+	}
+
+	String localScopeFingerprint(SearchCommand command) {
+		return fingerprint(command, LOCAL_PIPELINE_VERSION, "*", false);
+	}
+
+	private String fingerprint(
+			SearchCommand command, String selectedPipelineVersion, String selectedCursor, boolean includeProviders) {
 		String types = command.documentTypes().stream()
 				.map(Enum::name)
 				.sorted()
@@ -57,11 +76,12 @@ class QueryFingerprinter {
 				.sorted()
 				.collect(Collectors.joining(","));
 		String cursor = Base64.getUrlEncoder().withoutPadding()
-				.encodeToString(command.cursor().getBytes(StandardCharsets.UTF_8));
+				.encodeToString(selectedCursor.getBytes(StandardCharsets.UTF_8));
 		String providerSet = providers.stream().map(ProviderId::name).collect(Collectors.joining(","));
-		String canonical = String.join("\n",
+		var fields = new java.util.ArrayList<>(List.of(
 				"fingerprintVersion=" + FINGERPRINT_VERSION,
-				"pipelineVersion=" + pipelineVersion(),
+				"pipelineVersion=" + selectedPipelineVersion,
+				"mode=" + command.mode().name(),
 				"query=" + normalizedQuery(command),
 				"yearFrom=" + nullable(command.yearFrom()),
 				"yearTo=" + nullable(command.yearTo()),
@@ -70,8 +90,11 @@ class QueryFingerprinter {
 				"minimumCitations=" + command.minimumCitations(),
 				"languages=" + languages,
 				"pageSize=" + command.pageSize(),
-				"cursor=" + cursor,
-				"providers=" + providerSet);
+				"cursor=" + cursor));
+		if (includeProviders) {
+			fields.add("providers=" + providerSet);
+		}
+		String canonical = String.join("\n", fields);
 		try {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 			return HexFormat.of().formatHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
@@ -89,6 +112,10 @@ class QueryFingerprinter {
 		return providers.equals(List.of(ProviderId.OPENALEX))
 				? OPENALEX_PIPELINE_VERSION
 				: FANOUT_PIPELINE_VERSION;
+	}
+
+	String localPipelineVersion() {
+		return LOCAL_PIPELINE_VERSION;
 	}
 
 	private static String nullable(Object value) {

@@ -16,6 +16,8 @@ final class SearchApiMapper {
 				view.query(),
 				view.queryFingerprint(),
 				view.cacheDisposition(),
+				view.requestedMode(),
+				view.executionSource(),
 				view.searchedAt(),
 				view.freshUntil(),
 				view.nextCursor(),

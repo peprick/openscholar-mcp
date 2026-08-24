@@ -11,7 +11,17 @@ import {
 import { Badge } from "@/shared/ui/badge";
 
 function matchReasonLabel(feature: string): string {
-  if (feature === "TEXT_RELEVANCE") return "Similar words in the title or abstract";
+  if (feature === "TITLE_EXACT" || feature === "TITLE_PREFIX") {
+    return "The title closely matches your topic";
+  }
+  if (
+    feature === "TEXT_RELEVANCE" ||
+    feature === "POSTGRES_FULL_TEXT" ||
+    feature === "ABSTRACT_MATCH"
+  ) {
+    return "Similar words in the title or abstract";
+  }
+  if (feature === "AUTHOR_MATCH") return "An author matches your search";
   if (feature === "CITATION_SIGNAL") return "Frequently cited paper";
   if (feature === "PROVIDER_RECIPROCAL_RANK_FUSION") {
     return "Appears across research sources";

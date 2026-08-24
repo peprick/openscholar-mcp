@@ -111,7 +111,7 @@ class McpProtocolIntegrationTests {
 
 		assertToolContract(tools.get("search_research"),
 				Set.of("topic", "yearFrom", "yearTo", "documentTypes", "openAccessOnly", "minimumCitations",
-						"languages", "limit", "cursor", "forceRefresh"),
+						"languages", "limit", "cursor", "forceRefresh", "mode"),
 				Set.of("topic"), false, false, true);
 		assertToolContract(tools.get("get_paper_details"), Set.of("paperId"), Set.of("paperId"), true, true, false);
 		assertToolContract(tools.get("get_legal_full_text"), Set.of("paperId"), Set.of("paperId"), true, true, false);
@@ -125,6 +125,8 @@ class McpProtocolIntegrationTests {
 			.isEqualTo("string");
 		assertThat(inputProperty(tools.get("search_research"), "documentTypes").required("type").asString())
 			.isEqualTo("array");
+		assertThat(inputProperty(tools.get("search_research"), "mode").required("type").asString())
+			.isEqualTo("string");
 		assertThat(inputProperty(tools.get("get_paper_details"), "paperId").required("type").asString())
 			.isEqualTo("string");
 		assertThat(inputProperty(tools.get("get_legal_full_text"), "paperId").required("type").asString())
@@ -134,6 +136,8 @@ class McpProtocolIntegrationTests {
 
 		JsonNode searchOutput = tools.get("search_research").required("outputSchema");
 		assertThat(arrayValues(searchOutput.required("required"))).doesNotContain("nextCursor");
+		assertThat(arrayValues(searchOutput.required("required")))
+			.contains("requestedMode", "executionSource");
 		JsonNode searchItem = searchOutput.required("properties").required("results").required("items");
 		assertThat(arrayValues(searchItem.required("required"))).doesNotContain(
 				"abstractText", "publicationDate", "publicationYear", "language", "venueName", "citationCount",
@@ -152,6 +156,9 @@ class McpProtocolIntegrationTests {
 				"issn", "degree");
 		JsonNode authorItem = searchItem.required("properties").required("authors").required("items");
 		assertThat(arrayValues(authorItem.required("required"))).doesNotContain("orcid", "openAlexId");
+		JsonNode provenanceItem = searchItem.required("properties").required("provenance").required("items");
+		assertThat(arrayValues(provenanceItem.required("required")))
+			.containsExactlyInAnyOrder("provider", "providerRecordId", "retrievedAt");
 	}
 
 	@Test
@@ -169,6 +176,10 @@ class McpProtocolIntegrationTests {
 		JsonNode successfulResult = successful.required("result");
 		assertThat(successfulResult.path("isError").asBoolean(false)).isFalse();
 		assertThat(successfulResult.required("structuredContent").required("query").asString()).isEqualTo(topic);
+		assertThat(successfulResult.required("structuredContent").required("requestedMode").asString())
+			.isEqualTo("AUTO");
+		assertThat(successfulResult.required("structuredContent").required("executionSource").asString())
+			.isEqualTo("PROVIDER_FETCH");
 		JsonNode searchResult = successfulResult.required("structuredContent").required("results").required(0);
 		assertThat(searchResult.required("title").asString()).isEqualTo("Deterministic MCP paper");
 		assertThat(successfulResult.required("structuredContent").has("nextCursor")).isFalse();
@@ -192,6 +203,9 @@ class McpProtocolIntegrationTests {
 		assertThat(searchResult.has("providerLandingPageUrl")).isFalse();
 		assertThat(searchResult.has("providerReportedPdfUrl")).isFalse();
 		assertThat(searchResult.has("score")).isFalse();
+		assertThat(searchResult.required("provenance")).hasSize(1);
+		assertThat(searchResult.required("provenance").required(0).required("provider").asString())
+			.isEqualTo("OPENALEX");
 		assertThat(searchResult.required("authors").required(0).has("orcid")).isFalse();
 		assertThat(searchResult.required("authors").required(0).has("openAlexId")).isFalse();
 		assertThat(researchProvider.calls()).isEqualTo(1);

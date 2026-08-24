@@ -17,6 +17,7 @@ import com.openscholar.jobs.ResearchRefreshJobStatus;
 import com.openscholar.jobs.ResearchRefreshJobTrigger;
 import com.openscholar.jobs.ResearchRefreshJobType;
 import com.openscholar.jobs.ResearchRefreshJobView;
+import com.openscholar.search.SearchFingerprintVersion;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -325,12 +326,15 @@ class ResearchRefreshJobStore {
 				           id, owner_id, fingerprint, fresh_until, searched_at
 				    FROM search_snapshot
 				    WHERE status = 'COMPLETED'
+				      AND result_origin = 'PROVIDER'
+				      AND fingerprint_version = :fingerprintVersion
 				    ORDER BY owner_id, fingerprint, searched_at DESC, id DESC
 				) latest
 				WHERE latest.fresh_until <= :now
 				ORDER BY latest.fresh_until, latest.id
 				LIMIT :limit
 				""")
+				.param("fingerprintVersion", SearchFingerprintVersion.CURRENT)
 				.param("now", databaseTime(now))
 				.param("limit", limit)
 				.query(UUID.class)

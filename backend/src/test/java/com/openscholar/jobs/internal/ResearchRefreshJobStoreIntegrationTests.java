@@ -14,6 +14,7 @@ import com.openscholar.jobs.ResearchRefreshJobNotRetryableException;
 import com.openscholar.jobs.ResearchRefreshJobStatus;
 import com.openscholar.jobs.ResearchRefreshJobTrigger;
 import com.openscholar.jobs.ResearchRefreshJobType;
+import com.openscholar.search.SearchFingerprintVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -170,7 +171,7 @@ class ResearchRefreshJobStoreIntegrationTests {
 	}
 
 	@Test
-	void selectsOnlyLatestStaleSearchesAndStaleAccessResolutions() {
+	void selectsOnlyLatestStaleProviderSearchesAndStaleAccessResolutions() {
 		UUID paperId = insertPaper("Stale access paper");
 		insertAccessResolution(paperId, NOW.minusSeconds(1));
 		UUID freshPaperId = insertPaper("Fresh access paper");
@@ -181,6 +182,15 @@ class ResearchRefreshJobStoreIntegrationTests {
 		insertSearchSnapshot(refreshedFingerprint, NOW.minusSeconds(2), NOW.plusSeconds(30));
 		String staleFingerprint = "b".repeat(64);
 		UUID staleSearchId = insertSearchSnapshot(staleFingerprint, NOW.minusSeconds(20), NOW.minusSeconds(1));
+		UUID staleLocalSearchId = insertSearchSnapshot(
+				"c".repeat(64), NOW.minusSeconds(20), NOW.minusSeconds(1));
+		jdbcTemplate.update("""
+				UPDATE search_snapshot
+				SET requested_mode = 'LOCAL', result_origin = 'LOCAL_CATALOG'
+				WHERE id = ?
+				""", staleLocalSearchId);
+		insertSearchSnapshot(
+				"d".repeat(64), NOW.minusSeconds(20), NOW.minusSeconds(1), 1);
 
 		assertThat(store.staleAccessTargets(NOW, 10)).containsExactly(paperId);
 		assertThat(store.staleSearchTargets(NOW, 10)).containsExactly(staleSearchId);
@@ -211,6 +221,12 @@ class ResearchRefreshJobStoreIntegrationTests {
 	}
 
 	private UUID insertSearchSnapshot(String fingerprint, Instant searchedAt, Instant freshUntil) {
+		return insertSearchSnapshot(
+				fingerprint, searchedAt, freshUntil, SearchFingerprintVersion.CURRENT);
+	}
+
+	private UUID insertSearchSnapshot(
+			String fingerprint, Instant searchedAt, Instant freshUntil, int fingerprintVersion) {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update("""
 				INSERT INTO search_snapshot (
@@ -219,10 +235,10 @@ class ResearchRefreshJobStoreIntegrationTests {
 				    provider_coverage, warnings, total_provider_matches, result_count,
 				    next_cursor, created_at
 				)
-				VALUES (?, '00000000-0000-0000-0000-000000000001', 'durable jobs', 'durable jobs', ?, 1, 'test-v1',
+				VALUES (?, '00000000-0000-0000-0000-000000000001', 'durable jobs', 'durable jobs', ?, ?, 'test-v1',
 				        '{"documentTypes":[],"openAccessOnly":false,"minimumCitations":0,"languages":[],"pageSize":20,"cursor":"*"}'::jsonb,
 				        'COMPLETED', ?, ?, '[]'::jsonb, '[]'::jsonb, 0, 0, NULL, ?)
-				""", id, fingerprint, databaseTime(searchedAt), databaseTime(freshUntil),
+				""", id, fingerprint, fingerprintVersion, databaseTime(searchedAt), databaseTime(freshUntil),
 				databaseTime(searchedAt));
 		return id;
 	}

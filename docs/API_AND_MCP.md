@@ -43,13 +43,22 @@ Example:
   },
   "pageSize": 20,
   "cursor": "opaque cursor returned by a previous response, or omit",
-  "forceRefresh": false
+  "forceRefresh": false,
+  "mode": "AUTO"
 }
 ```
 
-Responses include search ID, query fingerprint, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, and pagination.
+`mode` is optional and defaults to `AUTO`:
 
-The implemented backend returns `201 Created` for a newly fetched immutable snapshot and `200 OK` for an exact cache hit or stale fallback. `GET /api/v1/searches/{searchId}` reads the current owner's stored snapshot without contacting a provider. `POST /api/v1/searches/{searchId}/next` derives the continuation from that immutable snapshot: it reuses the stored query, filters, and page size, replaces the current cursor with the stored opaque multi-provider continuation, and disables forced refresh. A newly fetched continuation returns `201`; replaying a fresh continuation returns `200 EXACT_HIT`; a missing or other-owner source snapshot returns `404 SEARCH_NOT_FOUND`; and a snapshot without another page returns `409 SEARCH_PAGE_EXHAUSTED`. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, and `STALE_FALLBACK`.
+- `AUTO` keeps the normal provider/cache pipeline and uses the owner-scoped local catalog only when provider-backed results cannot satisfy the request.
+- `ONLINE` uses provider-backed fetch/cache behavior and never falls back to local-catalog retrieval. Use `forceRefresh=true` when a live provider call, rather than an exact fresh cache hit, is required.
+- `LOCAL` searches previously discovered or saved metadata in PostgreSQL and never contacts a provider. `forceRefresh=true` is invalid in this mode.
+
+Responses include search ID, query fingerprint, the requested mode, actual execution source, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, provenance, and pagination. `executionSource` is one of `PROVIDER_FETCH`, `EXACT_CACHE`, `STALE_CACHE`, or `LOCAL_CATALOG`; it is the authoritative indication of how the response was produced and can differ from `requestedMode=AUTO`.
+
+The implemented backend returns `201 Created` for a newly fetched or locally generated immutable snapshot and `200 OK` for an exact cache hit or stale provider fallback. `GET /api/v1/searches/{searchId}` reads the current owner's stored snapshot without contacting a provider. `POST /api/v1/searches/{searchId}/next` derives the continuation from that immutable snapshot: it reuses the stored query, filters, and page size, replaces the current cursor with the stored opaque continuation, and disables forced refresh. A local snapshot continues locally even when its original request used `AUTO`, so a local cursor is never sent to a provider after connectivity returns. A newly created continuation returns `201`; replaying a fresh continuation returns `200 EXACT_HIT`; a missing or other-owner source snapshot returns `404 SEARCH_NOT_FOUND`; and a snapshot without another page returns `409 SEARCH_PAGE_EXHAUSTED`. Current cache dispositions are `EXACT_HIT`, `MISS_FETCHED`, `STALE_REFRESHED`, `FORCED_REFRESH`, `STALE_FALLBACK`, and `LOCAL_RESULT`.
+
+Local-catalog eligibility is owner-scoped: hosted users can discover canonical papers they previously received in a search snapshot or saved in a collection, while the fixed local user searches its own catalog. A local response has empty `providerCoverage`; each result still carries deterministic stored provider provenance and its retrieval time so database retrieval is not mistaken for newly refreshed metadata. `LOCAL_RESULT` and `LOCAL_CATALOG` do not claim that external links are reachable or current. Open-access-only local filtering uses stored provider-reported evidence, not a new legal-access verification.
 
 OpenAlex is enabled by default. DataCite, DOAJ, and CORE are operator opt-ins; CORE additionally requires the licence-confirmation guard. Enabled providers run concurrently. A successful provider is preserved when another fails, coverage/warnings describe both outcomes, exact identifiers merge duplicate works, and a multi-provider page is ranked by deterministic reciprocal-rank fusion with provider contributions retained. DataCite is thesis/dissertation metadata-only discovery and never returns a discovery PDF or open-access claim.
 
@@ -165,13 +174,13 @@ The implemented transport is stateless Streamable HTTP through `spring-ai-starte
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Local mode requires the configured MCP bearer key. OIDC mode delegates bearer validation to the JWT resource server and requires `openscholar.mcp`; present `Origin` headers must still exactly match the configured allow-list.
 
-The adapter registers five read-oriented tools. Search may contact the enabled discovery-provider set and update internal metadata/search caches. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+The adapter registers five read-oriented tools. `search_research` in `AUTO` or `ONLINE` mode may contact the enabled discovery-provider set and update internal metadata/search caches; `LOCAL` is database-only but still stores an immutable owned snapshot. Because MCP annotations describe the whole tool rather than one invocation, `search_research` retains `readOnlyHint=false`, `idempotentHint=false`, and `openWorldHint=true` for every mode. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
 ### `search_research`
 
-Finds cached and provider-backed research.
+Finds provider-backed, cached, or owner-scoped local research metadata.
 
 ```json
 {
@@ -184,11 +193,12 @@ Finds cached and provider-backed research.
   "languages": ["en"],
   "limit": 20,
   "cursor": "opaque cursor from an earlier response, or omit",
-  "forceRefresh": false
+  "forceRefresh": false,
+  "mode": "AUTO"
 }
 ```
 
-Output includes canonical paper IDs, nullable typed publication metadata (publisher/institution, volume/issue, pages or article number, edition, ISBN/ISSN, and degree), provider-reported access hints, ranking reasons, provider provenance, cache disposition, freshness, warnings, and the next cursor. Provider-reported PDF links are not verified legal-access claims; use stored access output from `get_legal_full_text` after verification through REST/UI.
+Output includes canonical paper IDs, nullable typed publication metadata (publisher/institution, volume/issue, pages or article number, edition, ISBN/ISSN, and degree), provider-reported access hints, ranking reasons, full contributing-provider provenance, requested mode, actual execution source, cache disposition, freshness, warnings, and the next cursor. The existing primary provider fields remain for compatibility; `provenance` is the complete contribution list. Provider-reported PDF links are not verified legal-access claims; use stored access output from `get_legal_full_text` after verification through REST/UI.
 
 ### `get_paper_details`
 

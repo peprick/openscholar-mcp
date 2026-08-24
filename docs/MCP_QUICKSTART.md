@@ -73,7 +73,7 @@ Version `2.2.0` is the Inspector release used for the documented smoke test; upg
 
 | Tool | Behavior | External provider call |
 |---|---|---|
-| `search_research` | Searches or reuses a bounded scholarly snapshot; returns canonical IDs, ranking rationale, provenance, warnings, and a cursor. | Possible |
+| `search_research` | Searches or reuses a bounded owner-scoped scholarly snapshot; returns canonical IDs, requested mode, actual execution source, ranking rationale, full provider provenance, warnings, and a cursor. | Possible in `AUTO`/`ONLINE`; never in `LOCAL` |
 | `get_paper_details` | Reads canonical metadata, identifiers, provenance, freshness, and the full stored access resolution for one OpenScholar UUID. | No |
 | `get_legal_full_text` | Reads the stored legal-access resolution and verified links. `NOT_YET_RESOLVED` means the REST/UI verification flow has not run yet. | No |
 | `search_saved_library` | Searches the current owner's saved memberships by text, collection, status, and normalized tag. Local mode uses the fixed bootstrap owner; hosted mode derives it from issuer+subject. | No |
@@ -138,11 +138,14 @@ A search call uses the same endpoint:
       "documentTypes": ["ARTICLE", "PREPRINT"],
       "openAccessOnly": true,
       "languages": ["en"],
-      "limit": 10
+      "limit": 10,
+      "mode": "AUTO"
     }
   }
 }
 ```
+
+`mode` is optional and defaults to `AUTO`. Use `LOCAL` for a database-only search over metadata previously visible to the current owner, or `ONLINE` to forbid local-catalog fallback. `forceRefresh=true` is incompatible with `LOCAL`. Read `executionSource` (`PROVIDER_FETCH`, `EXACT_CACHE`, `STALE_CACHE`, or `LOCAL_CATALOG`) rather than inferring provider activity from the requested mode. A local result retains stored provider provenance and its retrieval time; it does not imply that the provider was contacted or that external links are currently reachable.
 
 ## Compatibility and safety
 

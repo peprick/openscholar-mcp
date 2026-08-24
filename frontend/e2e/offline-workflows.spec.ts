@@ -142,6 +142,39 @@ test("search keeps diagnostics private while preserving useful next-page context
   await expect(page.getByText("Miss Fetched", { exact: true })).toHaveCount(0);
 });
 
+test("local search stays useful and plainly labelled without external traffic", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("searchbox", { name: "Research topic" })
+    .fill("graph neural networks for drug discovery");
+
+  const searchRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/searches") &&
+      request.method() === "POST",
+  );
+  await page.getByRole("button", { name: "Search locally" }).click();
+
+  const request = await searchRequest;
+  expect(request.postDataJSON()).toMatchObject({ mode: "LOCAL" });
+  await expect(page).toHaveURL(`/searches/${ids.search}`);
+  await expect(page.getByLabel("Search notice")).toContainText("Local results.");
+  await expect(page.getByLabel("Search notice")).toContainText(
+    "already saved or previously discovered",
+  );
+  await expect(
+    page.getByText(/1 previously discovered paper shown/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Some research sources could not be reached."),
+  ).toHaveCount(0);
+  await expect(page.getByText("LOCAL_RESULT", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Provider coverage")).toHaveCount(0);
+  await expectNoSeriousAccessibilityViolations(page);
+});
+
 test("paper sources distinguish readable links from restricted access", async ({
   page,
 }) => {

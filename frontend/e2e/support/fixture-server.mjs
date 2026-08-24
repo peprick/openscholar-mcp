@@ -83,6 +83,7 @@ const pdf = buildPdf();
 function initialState() {
   return {
     query: "graph neural networks for drug discovery",
+    searchMode: "AUTO",
     collections: [
       {
         collectionId: ids.collection,
@@ -168,30 +169,43 @@ function searchResult({ rank, paperId, restricted = false }) {
 }
 
 function searchResponse(searchId, nextPage = false) {
+  const local = state.searchMode === "LOCAL";
   return {
     searchId,
     query: state.query,
     queryFingerprint:
       "90ff4c90bc8c9f06583d33a443f923f65d28ac04147b9ad8cf9a64221759c0de",
-    cacheDisposition: nextPage ? "MISS_FETCHED" : "EXACT_HIT",
+    requestedMode: state.searchMode,
+    executionSource: local
+      ? "LOCAL_CATALOG"
+      : nextPage
+        ? "PROVIDER_FETCH"
+        : "EXACT_CACHE",
+    cacheDisposition: local
+      ? "LOCAL_RESULT"
+      : nextPage
+        ? "MISS_FETCHED"
+        : "EXACT_HIT",
     searchedAt: "2026-08-20T09:20:00Z",
     freshUntil: "2026-08-20T10:20:00Z",
     nextCursor: nextPage ? null : "offline-next-page",
-    providerCoverage: [
-      {
-        provider: "OPENALEX",
-        status: "SUCCESS",
-        returnedCount: 1,
-        totalMatches: 428,
-      },
-      {
-        provider: "CROSSREF",
-        status: "DEGRADED",
-        returnedCount: 0,
-        totalMatches: 0,
-      },
-    ],
-    warnings: ["CROSSREF_SYNTHETIC_FAILURE"],
+    providerCoverage: local
+      ? []
+      : [
+          {
+            provider: "OPENALEX",
+            status: "SUCCESS",
+            returnedCount: 1,
+            totalMatches: 428,
+          },
+          {
+            provider: "CROSSREF",
+            status: "DEGRADED",
+            returnedCount: 0,
+            totalMatches: 0,
+          },
+        ],
+    warnings: local ? [] : ["CROSSREF_SYNTHETIC_FAILURE"],
     results: [
       nextPage
         ? searchResult({
@@ -540,6 +554,9 @@ async function handle(request, response) {
   if (path === "/api/v1/searches" && request.method === "POST") {
     const body = await requestBody(request);
     if (typeof body.query === "string") state.query = body.query.trim();
+    state.searchMode = ["AUTO", "ONLINE", "LOCAL"].includes(body.mode)
+      ? body.mode
+      : "AUTO";
     json(response, 201, searchResponse(ids.search), {
       location: `/api/v1/searches/${ids.search}`,
     });

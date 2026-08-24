@@ -31,6 +31,9 @@ import com.openscholar.search.ProviderContributionView;
 import com.openscholar.search.ProviderCoverageView;
 import com.openscholar.search.RankingReason;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
+import com.openscholar.search.SearchResultOrigin;
 import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchView;
 import org.springframework.stereotype.Component;
@@ -55,9 +58,10 @@ public class SearchSnapshotStore {
 	}
 
 	@Transactional(readOnly = true)
-	public Optional<LatestSnapshot> findLatest(UUID ownerId, String fingerprint) {
+	public Optional<LatestSnapshot> findLatestProvider(UUID ownerId, String fingerprint) {
 		return snapshotRepository
-				.findFirstByOwnerIdAndFingerprintAndStatusOrderBySearchedAtDesc(ownerId, fingerprint, COMPLETED)
+				.findFirstByOwnerIdAndFingerprintAndResultOriginAndStatusOrderBySearchedAtDesc(
+						ownerId, fingerprint, SearchResultOrigin.PROVIDER.name(), COMPLETED)
 				.map(snapshot -> new LatestSnapshot(snapshot.freshUntil(), toView(snapshot, CacheDisposition.EXACT_HIT)));
 	}
 
@@ -78,7 +82,8 @@ public class SearchSnapshotStore {
 	@Transactional(readOnly = true)
 	public Optional<StoredSearch> findStoredSearch(UUID searchId) {
 		return snapshotRepository.findByIdAndStatus(searchId, COMPLETED)
-				.map(snapshot -> new StoredSearch(snapshot.ownerId(), storedCommand(snapshot)));
+				.map(snapshot -> new StoredSearch(
+						snapshot.ownerId(), storedCommand(snapshot), snapshot.resultOrigin()));
 	}
 
 	@Transactional
@@ -135,6 +140,8 @@ public class SearchSnapshotStore {
 				fingerprintVersion,
 				pipelineVersion,
 				filters(command),
+				command.mode(),
+				SearchResultOrigin.PROVIDER,
 				providerResult.retrievedAt(),
 				freshUntil,
 				coverage,
@@ -171,6 +178,60 @@ public class SearchSnapshotStore {
 		return toView(snapshot, results, disposition);
 	}
 
+	@Transactional
+	public SearchView storeLocal(
+			UUID ownerId,
+			SearchCommand command,
+			String normalizedQuery,
+			String fingerprint,
+			int fingerprintVersion,
+			String pipelineVersion,
+			Instant searchedAt,
+			String nextCursor,
+			List<String> warnings,
+			List<SearchResultView> localResults) {
+		SearchSnapshotEntity snapshot = SearchSnapshotEntity.completed(
+				ownerId,
+				command.query(),
+				normalizedQuery,
+				fingerprint,
+				fingerprintVersion,
+				pipelineVersion,
+				filters(command),
+				command.mode(),
+				SearchResultOrigin.LOCAL_CATALOG,
+				searchedAt,
+				searchedAt,
+				List.of(),
+				warnings,
+				0L,
+				localResults.size(),
+				nextCursor);
+		snapshotRepository.saveAndFlush(snapshot);
+
+		List<SearchResultEntity> persisted = localResults.stream()
+				.map(result -> SearchResultEntity.create(
+						snapshot.id(),
+						result.paper(),
+						result.rank(),
+						result.score(),
+						result.reportedOpenAccess(),
+						toString(result.landingPageUrl()),
+						toString(result.pdfUrl()),
+						result.rankingReasons().stream()
+								.map(reason -> rankingReasonMap(reason.feature(), reason.value()))
+								.toList(),
+						result.providerContributions().stream()
+								.map(SearchSnapshotStore::contributionMap)
+								.toList(),
+						result.provider().name(),
+						result.providerRecordId(),
+						result.retrievedAt()))
+				.toList();
+		resultRepository.saveAllAndFlush(persisted);
+		return toView(snapshot, persisted, CacheDisposition.LOCAL_RESULT);
+	}
+
 	private SearchView toView(SearchSnapshotEntity snapshot, CacheDisposition disposition) {
 		List<SearchResultEntity> results = resultRepository.findAllBySearchIdOrderByResultRank(snapshot.id());
 		return toView(snapshot, results, disposition);
@@ -189,6 +250,8 @@ public class SearchSnapshotStore {
 				snapshot.originalQuery(),
 				snapshot.fingerprint(),
 				disposition,
+				snapshot.requestedMode(),
+				executionSource(snapshot.resultOrigin(), disposition),
 				snapshot.searchedAt(),
 				snapshot.freshUntil(),
 				snapshot.nextCursor(),
@@ -341,6 +404,20 @@ public class SearchSnapshotStore {
 				"retrievedAt", contribution.retrievedAt().toString());
 	}
 
+	private static Map<String, Object> contributionMap(ProviderContributionView contribution) {
+		return Map.of(
+				"provider", contribution.provider().name(),
+				"providerRecordId", contribution.providerRecordId(),
+				"retrievedAt", contribution.retrievedAt().toString());
+	}
+
+	private static Map<String, Object> rankingReasonMap(String feature, Double value) {
+		Map<String, Object> reason = new LinkedHashMap<>();
+		reason.put("feature", feature);
+		reason.put("value", value);
+		return reason;
+	}
+
 	private static ProviderContributionView contributionView(Map<String, Object> contribution) {
 		return new ProviderContributionView(
 				ProviderId.valueOf(String.valueOf(contribution.get("provider"))),
@@ -362,6 +439,7 @@ public class SearchSnapshotStore {
 		filters.put("languages", command.languages().stream().sorted().toList());
 		filters.put("pageSize", command.pageSize());
 		filters.put("cursor", command.cursor());
+		filters.put("mode", command.mode().name());
 		return filters;
 	}
 
@@ -377,7 +455,8 @@ public class SearchSnapshotStore {
 				strings(filters.get("languages"), "languages"),
 				requiredInteger(filters, "pageSize"),
 				requiredString(filters, "cursor"),
-				false);
+				false,
+				snapshot.requestedMode());
 	}
 
 	private static Integer nullableInteger(Map<String, Object> values, String key) {
@@ -453,6 +532,18 @@ public class SearchSnapshotStore {
 				.toList();
 	}
 
+	private static SearchExecutionSource executionSource(
+			SearchResultOrigin origin, CacheDisposition disposition) {
+		if (origin == SearchResultOrigin.LOCAL_CATALOG) {
+			return SearchExecutionSource.LOCAL_CATALOG;
+		}
+		return switch (disposition) {
+			case EXACT_HIT -> SearchExecutionSource.EXACT_CACHE;
+			case STALE_FALLBACK -> SearchExecutionSource.STALE_CACHE;
+			default -> SearchExecutionSource.PROVIDER_FETCH;
+		};
+	}
+
 	private static URI parseHttpUri(String value) {
 		if (value == null || value.isBlank()) {
 			return null;
@@ -511,11 +602,13 @@ public class SearchSnapshotStore {
 					currentCommand.languages(),
 					currentCommand.pageSize(),
 					nextCursor,
-					false);
+					false,
+					currentCommand.mode());
 		}
 	}
 
-	public record StoredSearch(UUID ownerId, SearchCommand command) {
+	public record StoredSearch(
+			UUID ownerId, SearchCommand command, SearchResultOrigin resultOrigin) {
 	}
 
 	private static final class CandidateAccumulator {

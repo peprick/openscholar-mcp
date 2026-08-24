@@ -62,10 +62,14 @@ paths:
       operationId: createSearch
       summary: Search scholarly metadata
       description: |
-        Searches enabled metadata providers with bounded filters and stores an immutable,
-        principal-owned snapshot. A newly fetched snapshot returns `201`; an exact fresh
-        cache hit or stale fallback returns `200`. Partial provider success remains a
-        successful response and is described by `providerCoverage` and `warnings`.
+        Searches with the requested `AUTO`, `ONLINE`, or `LOCAL` execution mode and stores
+        an immutable, principal-owned snapshot. `AUTO` retains the provider/cache behavior
+        and falls back to the owner-scoped local catalog only when provider-backed data
+        cannot satisfy the request. `ONLINE` never falls back to local catalog retrieval;
+        `LOCAL` never contacts a provider. A newly fetched or locally generated snapshot
+        returns `201`; an exact cache hit or stale provider fallback returns `200`. Partial
+        provider success remains a successful response and is described by
+        `providerCoverage` and `warnings`.
       security:
         - HostedOidc: [openscholar.search]
       requestBody:
@@ -109,10 +113,11 @@ paths:
       operationId: createNextSearchPage
       summary: Continue an immutable search snapshot
       description: |
-        Reuses the current principal's stored query, filters, page size, and opaque next
-        cursor. A newly fetched continuation returns `201`; replaying a fresh continuation
-        may return `200`. A missing or other-principal source snapshot returns
-        `SEARCH_NOT_FOUND`; an exhausted snapshot returns `SEARCH_PAGE_EXHAUSTED`.
+        Reuses the current principal's stored query, filters, execution mode, page size,
+        and opaque next cursor. A local snapshot always continues locally, even when the
+        original request used AUTO. A newly created continuation returns `201`; replaying
+        a fresh continuation may return `200`. A missing or other-principal source snapshot
+        returns `SEARCH_NOT_FOUND`; an exhausted snapshot returns `SEARCH_PAGE_EXHAUSTED`.
       security:
         - HostedOidc: [openscholar.search]
       responses:
@@ -1018,7 +1023,18 @@ components:
       enum: [CORE, DATACITE, DOAJ, OPENALEX]
     CacheDisposition:
       type: string
-      enum: [EXACT_HIT, MISS_FETCHED, STALE_REFRESHED, FORCED_REFRESH, STALE_FALLBACK]
+      enum: [EXACT_HIT, MISS_FETCHED, STALE_REFRESHED, FORCED_REFRESH, STALE_FALLBACK, LOCAL_RESULT]
+    SearchMode:
+      type: string
+      enum: [AUTO, ONLINE, LOCAL]
+      default: AUTO
+      description: |
+        AUTO may use provider-backed cache/fetch behavior and then a local-catalog fallback.
+        ONLINE never uses local-catalog fallback. LOCAL is database-only.
+    SearchExecutionSource:
+      type: string
+      enum: [PROVIDER_FETCH, EXACT_CACHE, STALE_CACHE, LOCAL_CATALOG]
+      description: Actual source used for this response, independent of the requested mode.
     ReadingStatus:
       type: string
       enum: [UNREAD, READING, COMPLETED]
@@ -1188,10 +1204,17 @@ components:
         cursor:
           type: [string, "null"]
           maxLength: 4096
-          description: Opaque provider cursor; omit for a first page.
+          description: Opaque mode-specific cursor; omit for a first page and never construct one client-side.
         forceRefresh:
           type: [boolean, "null"]
           default: false
+          description: Bypasses an exact fresh provider cache entry. Incompatible with LOCAL mode.
+        mode:
+          oneOf:
+            - $ref: "#/components/schemas/SearchMode"
+            - type: "null"
+          default: AUTO
+          description: Omit or use null for AUTO behavior.
       additionalProperties: false
     SearchFilters:
       type: object
@@ -1235,6 +1258,8 @@ components:
         - searchId
         - query
         - queryFingerprint
+        - requestedMode
+        - executionSource
         - cacheDisposition
         - searchedAt
         - freshUntil
@@ -1249,6 +1274,10 @@ components:
           type: string
         queryFingerprint:
           type: string
+        requestedMode:
+          $ref: "#/components/schemas/SearchMode"
+        executionSource:
+          $ref: "#/components/schemas/SearchExecutionSource"
         cacheDisposition:
           $ref: "#/components/schemas/CacheDisposition"
         searchedAt:
@@ -1259,6 +1288,7 @@ components:
           $ref: "#/components/schemas/NullableString"
         providerCoverage:
           type: array
+          description: Empty for LOCAL_CATALOG execution; otherwise records enabled-provider outcomes.
           items:
             $ref: "#/components/schemas/SearchProviderCoverage"
         warnings:
@@ -2305,12 +2335,25 @@ components:
       additionalProperties: false
     PrivacySearch:
       type: object
-      required: [searchId, query, filters, searchedAt, freshUntil, resultCount, warnings]
+      required:
+        - searchId
+        - query
+        - requestedMode
+        - executionSource
+        - filters
+        - searchedAt
+        - freshUntil
+        - resultCount
+        - warnings
       properties:
         searchId:
           $ref: "#/components/schemas/Uuid"
         query:
           type: string
+        requestedMode:
+          $ref: "#/components/schemas/SearchMode"
+        executionSource:
+          $ref: "#/components/schemas/SearchExecutionSource"
         filters:
           $ref: "#/components/schemas/PrivacySearchFilters"
         searchedAt:

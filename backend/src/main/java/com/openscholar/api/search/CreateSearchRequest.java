@@ -4,6 +4,7 @@ import java.util.Set;
 
 import com.openscholar.paper.DocumentType;
 import com.openscholar.search.SearchCommand;
+import com.openscholar.search.SearchMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
@@ -17,7 +18,8 @@ public record CreateSearchRequest(
 		@Valid Filters filters,
 		@Min(1) @Max(50) Integer pageSize,
 		@Size(max = 4096) String cursor,
-		Boolean forceRefresh) {
+		Boolean forceRefresh,
+		SearchMode mode) {
 
 	SearchCommand toCommand() {
 		Filters effectiveFilters = filters == null ? Filters.defaults() : filters;
@@ -31,7 +33,13 @@ public record CreateSearchRequest(
 				effectiveFilters.safeLanguages(),
 				pageSize == null ? 20 : pageSize,
 				cursor,
-				Boolean.TRUE.equals(forceRefresh));
+				Boolean.TRUE.equals(forceRefresh),
+				mode == null ? SearchMode.AUTO : mode);
+	}
+
+	@AssertTrue(message = "forceRefresh cannot be used with LOCAL mode")
+	public boolean isRefreshModeValid() {
+		return mode != SearchMode.LOCAL || !Boolean.TRUE.equals(forceRefresh);
 	}
 
 	public record Filters(

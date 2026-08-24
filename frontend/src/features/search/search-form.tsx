@@ -9,6 +9,7 @@ import {
   createSearchRequestSchema,
   documentTypes,
   searchResponseSchema,
+  type SearchMode,
 } from "@/shared/api/schemas";
 import { humanizeEnum } from "@/shared/formatting/display";
 
@@ -21,11 +22,12 @@ function optionalInteger(formData: FormData, name: string): number | undefined {
   return value === "" ? undefined : Number(value);
 }
 
-function requestFrom(form: HTMLFormElement): unknown {
+function requestFrom(form: HTMLFormElement, mode: SearchMode): unknown {
   const formData = new FormData(form);
   const language = String(formData.get("language") ?? "").trim();
   return {
     query: String(formData.get("query") ?? ""),
+    mode,
     filters: {
       yearFrom: optionalInteger(formData, "yearFrom"),
       yearTo: optionalInteger(formData, "yearTo"),
@@ -55,7 +57,7 @@ export function SearchForm({
 }: SearchFormProps): React.JSX.Element {
   const router = useRouter();
   const errorSummaryRef = useRef<HTMLDivElement>(null);
-  const [pending, setPending] = useState(false);
+  const [pendingMode, setPendingMode] = useState<SearchMode | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [violations, setViolations] = useState<string[]>([]);
   const [invalidFields, setInvalidFields] = useState<string[]>([]);
@@ -72,8 +74,14 @@ export function SearchForm({
     setViolations([]);
     setInvalidFields([]);
 
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const mode: SearchMode =
+      submitter instanceof HTMLButtonElement && submitter.value === "LOCAL"
+        ? "LOCAL"
+        : "AUTO";
+
     const parsedRequest = createSearchRequestSchema.safeParse(
-      requestFrom(event.currentTarget),
+      requestFrom(event.currentTarget, mode),
     );
     if (!parsedRequest.success) {
       setErrorMessage("Review the highlighted search values.");
@@ -91,7 +99,7 @@ export function SearchForm({
       return;
     }
 
-    setPending(true);
+    setPendingMode(mode);
     try {
       const response = await fetch("/api/searches", {
         method: "POST",
@@ -133,7 +141,7 @@ export function SearchForm({
     } catch {
       setErrorMessage("Search is temporarily unavailable. Please try again.");
     } finally {
-      setPending(false);
+      setPendingMode(null);
     }
   }
 
@@ -177,13 +185,30 @@ export function SearchForm({
           maxLength={500}
           minLength={3}
           name="query"
-          placeholder="e.g. graph neural networks for drug discovery"
+          placeholder="e.g. graph neural networks"
           required
           type="search"
         />
-        <button className="button button--primary searchButton" disabled={pending}>
-          {pending ? "Searching…" : "Search papers"}
-        </button>
+        <div className="searchActions">
+          <button
+            className="button button--primary searchButton"
+            disabled={pendingMode !== null}
+            name="mode"
+            type="submit"
+            value="AUTO"
+          >
+            {pendingMode === "AUTO" ? "Searching…" : "Search papers"}
+          </button>
+          <button
+            className="button button--secondary searchButton"
+            disabled={pendingMode !== null}
+            name="mode"
+            type="submit"
+            value="LOCAL"
+          >
+            {pendingMode === "LOCAL" ? "Searching locally…" : "Search locally"}
+          </button>
+        </div>
       </div>
 
       <details className="filterPanel">
@@ -290,9 +315,11 @@ export function SearchForm({
       </details>
 
       <p aria-live="polite" className="formStatus">
-        {pending
-          ? "Searching trusted research sources."
-          : "OpenScholar combines duplicate records and checks full-text access separately."}
+        {pendingMode === "LOCAL"
+          ? "Searching papers already known to OpenScholar."
+          : pendingMode === "AUTO"
+            ? "Searching trusted research sources."
+            : "OpenScholar combines duplicate records and checks full-text access separately."}
       </p>
     </form>
   );

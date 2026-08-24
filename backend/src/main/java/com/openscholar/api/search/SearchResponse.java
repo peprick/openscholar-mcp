@@ -9,12 +9,16 @@ import java.util.UUID;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.CacheDisposition;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 
 public record SearchResponse(
 		UUID searchId,
 		String query,
 		String queryFingerprint,
 		CacheDisposition cacheDisposition,
+		SearchMode requestedMode,
+		SearchExecutionSource executionSource,
 		Instant searchedAt,
 		Instant freshUntil,
 		String nextCursor,

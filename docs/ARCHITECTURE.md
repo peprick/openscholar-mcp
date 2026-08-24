@@ -36,7 +36,7 @@ Current package-level modules:
 ```text
 com.openscholar
 ├── common                 # shared safe errors and boundary utilities
-├── search                 # owner-scoped exact snapshots, provider fan-out, fusion, deadlines
+├── search                 # owner-scoped provider/local snapshots, fan-out, ranking, deadlines
 ├── paper                  # canonical metadata, identifiers, authors, persistence
 ├── provider               # research-provider SPI plus discovery adapters
 ├── access                 # legal-access resolution, URL verification, Unpaywall/arXiv clients
@@ -63,17 +63,26 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Providers as Enabled providers
 
-    Client->>API: topic + filters
+    Client->>API: topic + filters + mode
     API->>Search: validated SearchCommand
-    Search->>DB: latest exact query fingerprint
-    alt exact snapshot is fresh and refresh is not forced
-        DB-->>Search: immutable cached snapshot
-    else cache miss, stale snapshot, or forced refresh
-        Search->>Providers: bounded concurrent fan-out
-        Providers-->>Search: mapped records and isolated failures
-        Search->>Search: exact-ID merge + reciprocal-rank fusion when multi-provider
-        Search->>Search: normalize and reconcile identifiers
-        Search->>DB: idempotent upsert and result snapshot
+    alt LOCAL
+        Search->>DB: owner-visible metadata candidates
+        Search->>DB: immutable local snapshot
+    else AUTO or ONLINE
+        Search->>DB: latest exact provider fingerprint
+        alt exact snapshot is fresh and refresh is not forced
+            DB-->>Search: immutable provider snapshot
+        else cache miss, stale snapshot, or forced refresh
+            Search->>Providers: bounded concurrent fan-out
+            Providers-->>Search: mapped records and isolated failures
+            Search->>Search: exact-ID merge + reciprocal-rank fusion when multi-provider
+            Search->>Search: normalize and reconcile identifiers
+            Search->>DB: idempotent upsert and result snapshot
+        end
+        opt AUTO cannot return provider-backed results
+            Search->>DB: owner-visible metadata candidates
+            Search->>DB: immutable local snapshot
+        end
     end
     Search-->>API: response with provenance
     API-->>Client: structured results
@@ -81,12 +90,14 @@ sequenceDiagram
 
 ## Cache decision
 
-A query fingerprint is calculated from normalized topic text, sorted filters, and the enabled-provider set. Snapshots and continuation reads are scoped to the current user; two principals may have the same fingerprint without sharing private search history. The orchestrator reuses an exact fresh owner/fingerprint pair unless refresh is forced. It evaluates:
+The mode-aware v2 query fingerprint is calculated from normalized topic text, sorted filters, requested mode, and the enabled-provider set. Local retrieval uses a separate `local-catalog-v1` pipeline without an invented provider set. Keeping `AUTO` and `ONLINE` fingerprints distinct lets each immutable snapshot resource report one stable requested mode. Snapshots and continuation reads are scoped to the current user and persist requested mode plus `PROVIDER` or `LOCAL_CATALOG` result origin; two principals may have the same fingerprint without sharing private search history. Legacy v1 snapshots remain readable and manually refreshable but are excluded from automatic stale-target scheduling. `AUTO` is the default, `ONLINE` forbids local-catalog fallback, and `LOCAL` is database-only and rejects forced refresh. The orchestrator reuses an exact fresh owner/fingerprint/origin entry where applicable. It evaluates:
 
 - freshness of the exact search snapshot;
 - explicit user refresh requests.
 
-Otherwise it invokes the enabled discovery providers concurrently, persists a new immutable snapshot from all successful results, or returns the latest exact stale snapshot if no provider succeeds. Individual provider failures remain coverage/warning entries and do not erase useful results. Exact identifiers reconcile duplicates; multi-provider result sets use deterministic reciprocal-rank fusion and retain every contributing provider. A bounded 64-stripe coordinator rechecks the owner-scoped exact cache inside the same-instance critical section before provider access and persistence, so concurrent ordinary misses for the same owner/fingerprint share the leader's new snapshot. Lock acquisition has a configurable 12-second default limit; it does not time work after acquisition or cancel the leader. On timeout, the orchestrator rechecks the latest exact snapshot: a normal caller may return a newly fresh `EXACT_HIT`, while any other available snapshot becomes `STALE_FALLBACK` with `SEARCH_COORDINATION_TIMEOUT`; only a caller without a snapshot receives the retryable public timeout error. Explicit forced refreshes retain their provider-fetch semantics. This coordination is intentionally JVM-local; cross-instance request coalescing remains external work. Responses expose freshness, cache disposition, provider coverage/contributions, warnings, and an opaque combined provider cursor.
+Otherwise the provider path invokes enabled discovery providers concurrently, persists a new immutable snapshot from all successful results, or returns the latest exact stale provider snapshot if no provider succeeds. `AUTO` may then execute owner-scoped local-catalog retrieval; `ONLINE` never does, while `LOCAL` bypasses the provider path entirely. Local eligibility requires a paper to have appeared in that owner's earlier snapshot or saved collection. Local execution has empty provider coverage but retains deterministic stored provider provenance and its retrieval time for each result. Its opaque, query-bound cursor carries a bounded remainder of the first page's ranked paper IDs, so catalog growth cannot shift later pages; owner visibility is checked again when each page is hydrated. Continuation of a local snapshot remains local after reconnection.
+
+Individual provider failures remain coverage/warning entries and do not erase useful results. Exact identifiers reconcile duplicates; multi-provider result sets use deterministic reciprocal-rank fusion and retain every contributing provider. A bounded 64-stripe coordinator rechecks the owner-scoped exact provider cache inside the same-instance critical section before provider access and persistence, so concurrent ordinary misses for the same owner/fingerprint share the leader's new snapshot. Lock acquisition has a configurable 12-second default limit; it does not time work after acquisition or cancel the leader. On timeout, the orchestrator rechecks the latest exact provider snapshot: a normal caller may return a newly fresh `EXACT_HIT`, while any other available snapshot becomes `STALE_FALLBACK` with `SEARCH_COORDINATION_TIMEOUT`. If no provider snapshot exists, `AUTO` may still use the owner-scoped local catalog; `ONLINE` and forced refresh preserve their provider-only semantics and return the retryable public timeout error. This coordination is intentionally JVM-local; cross-instance request coalescing remains external work. Responses expose `requestedMode`, actual `executionSource`, freshness, cache disposition, provider coverage/contributions, warnings, and an opaque mode-specific cursor.
 
 An outer `SearchExecutionDeadline` runs every `SearchResearchUseCase` `search`, `next`, and `get` operation on a context-propagating virtual-thread worker with a configurable 18-second default. Its monotonic budget covers application dispatch through cache, coordination, provider/deserialization, persistence, and final `SearchView` construction. On expiration it marks cancellation, interrupts the worker, and uses cooperative checkpoints before and after blocking boundaries. The deadline is terminal and takes precedence when it fires first, so the orchestrator does not initiate a new stale fallback after expiration; inner OpenAlex and coordination outcomes retain precedence when they finish first. The deadline cannot guarantee cancellation of JDBC persistence already in progress; its transaction may continue and commit, so a new immutable snapshot may later become visible. Parsing/schema validation, REST/MCP DTO and framework serialization, socket lifetime, client disconnects, and MCP cancellation notifications remain outside this application boundary.
 
@@ -164,7 +175,7 @@ The related-paper endpoint remains database-only. Its opt-in hybrid read consume
 
 The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spring AI WebMVC starter. Five annotation-registered, read-oriented handlers delegate to the same application services used by REST. WebMVC plus Java 21 virtual threads fits the blocking JPA path.
 
-Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; legal-access retrieval is stored-only. Local mode uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
+Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; `search_research(mode=LOCAL)` and legal-access retrieval are stored-only. Provider-backed search results expose every contribution retained by their snapshot; local execution exposes one deterministic stored provider record without inventing local provenance. The search tool's static MCP annotations remain conservative because AUTO/ONLINE can access the open world and every newly executed mode stores a snapshot. Local deployment uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
 
 The configured MCP SDK request timeout still does not provide whole-tool cancellation. Discovery-provider exchange deadlines, the 12-second coordination limit, and the 18-second search application deadline bound their own layers, but framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not cancel the tool worker. Durable refresh jobs are REST operations and are not MCP Tasks or owned MCP job handles.
 

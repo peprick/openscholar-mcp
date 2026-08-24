@@ -112,7 +112,8 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 
 - Original and normalized query.
 - Mandatory owner ID referencing `app_user`.
-- SHA-256 fingerprint over query, sorted filters, and the enabled discovery-provider set.
+- Requested `AUTO`, `ONLINE`, or `LOCAL` mode and internal `PROVIDER` or `LOCAL_CATALOG` result origin.
+- Versioned SHA-256 fingerprint over query, requested mode, and sorted filters, using either the enabled-provider pipeline or the separate `local-catalog-v1` pipeline. Mode-aware fingerprints are v2; legacy v1 rows remain historical/readable but are not automatic stale-refresh targets.
 - Validated filter JSONB.
 - Status, search/freshness timestamps.
 - Provider coverage and warnings.
@@ -125,9 +126,9 @@ One row per paper stores `last_forced_at`. An atomic PostgreSQL upsert claims a 
 - Total score and feature-level explanation.
 - Provider contribution set.
 
-Exact fresh fingerprints reuse only the current owner's snapshots. Related-topic searches retrieve canonical papers independently and are not labelled exact hits.
+Exact fresh fingerprints reuse only the current owner's snapshots with the compatible result origin. Local candidates are restricted to papers previously visible in that owner's snapshots or saved collections. A bounded opaque cursor preserves the first local page's remaining paper order and rechecks owner eligibility on hydration, preventing mutable catalog growth from shifting continuation pages. Related-topic searches retrieve canonical papers independently and are not labelled exact hits.
 
-The current implementation keeps successful snapshots immutable, retains canonical-paper references with delete protection, indexes owner plus fingerprint/freshness, caches empty result sets, and creates a new snapshot for forced or stale refreshes. Enabled providers can contribute partial results; exact identifiers merge duplicate works, provider contributions are retained, and deterministic reciprocal-rank fusion ranks multi-provider pages. Provider failures can serve the latest exact owner-scoped stale snapshot with an explicit warning; they never overwrite it.
+The current implementation keeps successful snapshots immutable, retains canonical-paper references with delete protection, indexes owner plus fingerprint, result origin, and freshness, caches empty result sets, and creates a new snapshot for forced, stale, or local executions. Enabled providers can contribute partial results; exact identifiers merge duplicate works, provider contributions are retained, and deterministic reciprocal-rank fusion ranks multi-provider pages. Provider failures can serve the latest exact owner-scoped stale provider snapshot with an explicit warning; they never overwrite it. Local snapshots have empty provider coverage but copy deterministic stored provider provenance and its retrieval time into each result rather than fabricating local-provider provenance.
 
 ## Library
 
@@ -186,7 +187,7 @@ The worker and stale-target scheduler are default-off. The scheduler is invalid 
 ## Migrations
 
 - Flyway owns production schema changes.
-- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage; `V11` adds the pinned Qwen/Ollama profile's partial/expression HNSW index; `V12` adds typed publication metadata fields; `V13` creates durable research-refresh jobs; `V14` adds unique issuer+subject identity columns; `V15` scopes search snapshots and their cache indexes to an owner.
+- `V1` creates canonical papers and identifiers; `V2` adds provider records/authors; `V3` adds immutable search snapshots; `V4` adds `paper_access_resolution` and `paper_version`; `V5` adds access lookup fingerprints and the persistent forced-refresh guard; `V6` snapshots credited author names and enforces publication date/year consistency; `V7` creates the fixed local user and persistent library; `V8` hardens canonical tag shape and the ten-tag database limit; `V9` adds the generated full-text vector and GIN index; `V10` adds immutable embedding profiles and versioned pgvector storage; `V11` adds the pinned Qwen/Ollama profile's partial/expression HNSW index; `V12` adds typed publication metadata fields; `V13` creates durable research-refresh jobs; `V14` adds unique issuer+subject identity columns; `V15` scopes search snapshots and their cache indexes to an owner; `V16` records requested search mode/result origin and replaces the cache index with an origin-aware owner/fingerprint/freshness index.
 - Applied migrations are immutable.
 - Destructive migrations require backup and roll-forward plans.
 - Hibernate validates but does not create production tables.

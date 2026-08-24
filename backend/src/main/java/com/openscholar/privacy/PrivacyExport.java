@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 import com.openscholar.library.ReadingStatus;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 
 public record PrivacyExport(
 		UUID userId,
@@ -24,6 +26,8 @@ public record PrivacyExport(
 	public record PrivacySearch(
 			UUID searchId,
 			String query,
+			SearchMode requestedMode,
+			SearchExecutionSource executionSource,
 			PrivacySearchFilters filters,
 			Instant searchedAt,
 			Instant freshUntil,

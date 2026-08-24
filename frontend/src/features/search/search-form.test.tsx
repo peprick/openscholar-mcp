@@ -62,6 +62,7 @@ describe("SearchForm", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           query: "graph neural networks for drug discovery",
+          mode: "AUTO",
           filters: {
             yearFrom: 2020,
             yearTo: 2026,
@@ -81,6 +82,41 @@ describe("SearchForm", () => {
       );
     },
   );
+
+  it("offers a local search without exposing provider controls", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SearchForm initialQuery="protein structure prediction" />);
+    await user.click(screen.getByRole("button", { name: "Search locally" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith("/api/searches", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        query: "protein structure prediction",
+        mode: "LOCAL",
+        filters: {
+          documentTypes: [],
+          openAccessOnly: false,
+          minimumCitations: 0,
+          languages: [],
+        },
+        pageSize: 20,
+        forceRefresh: false,
+      }),
+    });
+    expect(
+      screen.getByText("Searching papers already known to OpenScholar."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Search papers" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Searching locally…" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Provider coverage")).not.toBeInTheDocument();
+  });
 
   it("surfaces an RFC 9457 validation problem and its violations", async () => {
     const user = userEvent.setup();

@@ -93,6 +93,8 @@ export function searchResponseFixture(): SearchResponse {
     query: "graph neural networks for drug discovery",
     queryFingerprint:
       "90ff4c90bc8c9f06583d33a443f923f65d28ac04147b9ad8cf9a64221759c0de",
+    requestedMode: "AUTO",
+    executionSource: "PROVIDER_FETCH",
     cacheDisposition: "MISS_FETCHED",
     searchedAt: "2026-08-17T14:30:00Z",
     freshUntil: "2026-08-17T15:30:00Z",

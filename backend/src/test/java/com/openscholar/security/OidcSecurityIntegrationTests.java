@@ -176,6 +176,75 @@ class OidcSecurityIntegrationTests {
 	}
 
 	@Test
+	void localCatalogSearchCannotRevealAnotherOwnersKnownPapers() throws Exception {
+		RequestPostProcessor alice = user("alice-local", "Alice", "openscholar.search");
+		RequestPostProcessor bob = user("bob-local", "Bob", "openscholar.search");
+		mockMvc.perform(get("/api/v1/searches/{searchId}", UUID.randomUUID()).with(alice))
+				.andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/v1/searches/{searchId}", UUID.randomUUID()).with(bob))
+				.andExpect(status().isNotFound());
+
+		UUID paperId = UUID.randomUUID();
+		UUID collectionId = UUID.randomUUID();
+		OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+		String title = "Alice private local catalog paper "
+				+ UUID.randomUUID().toString().replace("-", "");
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO paper (
+					    id, title, normalized_title, document_type, metadata_quality,
+					    metadata_updated_at, version, created_at, updated_at
+					)
+					VALUES (?, ?, lower(?), 'ARTICLE', 0, ?, 0, ?, ?)
+					""", paperId, title, title, now, now, now);
+			jdbcTemplate.update("""
+					INSERT INTO provider_record (
+					    id, paper_id, provider, provider_record_id, retrieved_at,
+					    reported_open_access, metadata_fragment, created_at, updated_at
+					)
+					VALUES (?, ?, 'openalex', ?, ?, true, '{}'::jsonb, ?, ?)
+					""", UUID.randomUUID(), paperId, "W-PRIVATE-" + paperId, now, now, now);
+			jdbcTemplate.update("""
+					INSERT INTO library_collection (
+					    id, owner_id, name, version, created_at, updated_at
+					)
+					VALUES (?, ?, 'Alice private papers', 0, ?, ?)
+					""", collectionId, userId("alice-local"), now, now);
+			jdbcTemplate.update("""
+					INSERT INTO collection_paper (
+					    id, collection_id, paper_id, reading_status, version, saved_at, updated_at
+					)
+					VALUES (?, ?, ?, 'UNREAD', 0, ?, ?)
+					""", UUID.randomUUID(), collectionId, paperId, now, now);
+
+			String localRequest = """
+					{"query":"%s","mode":"LOCAL","pageSize":20}
+					""".formatted(title);
+			mockMvc.perform(post("/api/v1/searches")
+						.with(bob)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(localRequest))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+					.andExpect(jsonPath("$.results").isEmpty());
+			mockMvc.perform(post("/api/v1/searches")
+						.with(alice)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(localRequest))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.results[0].paperId").value(paperId.toString()));
+		}
+		finally {
+			jdbcTemplate.update("DELETE FROM library_collection WHERE id = ?", collectionId);
+			jdbcTemplate.update("""
+					DELETE FROM search_snapshot
+					WHERE id IN (SELECT search_id FROM search_result WHERE paper_id = ?)
+					""", paperId);
+			jdbcTemplate.update("DELETE FROM paper WHERE id = ?", paperId);
+		}
+	}
+
+	@Test
 	void deletionErasesOnlyTheCurrentPrincipalAndAValidTokenReprovisionsAnEmptyAccount() throws Exception {
 		mockMvc.perform(post("/api/v1/collections")
 						.with(user("alice-delete", "Alice", "openscholar.library"))

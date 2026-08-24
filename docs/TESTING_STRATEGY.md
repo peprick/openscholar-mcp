@@ -2,7 +2,7 @@
 
 ## Unit tests
 
-- Query normalization and fingerprint stability.
+- Query normalization, mode/provider/local fingerprint separation, and fingerprint stability.
 - DOI/arXiv normalization.
 - Provider mapping.
 - Deduplication/conflict resolution.
@@ -17,6 +17,7 @@
 - Embedding contract invariants, exact Ollama runtime/profile/request/digest checks, no-proxy/redirect transport, response-size enforcement, failure-scope translation, and disabled-by-default configuration.
 - Backfill command/result invariants, generator selection, bounded verification/generation/stale handling, fail-fast systemic errors, deletion/failure accounting, overflow protection, non-web startup guard, nonzero incomplete-run behavior, and duplicate-generator rejection.
 - Multi-provider fan-out, provider-set fingerprints, cursor composition, exact-ID merging, reciprocal-rank fusion, and partial success/failure reporting.
+- Search-mode defaults/invariants, opaque local-cursor bounds, deterministic local ranking, and requested-mode/execution-source mapping.
 - Durable refresh-job configuration, lease/claim state transitions, retry classification/backoff, stale-completion rejection, worker/scheduler guards, and safe error details.
 - OIDC property/JWT validation, route-scope decisions, issuer+subject resolution, protected-resource metadata/challenges, and principal rate-limit identity.
 - Frontend OIDC configuration, PKCE/state/nonce callback, ID-token/JWKS/token validation, encrypted session/refresh behavior, exact-Origin enforcement, and job response schemas.
@@ -29,13 +30,14 @@
 - Collection CRUD, saved-paper mutations, owner-scoped not-found behavior, library filters/pagination, and citation-batch attachment contracts.
 - Canonical paper details, record-level provenance, immutable credited names, date/year integrity, and stored-access summaries without provider calls.
 - MCP annotation discovery and tool validation.
+- REST/MCP AUTO, ONLINE, and LOCAL contract mapping, including rejection of forced LOCAL refresh and complete result provenance.
 - Refresh-job enqueue/list/get/retry contracts and privacy export/confirmed-delete contracts.
 
 ## Integration tests
 
 Testcontainers supplies real PostgreSQL/pgvector. Current coverage verifies Flyway from empty, V7-to-V8 library upgrade, V8-to-V9 full-text backfill, constraints/indexes, transactions, idempotent identifier upserts, collection/tag database invariants, literal wildcard handling, deterministic library pagination, owner-scoped access, generated full-text-vector refresh, the GIN index, stopword-only and punctuation-heavy queries, bounded related-paper ranking, venue-only matches, deterministic repeat reads, default-off lexical equivalence, pinned HNSW hybrid ordering, exact lexical-candidate vector coverage, explicit profile/source/coverage fallback modes, operational-error propagation, identical-search miss coalescing, distinct-stripe provider concurrency, explicit concurrent force-refresh behavior, coordination-timeout snapshot rechecks without duplicate provider work, execution-deadline provider interruption with no post-timeout snapshot, successful same-query retry, same-key leader-to-follower handoff, immutable embedding profiles, exact cosine storage, source invalidation, missing-vector cursor paging, and PostgreSQL advisory-lock exclusion.
 
-The current suite also covers the `V13` refresh-job schema, active-target deduplication, `SKIP LOCKED` claims, lease expiry/reclaim and stale-token safety; the `V14` issuer+subject identity constraints; the `V15` search-owner migration/cache indexes; cross-user search/library rejection; and owner-only privacy export/deletion. Broader high-contention/load reconciliation remains later work.
+The current suite also covers the `V13` refresh-job schema, active-target deduplication, `SKIP LOCKED` claims, lease expiry/reclaim and stale-token safety; the `V14` issuer+subject identity constraints; the `V15` search-owner migration/cache indexes; the `V16` mode/origin constraints and origin-aware cache index; current-version-only automatic stale search selection; cross-user search/library rejection; and owner-only privacy export/deletion. Metadata-only local-search coverage must prove zero provider calls in LOCAL, AUTO fallback order, ONLINE exclusion of local results, owner-visible candidate isolation, stable pagination, local continuation after reconnection, and persisted execution provenance. Broader high-contention/load reconciliation remains later work.
 
 ## Provider contract tests
 
@@ -57,11 +59,11 @@ The separately frozen HNSW gate uses a deterministic 10,000-vector, 1024-dimensi
 
 ## MCP tests
 
-- Implemented: direct adapter tests for defaults, bounds, result mapping, database-only behavior, stable errors, and safe unexpected failures.
+- Implemented: direct adapter tests for defaults, mode mapping/invariants, bounds, complete provider-provenance mapping, database-only behavior, stable errors, and safe unexpected failures.
 - Implemented: safe retryable `SEARCH_COORDINATION_TIMEOUT` and `SEARCH_COORDINATION_INTERRUPTED` tool mappings without nested causes or invented retry-after values.
 - Implemented: safe retryable `SEARCH_DEADLINE_EXCEEDED` and `SEARCH_EXECUTION_INTERRUPTED` REST/MCP mappings without nested causes or invented retry-after values.
 - Implemented: raw REST and MCP deadline calls prove bounded responses, provider interruption and exit, no post-timeout snapshot, stable JSON-RPC error wrapping, and no nested-cause leakage.
-- Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, input/output schemas, annotations, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
+- Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, mode/source input/output schemas, conservative static annotations, full result provenance, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
 - Implemented: successful raw structured calls for all four database-only tools, using a canonical paper created through the search tool where required.
 - Implemented: API-key, duplicate-header, exact-Origin, response-header, and disabled-until-configured security-filter coverage.
 - Implemented: hosted missing/invalid/expired/wrong-issuer/wrong-audience/insufficient-scope JWT cases, route-scope enforcement, issuer+subject ownership, protected-resource metadata/challenges, and principal-derived MCP rate-limit keys.

@@ -43,6 +43,8 @@ import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchDeadlineExceededException;
 import com.openscholar.search.SearchExecutionInterruptedException;
+import com.openscholar.search.SearchExecutionSource;
+import com.openscholar.search.SearchMode;
 import com.openscholar.search.SearchResearchUseCase;
 import com.openscholar.search.SearchResultView;
 import com.openscholar.search.SearchUnavailableException;
@@ -111,11 +113,13 @@ class OpenScholarMcpToolsTests {
 	@Test
 	void searchResearchMapsDefaultsIntoTheSharedSearchCommand() {
 		OpenScholarMcpTools.SearchResearchToolResult result = tools.searchResearch("  agent systems  ", null, null,
-				null, null, null, null, null, null, null);
+				null, null, null, null, null, null, null, null);
 
 		assertThat(result.searchId()).isEqualTo(searchView.searchId());
 		assertThat(result.query()).isEqualTo(searchView.query());
 		assertThat(result.cacheDisposition()).isEqualTo(CacheDisposition.EXACT_HIT);
+		assertThat(result.requestedMode()).isEqualTo(SearchMode.AUTO);
+		assertThat(result.executionSource()).isEqualTo(SearchExecutionSource.EXACT_CACHE);
 		assertThat(result.nextCursor()).isNull();
 		assertThat(result.providerCoverage()).isEmpty();
 		assertThat(result.warnings()).isEmpty();
@@ -130,6 +134,11 @@ class OpenScholarMcpToolsTests {
 			assertThat(paper.isbn()).containsExactly("978-0-306-40615-7");
 			assertThat(paper.issn()).containsExactly("2049-3630", "2049-3649");
 			assertThat(paper.degree()).isEqualTo("Doctor of Philosophy");
+			assertThat(paper.provenance()).singleElement().satisfies(provenance -> {
+				assertThat(provenance.provider()).isEqualTo(ProviderId.OPENALEX);
+				assertThat(provenance.providerRecordId()).isEqualTo("W-MCP-TYPED");
+				assertThat(provenance.retrievedAt()).isEqualTo(NOW);
+			});
 		});
 		assertThat(search.calls).isOne();
 		assertThat(search.command.query()).isEqualTo("agent systems");
@@ -142,13 +151,14 @@ class OpenScholarMcpToolsTests {
 		assertThat(search.command.pageSize()).isEqualTo(20);
 		assertThat(search.command.cursor()).isEqualTo("*");
 		assertThat(search.command.forceRefresh()).isFalse();
+		assertThat(search.command.mode()).isEqualTo(SearchMode.AUTO);
 	}
 
 	@Test
 	void searchResearchMapsExplicitValuesAndAcceptsTheInclusivePageCap() {
 		OpenScholarMcpTools.SearchResearchToolResult result = tools.searchResearch("graph agents", 2020, 2026,
 				Set.of(DocumentType.ARTICLE, DocumentType.THESIS), true, 7, Set.of("EN", "Fr"), 25,
-				"opaque-cursor", true);
+				"opaque-cursor", true, SearchMode.ONLINE);
 
 		assertThat(result.searchId()).isEqualTo(searchView.searchId());
 		assertThat(search.command.yearFrom()).isEqualTo(2020);
@@ -160,16 +170,26 @@ class OpenScholarMcpToolsTests {
 		assertThat(search.command.pageSize()).isEqualTo(25);
 		assertThat(search.command.cursor()).isEqualTo("opaque-cursor");
 		assertThat(search.command.forceRefresh()).isTrue();
+		assertThat(search.command.mode()).isEqualTo(SearchMode.ONLINE);
 	}
 
 	@Test
 	void searchResearchRejectsPageSizesOutsideTheMcpBoundsBeforeCallingTheUseCase() {
 		for (int invalidSize : List.of(0, 26)) {
 			Throwable failure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null, null,
-					null, invalidSize, null, null));
+					null, invalidSize, null, null, null));
 
 			assertSafeFailure(failure, "INVALID_REQUEST: MCP page size must be between 1 and 25");
 		}
+		assertThat(search.calls).isZero();
+	}
+
+	@Test
+	void searchResearchRejectsAForcedLocalSearchBeforeCallingTheUseCase() {
+		Throwable failure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null, null,
+				null, null, null, true, SearchMode.LOCAL));
+
+		assertSafeFailure(failure, "INVALID_REQUEST: Local search cannot force a provider refresh");
 		assertThat(search.calls).isZero();
 	}
 
@@ -349,7 +369,7 @@ class OpenScholarMcpToolsTests {
 		search.failure = new SearchUnavailableException("Provider temporarily unavailable", true,
 				Duration.ofSeconds(7), new IllegalStateException(NESTED_SECRET));
 		Throwable searchFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
-				null, null, null, null, null));
+				null, null, null, null, null, null));
 		assertSafeFailure(searchFailure,
 				"SEARCH_PROVIDER_UNAVAILABLE: Provider temporarily unavailable; retryable=true; retryAfterSeconds=7");
 		assertThat(searchFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
@@ -371,7 +391,7 @@ class OpenScholarMcpToolsTests {
 		search.failure = timeout;
 
 		Throwable timeoutFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
-				null, null, null, null, null));
+				null, null, null, null, null, null));
 
 		assertSafeFailure(timeoutFailure,
 				"SEARCH_COORDINATION_TIMEOUT: Search coordination wait timed out; retryable=true");
@@ -379,7 +399,7 @@ class OpenScholarMcpToolsTests {
 
 		search.failure = new SearchCoordinationInterruptedException(new InterruptedException(NESTED_SECRET));
 		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
-				null, null, null, null, null));
+				null, null, null, null, null, null));
 
 		assertSafeFailure(interruptedFailure,
 				"SEARCH_COORDINATION_INTERRUPTED: Search coordination wait was interrupted; retryable=true");
@@ -393,7 +413,7 @@ class OpenScholarMcpToolsTests {
 		search.failure = deadline;
 
 		Throwable deadlineFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
-				null, null, null, null, null));
+				null, null, null, null, null, null));
 
 		assertSafeFailure(deadlineFailure,
 				"SEARCH_DEADLINE_EXCEEDED: Search execution deadline exceeded; retryable=true");
@@ -401,7 +421,7 @@ class OpenScholarMcpToolsTests {
 
 		search.failure = new SearchExecutionInterruptedException(new InterruptedException(NESTED_SECRET));
 		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
-				null, null, null, null, null));
+				null, null, null, null, null, null));
 
 		assertSafeFailure(interruptedFailure,
 				"SEARCH_EXECUTION_INTERRUPTED: Search execution was interrupted; retryable=true");

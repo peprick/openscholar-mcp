@@ -14,6 +14,7 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 ## What it does
 
 - Searches OpenAlex by default, with optional DataCite, DOAJ, and licence-gated CORE discovery adapters.
+- Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
 - Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, and provider identity.
 - Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
 - Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
@@ -103,6 +104,8 @@ The server advertises:
 
 See the [MCP quickstart](docs/MCP_QUICKSTART.md) for Inspector commands, raw protocol examples, security behavior, and the supported conformance subset.
 
+`search_research` accepts `AUTO`, `ONLINE`, and database-only `LOCAL` modes and reports the actual execution source independently from caller intent.
+
 ## Develop locally
 
 ### Backend
@@ -163,6 +166,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 | Surface | Status |
 |---|---|
 | Local web application, REST API, and PostgreSQL persistence | Implemented |
+| Metadata-only local search with explicit provenance | Implemented |
 | Five-tool MCP server | Implemented |
 | Optional hosted OIDC mode | Implemented; synthetically tested |
 | Single-host deployment and monitoring templates | Implemented and locally validated |

@@ -17,7 +17,8 @@ public record SearchCommand(
 		Set<String> languages,
 		int pageSize,
 		String cursor,
-		boolean forceRefresh) {
+		boolean forceRefresh,
+		SearchMode mode) {
 
 	public SearchCommand {
 		query = Objects.requireNonNull(query, "query").strip();
@@ -49,5 +50,24 @@ public record SearchCommand(
 		if (cursor.length() > 4096) {
 			throw new IllegalArgumentException("Cursor must not exceed 4096 characters");
 		}
+		mode = mode == null ? SearchMode.AUTO : mode;
+		if (mode == SearchMode.LOCAL && forceRefresh) {
+			throw new IllegalArgumentException("Local search cannot force a provider refresh");
+		}
+	}
+
+	public SearchCommand(
+			String query,
+			Integer yearFrom,
+			Integer yearTo,
+			Set<DocumentType> documentTypes,
+			boolean openAccessOnly,
+			int minimumCitations,
+			Set<String> languages,
+			int pageSize,
+			String cursor,
+			boolean forceRefresh) {
+		this(query, yearFrom, yearTo, documentTypes, openAccessOnly, minimumCitations,
+				languages, pageSize, cursor, forceRefresh, SearchMode.AUTO);
 	}
 }
