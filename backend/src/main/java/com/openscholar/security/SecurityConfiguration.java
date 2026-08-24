@@ -79,6 +79,8 @@ class SecurityConfiguration {
 						.hasAuthority("SCOPE_openscholar.search")
 						.requestMatchers(HttpMethod.POST, "/api/v1/papers/*/access/verify")
 						.hasAuthority("SCOPE_openscholar.search")
+						.requestMatchers(HttpMethod.GET, "/api/v1/papers/resolve")
+						.hasAuthority("SCOPE_openscholar.search")
 						.requestMatchers(HttpMethod.GET, "/api/v1/papers/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/citations/export")

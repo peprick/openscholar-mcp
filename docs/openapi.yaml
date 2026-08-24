@@ -181,6 +181,54 @@ paths:
         "504":
           $ref: "#/components/responses/GatewayTimeout"
 
+  /api/v1/papers/resolve:
+    get:
+      tags: [Papers]
+      operationId: resolvePaperIdentifier
+      summary: Resolve a paper already visible to the current owner
+      description: |
+        Parses a DOI, arXiv, or OpenAlex work reference and resolves it against
+        canonical metadata already present in one of the current principal's search
+        snapshots or collections. This database-only operation never contacts a
+        scholarly provider. Missing and other-principal records both return
+        `PAPER_IDENTIFIER_NOT_FOUND` so the shared catalog cannot be enumerated.
+      security:
+        - HostedOidc: [openscholar.search]
+      parameters:
+        - $ref: "#/components/parameters/PaperIdentifierReference"
+      responses:
+        "200":
+          description: The owner-visible canonical paper identifier resolution.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperIdentifierResolutionResponse"
+        "400":
+          description: The reference is blank, oversized, unsafe, malformed, or unsupported.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No matching paper is visible to the current principal.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
   /api/v1/papers/{paperId}:
     parameters:
       - $ref: "#/components/parameters/PaperId"
@@ -789,6 +837,15 @@ components:
       description: Shared canonical paper UUID.
       schema:
         $ref: "#/components/schemas/Uuid"
+    PaperIdentifierReference:
+      name: identifier
+      in: query
+      required: true
+      description: A bare or canonical DOI, arXiv, or OpenAlex work reference.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 512
     CollectionId:
       name: collectionId
       in: path
@@ -897,7 +954,7 @@ components:
         type: string
         const: nosniff
     NoStore:
-      description: Prevents storage of privacy responses.
+      description: Prevents storage of privacy-sensitive or owner-specific responses.
       schema:
         type: string
         const: no-store
@@ -1564,6 +1621,20 @@ components:
             $ref: "#/components/schemas/PaperProvenance"
         access:
           $ref: "#/components/schemas/PaperAccessSummary"
+      additionalProperties: false
+    PaperIdentifierResolutionResponse:
+      type: object
+      required: [paperId, identifierType, normalizedValue]
+      properties:
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        identifierType:
+          type: string
+          enum: [DOI, ARXIV, OPENALEX]
+        normalizedValue:
+          type: string
+          minLength: 1
+          maxLength: 512
       additionalProperties: false
     PaperAuthor:
       type: object

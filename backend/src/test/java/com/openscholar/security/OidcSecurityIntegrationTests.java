@@ -84,6 +84,18 @@ class OidcSecurityIntegrationTests {
 		assertManagementMetricsAreScrapeable();
 		mockMvc.perform(get("/api/v1/papers/{paperId}", UUID.randomUUID()))
 				.andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/v1/papers/resolve")
+						.queryParam("identifier", "10.1000/missing"))
+				.andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/v1/papers/resolve")
+						.queryParam("identifier", "10.1000/missing")
+						.with(user("alice", "Alice", "openscholar.library")))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/papers/resolve")
+						.queryParam("identifier", "10.1000/missing")
+						.with(user("alice", "Alice", "openscholar.search")))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("PAPER_IDENTIFIER_NOT_FOUND"));
 
 		mockMvc.perform(get("/api/v1/collections"))
 				.andExpect(status().isUnauthorized());

@@ -32,10 +32,15 @@ import com.openscholar.library.LibraryUseCase;
 import com.openscholar.library.ReadingStatus;
 import com.openscholar.library.SavedPaperView;
 import com.openscholar.paper.DocumentType;
+import com.openscholar.paper.InvalidPaperIdentifierException;
 import com.openscholar.paper.PaperDetailsUseCase;
 import com.openscholar.paper.PaperDetailsView;
+import com.openscholar.paper.PaperIdentifierLookupUseCase;
+import com.openscholar.paper.PaperIdentifierNotFoundException;
+import com.openscholar.paper.PaperIdentifierResolutionView;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperView;
+import com.openscholar.paper.ResolvablePaperIdentifierType;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.SearchCommand;
@@ -66,6 +71,8 @@ class OpenScholarMcpToolsTests {
 	private RecordingSearchUseCase search;
 
 	private RecordingPaperDetailsUseCase paperDetails;
+
+	private RecordingPaperIdentifierLookupUseCase paperIdentifierLookup;
 
 	private RecordingPaperAccessUseCase paperAccess;
 
@@ -103,6 +110,9 @@ class OpenScholarMcpToolsTests {
 
 		search = new RecordingSearchUseCase(searchView);
 		paperDetails = new RecordingPaperDetailsUseCase(paperDetailsView);
+		paperIdentifierLookup = new RecordingPaperIdentifierLookupUseCase(
+				new PaperIdentifierResolutionView(PAPER_ID, ResolvablePaperIdentifierType.DOI,
+						"10.1000/openscholar.mcp-test"));
 		paperAccess = new RecordingPaperAccessUseCase(paperAccessView);
 		library = new RecordingLibraryUseCase(new LibraryPage<>(List.of(savedPaperView), 0, 20, 1, 1));
 		citations = new RecordingCitationExportUseCase(new CitationExport(CitationFormat.BIBTEX, "batch",
@@ -222,6 +232,40 @@ class OpenScholarMcpToolsTests {
 		assertThat(paperDetails.calls).isOne();
 		assertThat(paperAccess.paperId).isEqualTo(PAPER_ID);
 		assertThat(paperAccess.getCalls).isOne();
+		assertThat(paperAccess.resolveCalls).isZero();
+	}
+
+	@Test
+	void paperIdentifierResolutionDelegatesToTheOwnerScopedDatabaseUseCase() {
+		OpenScholarMcpTools.PaperIdentifierResolutionToolResult result = tools
+			.resolvePaperIdentifier("https://doi.org/10.1000/OpenScholar.MCP-Test");
+
+		assertThat(result.paperId()).isEqualTo(PAPER_ID);
+		assertThat(result.identifierType()).isEqualTo(ResolvablePaperIdentifierType.DOI);
+		assertThat(result.normalizedValue()).isEqualTo("10.1000/openscholar.mcp-test");
+		assertThat(paperIdentifierLookup.identifier)
+			.isEqualTo("https://doi.org/10.1000/OpenScholar.MCP-Test");
+		assertThat(paperIdentifierLookup.calls).isOne();
+		assertThat(search.calls).isZero();
+		assertThat(paperDetails.calls).isZero();
+		assertThat(paperAccess.getCalls).isZero();
+		assertThat(paperAccess.resolveCalls).isZero();
+	}
+
+	@Test
+	void paperIdentifierResolutionExposesStableSafeFailures() {
+		paperIdentifierLookup.failure = new InvalidPaperIdentifierException();
+		assertSafeFailure(catchThrowable(() -> tools.resolvePaperIdentifier("not-an-identifier")),
+				"INVALID_PAPER_IDENTIFIER: Identifier must be a DOI, arXiv identifier, or OpenAlex work identifier.");
+
+		paperIdentifierLookup.failure = new PaperIdentifierNotFoundException();
+		assertSafeFailure(catchThrowable(() -> tools.resolvePaperIdentifier("10.1000/private-paper")),
+				"PAPER_IDENTIFIER_NOT_FOUND: No visible paper was found for that identifier.");
+
+		assertThat(paperIdentifierLookup.calls).isEqualTo(2);
+		assertThat(search.calls).isZero();
+		assertThat(paperDetails.calls).isZero();
+		assertThat(paperAccess.getCalls).isZero();
 		assertThat(paperAccess.resolveCalls).isZero();
 	}
 
@@ -461,7 +505,8 @@ class OpenScholarMcpToolsTests {
 	private OpenScholarMcpTools toolsWithResultBudget(long maximumBytes) {
 		McpToolResultBudget budget = new McpToolResultBudget(JsonMapper.builder().build(),
 				new McpPayloadProperties(null, maximumBytes));
-		return new OpenScholarMcpTools(search, paperDetails, paperAccess, library, citations, budget);
+		return new OpenScholarMcpTools(search, paperDetails, paperIdentifierLookup, paperAccess, library, citations,
+				budget);
 	}
 
 	private static void assertSafeFailure(Throwable failure, String message) {
@@ -521,6 +566,31 @@ class OpenScholarMcpToolsTests {
 		public PaperDetailsView get(UUID paperId) {
 			calls++;
 			this.paperId = paperId;
+			if (failure != null) {
+				throw failure;
+			}
+			return result;
+		}
+	}
+
+	private static final class RecordingPaperIdentifierLookupUseCase implements PaperIdentifierLookupUseCase {
+
+		private final PaperIdentifierResolutionView result;
+
+		private String identifier;
+
+		private RuntimeException failure;
+
+		private int calls;
+
+		private RecordingPaperIdentifierLookupUseCase(PaperIdentifierResolutionView result) {
+			this.result = result;
+		}
+
+		@Override
+		public PaperIdentifierResolutionView resolve(String identifier) {
+			calls++;
+			this.identifier = identifier;
 			if (failure != null) {
 				throw failure;
 			}

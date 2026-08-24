@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 
 import com.openscholar.TestcontainersConfiguration;
+import com.openscholar.TestCurrentUserConfiguration;
 import com.openscholar.api.ApiExceptionHandler;
 import com.openscholar.paper.CanonicalPaperCandidate;
 import com.openscholar.paper.DocumentType;
@@ -58,7 +59,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ TestcontainersConfiguration.class, CitationBatchControllerIntegrationTests.CitationTestConfiguration.class })
+@Import({
+	TestcontainersConfiguration.class,
+	TestCurrentUserConfiguration.class,
+	CitationBatchControllerIntegrationTests.CitationTestConfiguration.class
+})
 @SpringBootTest(classes = CitationBatchControllerIntegrationTests.CitationBatchTestApplication.class)
 class CitationBatchControllerIntegrationTests {
 

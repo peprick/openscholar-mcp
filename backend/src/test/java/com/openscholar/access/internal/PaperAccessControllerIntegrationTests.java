@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.jayway.jsonpath.JsonPath;
 import com.openscholar.TestcontainersConfiguration;
+import com.openscholar.TestCurrentUserConfiguration;
 import com.openscholar.access.AccessHostType;
 import com.openscholar.access.AccessStatus;
 import com.openscholar.access.AccessVerificationStatus;
@@ -66,7 +67,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @AutoConfigureMockMvc(addFilters = false)
-@Import({TestcontainersConfiguration.class, PaperAccessControllerIntegrationTests.FakeAccessConfiguration.class})
+@Import({
+	TestcontainersConfiguration.class,
+	TestCurrentUserConfiguration.class,
+	PaperAccessControllerIntegrationTests.FakeAccessConfiguration.class
+})
 @SpringBootTest(
 		classes = PaperAccessControllerIntegrationTests.AccessTestApplication.class,
 		properties = "openscholar.access.cache-ttl=1h")

@@ -11,6 +11,8 @@ import com.openscholar.library.CollectionNotFoundException;
 import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.jobs.ResearchRefreshJobNotFoundException;
 import com.openscholar.jobs.ResearchRefreshJobNotRetryableException;
+import com.openscholar.paper.InvalidPaperIdentifierException;
+import com.openscholar.paper.PaperIdentifierNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
@@ -20,6 +22,7 @@ import com.openscholar.search.SearchNotFoundException;
 import com.openscholar.search.SearchPageExhaustedException;
 import com.openscholar.search.SearchUnavailableException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -111,6 +114,30 @@ public class ApiExceptionHandler {
 				"PAPER_NOT_FOUND",
 				"Paper not found",
 				exception.getMessage());
+	}
+
+	@ExceptionHandler(InvalidPaperIdentifierException.class)
+	ResponseEntity<ProblemDetail> handleInvalidPaperIdentifier(InvalidPaperIdentifierException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.BAD_REQUEST,
+				"INVALID_PAPER_IDENTIFIER",
+				"Invalid paper identifier",
+				exception.getMessage());
+		return ResponseEntity.badRequest()
+				.cacheControl(CacheControl.noStore())
+				.body(problem);
+	}
+
+	@ExceptionHandler(PaperIdentifierNotFoundException.class)
+	ResponseEntity<ProblemDetail> handlePaperIdentifierNotFound(PaperIdentifierNotFoundException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.NOT_FOUND,
+				"PAPER_IDENTIFIER_NOT_FOUND",
+				"Paper identifier not found",
+				exception.getMessage());
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+				.cacheControl(CacheControl.noStore())
+				.body(problem);
 	}
 
 	@ExceptionHandler(CollectionNotFoundException.class)

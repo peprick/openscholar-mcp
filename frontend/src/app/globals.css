@@ -578,6 +578,94 @@ button:disabled {
   margin: 10px 2px 0;
 }
 
+.identifierLookup {
+  align-items: center;
+  border-top: 1px solid rgb(23 35 29 / 12%);
+  column-gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
+  margin-top: 22px;
+  max-width: 1010px;
+  padding-top: 18px;
+}
+
+.identifierLookupIntro {
+  display: grid;
+  gap: 1px;
+}
+
+.identifierLookupIntro span {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.identifierLookupIntro strong {
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.22rem;
+  font-weight: 400;
+}
+
+.identifierLookupControl {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.identifierLookupControl input {
+  background: rgb(255 253 248 / 72%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  flex: 1;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.identifierLookupControl input::placeholder {
+  color: #7a867e;
+}
+
+.identifierLookupControl input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgb(21 92 71 / 11%);
+  outline: none;
+}
+
+.identifierLookupControl input[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgb(156 46 40 / 11%);
+}
+
+.identifierLookupControl .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.identifierLookupControl .button:disabled[data-offline="true"] {
+  cursor: not-allowed;
+}
+
+.identifierLookupHint,
+.identifierLookupError {
+  font-size: 0.72rem;
+  grid-column: 2;
+  margin: 6px 2px 0;
+}
+
+.identifierLookupHint {
+  color: var(--ink-faint);
+}
+
+.identifierLookupError {
+  color: var(--danger);
+  font-weight: 650;
+}
+
 .connectivityRegion {
   min-height: 0;
 }
@@ -2443,6 +2531,26 @@ button:disabled {
 
   .filterGrid {
     grid-template-columns: 1fr;
+  }
+
+  .identifierLookup {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+
+  .identifierLookupControl {
+    flex-direction: column;
+  }
+
+  .identifierLookupControl .button {
+    width: 100%;
+  }
+
+  .identifierLookupHint,
+  .identifierLookupError {
+    grid-column: 1;
+    margin-top: -4px;
   }
 
   .topicSuggestions {

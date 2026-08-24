@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { BackendStatus } from "@/features/search/backend-status";
+import { IdentifierLookup } from "@/features/search/identifier-lookup";
 import { SearchForm } from "@/features/search/search-form";
 
 export const metadata: Metadata = {
@@ -42,6 +43,7 @@ export default async function HomePage({
             versions from trusted scholarly sources.
           </p>
           <SearchForm initialQuery={initialQuery} />
+          <IdentifierLookup />
           <div className="topicSuggestions" aria-label="Example research topics">
             <span>Try a topic</span>
             {exampleTopics.map((topic) => (

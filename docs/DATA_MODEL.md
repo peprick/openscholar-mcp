@@ -66,7 +66,7 @@ Current migrations index normalized title, publication year, the generated full-
 
 ### `paper_external_id`
 
-Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local IDs. A unique constraint on `(id_type, namespace, normalized_value)` prevents exact-identifier duplicates while allowing different repositories to reuse local IDs.
+Stores normalized DOI, arXiv, OpenAlex, PMID, PMCID, CORE, and repository-local IDs. A unique constraint on `(id_type, namespace, normalized_value)` prevents exact-identifier duplicates while allowing different repositories to reuse local IDs. Direct DOI/arXiv/OpenAlex resolution uses this index only after the same query proves that the canonical paper is visible through the current owner's search snapshots or collections.
 
 ### `paper_version`
 

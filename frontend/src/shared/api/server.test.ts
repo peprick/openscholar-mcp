@@ -5,6 +5,7 @@ import {
   fetchBackend,
   getNextSearchPage,
   getRelatedPapers,
+  resolvePaperIdentifier,
 } from "@/shared/api/server";
 import { getAuthConfig } from "@/shared/auth/config";
 import {
@@ -157,6 +158,57 @@ describe("getRelatedPapers", () => {
     await expect(
       getRelatedPapers(testIds.paper.toUpperCase()),
     ).resolves.toEqual(relatedPapersResponseFixture());
+  });
+});
+
+describe("resolvePaperIdentifier", () => {
+  it("encodes the pasted identifier and validates the resolution payload", async () => {
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "http://backend.test:8080");
+    const resolution = {
+      paperId: testIds.paper,
+      identifierType: "DOI" as const,
+      normalizedValue: "10.1000/example",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(resolution), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      resolvePaperIdentifier("doi:10.1000/example?part=one"),
+    ).resolves.toEqual(resolution);
+
+    const query = new URLSearchParams({
+      identifier: "doi:10.1000/example?part=one",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL(`/api/v1/papers/resolve?${query}`, "http://backend.test:8080"),
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
+  it("rejects extra fields in the backend response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            paperId: testIds.paper,
+            identifierType: "ARXIV",
+            normalizedValue: "2401.12345",
+            title: "Unexpected field",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(resolvePaperIdentifier("2401.12345")).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
   });
 });
 

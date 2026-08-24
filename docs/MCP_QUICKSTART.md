@@ -1,6 +1,6 @@
 # MCP quickstart
 
-OpenScholar exposes five read-oriented tools at `http://127.0.0.1:8080/mcp` over stateless Streamable HTTP. The MCP adapter and REST controllers call the same Spring application use cases; the adapter does not expose database entities, arbitrary URL fetching, filesystem access, or collection mutations.
+OpenScholar exposes six read-oriented tools at `http://127.0.0.1:8080/mcp` over stateless Streamable HTTP. The MCP adapter and REST controllers call the same Spring application use cases; the adapter does not expose database entities, arbitrary URL fetching, filesystem access, or collection mutations.
 
 ## 1. Configure the local key
 
@@ -74,14 +74,28 @@ Version `2.2.0` is the Inspector release used for the documented smoke test; upg
 | Tool | Behavior | External provider call |
 |---|---|---|
 | `search_research` | Searches or reuses a bounded owner-scoped scholarly snapshot; returns canonical IDs, requested mode, actual execution source, ranking rationale, full provider provenance, warnings, and a cursor. | Possible in `AUTO`/`ONLINE`; never in `LOCAL` |
+| `resolve_paper_identifier` | Resolves an owner-visible DOI, arXiv, or OpenAlex reference to its canonical OpenScholar paper ID. | No |
 | `get_paper_details` | Reads canonical metadata, identifiers, provenance, freshness, and the full stored access resolution for one OpenScholar UUID. | No |
 | `get_legal_full_text` | Reads the stored legal-access resolution and verified links. `NOT_YET_RESOLVED` means the REST/UI verification flow has not run yet. | No |
 | `search_saved_library` | Searches the current owner's saved memberships by text, collection, status, and normalized tag. Local mode uses the fixed bootstrap owner; hosted mode derives it from issuer+subject. | No |
 | `export_citations` | Returns a bounded ordered BibTeX or CSL-JSON export as structured MCP content. | No |
 
-MCP-specific result and citation batches are capped at 25 items. Citation inputs must be distinct canonical UUIDs. Paper-detail lookup currently accepts the canonical OpenScholar UUID only; DOI, arXiv, and OpenAlex identifier resolution is a later catalog feature.
+MCP-specific result and citation batches are capped at 25 items. Citation inputs must be distinct canonical UUIDs. `resolve_paper_identifier` is catalog-only: it does not import an unseen reference, and a paper must already be visible through the current owner's searches or collections.
 
 Search can update internal metadata/search caches, but none of the advertised tools mutates the user's collections or reading state. Write tools are deferred and are not currently advertised or implemented.
+
+When an agent already has a scholarly reference, it can skip a topic search and call:
+
+```json
+{
+  "name": "resolve_paper_identifier",
+  "arguments": {
+    "identifier": "https://doi.org/10.1038/s41586-020-2649-2"
+  }
+}
+```
+
+The call succeeds only after that paper has appeared in the current owner's search results or library. Pass the returned `paperId` to `get_paper_details`, `get_legal_full_text`, or `export_citations`.
 
 ## 4. Raw protocol smoke check
 
@@ -180,8 +194,8 @@ pnpm --dir tools/mcp-conformance exec conformance server \
   --verbose
 ```
 
-Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, resources, prompts, sampling, and elicitation that this five-tool domain server intentionally does not advertise; failing those fixture scenarios would not indicate a production contract failure. Do not use the `server-stateless` scenario, which targets a later protocol revision.
+Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, resources, prompts, sampling, and elicitation that this six-tool domain server intentionally does not advertise; failing those fixture scenarios would not indicate a production contract failure. Do not use the `server-stateless` scenario, which targets a later protocol revision.
 
-Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings, and `tools-list` discovered exactly the five documented tools.
+Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings. The current `tools-list` contract discovers exactly the six documented tools.
 
 The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, tooling-lock, and workflow changes. It installs the same frozen CLI with scripts disabled, starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.

@@ -14,7 +14,7 @@ The complete machine-readable REST contract is the checked-in [OpenAPI 3.1 speci
 
 ## Authentication modes
 
-Local development keeps REST on the fixed local owner and protects `/mcp` with `MCP_LOCAL_API_KEY`. When `OIDC_SECURITY_ENABLED=true`, Spring Boot becomes a stateless JWT resource server: it validates signature, expiry, issuer, and audience, then applies `openscholar.search`, `openscholar.library`, `openscholar.jobs`, `openscholar.privacy`, `openscholar.mcp`, or `openscholar.ops` by route. Search snapshots and library collections are resolved through the authenticated issuer+subject owner; unauthorized owned identifiers return not found rather than revealing another principal's object.
+Local development keeps REST on the fixed local owner and protects `/mcp` with `MCP_LOCAL_API_KEY`. When `OIDC_SECURITY_ENABLED=true`, Spring Boot becomes a stateless JWT resource server: it validates signature, expiry, issuer, and audience, then applies `openscholar.search`, `openscholar.library`, `openscholar.jobs`, `openscholar.privacy`, `openscholar.mcp`, or `openscholar.ops` by route. Search snapshots, library collections, and exact paper-identifier lookup are resolved through the authenticated issuer+subject owner; unauthorized owned identifiers return not found rather than revealing another principal's object.
 
 Hosted MCP publishes protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Its `401`/`403` challenges identify that metadata document and the required `openscholar.mcp` scope. The issuer remains the authorization server; OpenScholar does not issue tokens.
 
@@ -68,13 +68,16 @@ Open-access flags and PDF URLs in this search response are explicitly provider-r
 
 ```http
 GET  /api/v1/papers/{paperId}
+GET  /api/v1/papers/resolve?identifier={doi-or-arxiv-or-openalex-reference}
 GET  /api/v1/papers/{paperId}/versions
 GET  /api/v1/papers/{paperId}/related
 GET  /api/v1/papers/{paperId}/citation?format=bibtex
 POST /api/v1/papers/{paperId}/access/verify?forceRefresh=false
 ```
 
-All five paper/access routes above are implemented. `GET /versions` reads only the stored resolution. Before the first resolution it returns `NOT_YET_RESOLVED` with no locations and does not contact Unpaywall or arXiv.
+All six paper/access routes above are implemented. `GET /versions` reads only the stored resolution. Before the first resolution it returns `NOT_YET_RESOLVED` with no locations and does not contact Unpaywall or arXiv.
+
+`GET /papers/resolve` accepts common DOI, arXiv, and OpenAlex work references, normalizes the identifier with the same rules used during catalog ingestion, and returns the canonical paper UUID plus the matched type and normalized value. It is a database-only shortcut: it never discovers or imports a previously unseen paper and never contacts a provider. A paper is eligible only when it already appears in the current owner's search history or collections. Missing and other-owner matches both return `404 PAPER_IDENTIFIER_NOT_FOUND`; malformed or unsupported references return `400 INVALID_PAPER_IDENTIFIER`. Hosted calls require `openscholar.search`.
 
 `GET /papers/{paperId}` is a database-only canonical-details read. It returns canonical bibliographic fields—including nullable publisher, institution, volume, issue, pages, article number, edition, ISBN/ISSN, and degree metadata—paper-specific credited author names in provider order, every identifier, citation-count freshness, metadata completeness/freshness, deterministic record-level provenance, and a compact stored-access summary. Provenance identifies associated provider records and the record selected for canonical authorship; it is not field-level attribution. Source URLs are restricted to absolute HTTP(S) records and returned without query strings or fragments. Raw provider metadata and provider-reported landing/PDF links are excluded, while `/versions` remains the contract for verified access locations. An unknown UUID returns `404 PAPER_NOT_FOUND`; a malformed UUID returns the safe `400 INVALID_REQUEST` problem.
 
@@ -174,7 +177,7 @@ The implemented transport is stateless Streamable HTTP through `spring-ai-starte
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Local mode requires the configured MCP bearer key. OIDC mode delegates bearer validation to the JWT resource server and requires `openscholar.mcp`; present `Origin` headers must still exactly match the configured allow-list.
 
-The adapter registers five read-oriented tools. `search_research` in `AUTO` or `ONLINE` mode may contact the enabled discovery-provider set and update internal metadata/search caches; `LOCAL` is database-only but still stores an immutable owned snapshot. Because MCP annotations describe the whole tool rather than one invocation, `search_research` retains `readOnlyHint=false`, `idempotentHint=false`, and `openWorldHint=true` for every mode. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other four tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+The adapter registers six read-oriented tools. `search_research` in `AUTO` or `ONLINE` mode may contact the enabled discovery-provider set and update internal metadata/search caches; `LOCAL` is database-only but still stores an immutable owned snapshot. Because MCP annotations describe the whole tool rather than one invocation, `search_research` retains `readOnlyHint=false`, `idempotentHint=false`, and `openWorldHint=true` for every mode. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other five tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
 
 ## MVP MCP tools
 
@@ -200,9 +203,13 @@ Finds provider-backed, cached, or owner-scoped local research metadata.
 
 Output includes canonical paper IDs, nullable typed publication metadata (publisher/institution, volume/issue, pages or article number, edition, ISBN/ISSN, and degree), provider-reported access hints, ranking reasons, full contributing-provider provenance, requested mode, actual execution source, cache disposition, freshness, warnings, and the next cursor. The existing primary provider fields remain for compatibility; `provenance` is the complete contribution list. Provider-reported PDF links are not verified legal-access claims; use stored access output from `get_legal_full_text` after verification through REST/UI.
 
+### `resolve_paper_identifier`
+
+Accepts one DOI, arXiv, or OpenAlex work reference and returns its canonical OpenScholar paper UUID, identifier type, and normalized value when that paper is already visible through the current owner's searches or collections. It is read-only, database-only, and performs no discovery or access-provider call. A valid but unavailable reference does not reveal whether it exists for another owner.
+
 ### `get_paper_details`
 
-Accepts one canonical OpenScholar UUID and returns canonical metadata, identifiers, ordered authorship, record-level provenance, freshness, and the full stored access resolution, including coverage, warnings, and locations. It never contacts a provider. DOI, arXiv, and OpenAlex identifier resolution remains planned.
+Accepts one canonical OpenScholar UUID and returns canonical metadata, identifiers, ordered authorship, record-level provenance, freshness, and the full stored access resolution, including coverage, warnings, and locations. It never contacts a provider. Use `resolve_paper_identifier` first when the caller has a DOI, arXiv, or OpenAlex reference instead of an OpenScholar UUID.
 
 ### `get_legal_full_text`
 

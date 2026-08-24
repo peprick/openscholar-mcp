@@ -57,6 +57,7 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 - Missing, expired, wrong-issuer, wrong-audience, and insufficient-scope tokens for REST and MCP.
 - User A requesting/exporting/deleting User B resources by every identifier and pagination path.
 - User A using LOCAL/AUTO fallback, filters, or cursors to infer a canonical paper visible only to User B.
+- User A resolving User B's DOI, arXiv, or OpenAlex reference through REST or MCP and comparing not-found behavior with a globally absent identifier.
 - Forged forwarding headers, Origin variants, oversized/chunked MCP payloads, expensive-query bursts, and rate-limit identity churn.
 - Provider URLs resolving to private/link-local addresses initially or after redirect/DNS change.
 - Huge/malformed JSON, Atom, compressed responses, redirect chains, slow bodies, malicious metadata, and partial provider outages.

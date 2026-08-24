@@ -103,6 +103,31 @@ class PaperCatalogServiceTests {
 	}
 
 	@Test
+	void keepsTheExistingPercentEncodedDoiPersistenceKeyStable() {
+		PaperView fromUrl = paperCatalog.upsert(
+				paper(
+						"Encoded legacy DOI",
+						null,
+						0,
+						NOW,
+						List.of(new PaperIdentifier(
+								PaperIdentifierType.DOI,
+								"",
+								"https://doi.org/10.978.86123/Legacy%23Section+One")),
+						List.of()),
+				providerRecord("legacy-doi-url", NOW, Map.of()),
+				NOW);
+
+		assertThat(fromUrl.id()).isNotNull();
+		assertThat(count("paper")).isEqualTo(1);
+		assertThat(count("paper_external_id")).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"select normalized_value from paper_external_id where paper_id = ?",
+				String.class,
+				fromUrl.id())).isEqualTo("10.978.86123/legacy%23section+one");
+	}
+
+	@Test
 	void staleProviderReplayCannotAttachANewIdentifier() {
 		Instant newer = Instant.parse("2026-08-16T10:00:00Z");
 		PaperView original = paperCatalog.upsert(

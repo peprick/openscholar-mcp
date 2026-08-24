@@ -237,6 +237,28 @@ export const paperDetailsResponseSchema = z.object({
   access: accessSummarySchema,
 });
 
+export const paperIdentifierLookupRequestSchema = z
+  .object({
+    identifier: z
+      .string()
+      .trim()
+      .min(1, "Enter a DOI, arXiv ID, or OpenAlex work ID.")
+      .max(512, "The paper identifier is too long.")
+      .refine(
+        (value) => !/[\u0000-\u001f\u007f]/u.test(value),
+        "The paper identifier contains unsupported characters.",
+      ),
+  })
+  .strict();
+
+export const paperIdentifierResolutionSchema = z
+  .object({
+    paperId: z.string().uuid(),
+    identifierType: z.enum(["DOI", "ARXIV", "OPENALEX"]),
+    normalizedValue: z.string().min(1).max(512),
+  })
+  .strict();
+
 const relatedPaperAuthorSchema = authorSchema.strict();
 const relatedPaperRankingModeSchema = z.enum(["LEXICAL", "HYBRID"]);
 const relatedPaperFallbackReasonSchema = z.enum([
@@ -384,6 +406,12 @@ export type SearchMode = z.infer<typeof searchModeSchema>;
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 export type SearchResult = SearchResponse["results"][number];
 export type PaperDetailsResponse = z.infer<typeof paperDetailsResponseSchema>;
+export type PaperIdentifierLookupRequest = z.infer<
+  typeof paperIdentifierLookupRequestSchema
+>;
+export type PaperIdentifierResolution = z.infer<
+  typeof paperIdentifierResolutionSchema
+>;
 export type RelatedPapersResponse = z.infer<typeof relatedPapersResponseSchema>;
 export type RelatedPaperResult = RelatedPapersResponse["results"][number];
 export type PaperAccessResponse = z.infer<typeof paperAccessResponseSchema>;

@@ -1,6 +1,6 @@
 # Roadmap
 
-OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, and five-tool MCP flows are implemented. This roadmap lists future outcomes only; completed milestones are represented by the code, tests, architecture decisions, and quality evidence in this repository.
+OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, and six-tool MCP flows are implemented. This roadmap lists future outcomes only; completed milestones are represented by the code, tests, architecture decisions, and quality evidence in this repository.
 
 ## 1. Prove a hosted release
 
@@ -17,7 +17,6 @@ The checked-in deployment stack is a hardened template, not evidence of a public
 
 - Evaluate PubMed Central and audience-relevant institutional repositories through supported APIs.
 - Add providers only after documenting terms, attribution, quotas, failure isolation, and allowed metadata/document handling.
-- Improve exact-identifier lookup so DOI, arXiv, and OpenAlex identifiers can resolve directly to canonical papers.
 - Measure provider-specific usefulness before enabling additional sources by default.
 
 OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA workarounds, or indiscriminate PDF collection.

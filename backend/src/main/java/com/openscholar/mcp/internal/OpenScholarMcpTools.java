@@ -33,13 +33,18 @@ import com.openscholar.library.LibraryUseCase;
 import com.openscholar.library.ReadingStatus;
 import com.openscholar.library.SavedPaperView;
 import com.openscholar.paper.DocumentType;
+import com.openscholar.paper.InvalidPaperIdentifierException;
 import com.openscholar.paper.PaperAuthorView;
 import com.openscholar.paper.PaperDetailsUseCase;
 import com.openscholar.paper.PaperDetailsView;
 import com.openscholar.paper.PaperIdentifier;
+import com.openscholar.paper.PaperIdentifierLookupUseCase;
+import com.openscholar.paper.PaperIdentifierNotFoundException;
+import com.openscholar.paper.PaperIdentifierResolutionView;
 import com.openscholar.paper.PaperNotFoundException;
 import com.openscholar.paper.PaperProviderRecordView;
 import com.openscholar.paper.PaperView;
+import com.openscholar.paper.ResolvablePaperIdentifierType;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.search.CacheDisposition;
 import com.openscholar.search.ProviderContributionView;
@@ -79,6 +84,8 @@ public class OpenScholarMcpTools {
 
 	private final PaperDetailsUseCase paperDetailsUseCase;
 
+	private final PaperIdentifierLookupUseCase paperIdentifierLookupUseCase;
+
 	private final PaperAccessUseCase paperAccessUseCase;
 
 	private final LibraryUseCase libraryUseCase;
@@ -88,10 +95,12 @@ public class OpenScholarMcpTools {
 	private final McpToolResultBudget toolResultBudget;
 
 	public OpenScholarMcpTools(SearchResearchUseCase searchUseCase, PaperDetailsUseCase paperDetailsUseCase,
-			PaperAccessUseCase paperAccessUseCase, LibraryUseCase libraryUseCase,
+			PaperIdentifierLookupUseCase paperIdentifierLookupUseCase, PaperAccessUseCase paperAccessUseCase,
+			LibraryUseCase libraryUseCase,
 			CitationBatchExportUseCase citationExportUseCase, McpToolResultBudget toolResultBudget) {
 		this.searchUseCase = searchUseCase;
 		this.paperDetailsUseCase = paperDetailsUseCase;
+		this.paperIdentifierLookupUseCase = paperIdentifierLookupUseCase;
 		this.paperAccessUseCase = paperAccessUseCase;
 		this.libraryUseCase = libraryUseCase;
 		this.citationExportUseCase = citationExportUseCase;
@@ -149,6 +158,19 @@ public class OpenScholarMcpTools {
 			PaperDetailsView paper = paperDetailsUseCase.get(requiredPaperId);
 			return PaperDetailsToolResult.from(paper, paperAccessUseCase.get(requiredPaperId));
 		});
+	}
+
+	@McpTool(name = "resolve_paper_identifier", title = "Resolve paper identifier",
+			description = "Resolve one DOI, arXiv, or OpenAlex work identifier to a canonical OpenScholar paper UUID. "
+					+ "This owner-scoped database lookup only returns papers already visible in the caller's research history "
+					+ "or saved library and never contacts a provider.",
+			generateOutputSchema = true,
+			annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false,
+					idempotentHint = true, openWorldHint = false))
+	public PaperIdentifierResolutionToolResult resolvePaperIdentifier(
+			@McpToolParam(description = "DOI, arXiv identifier, OpenAlex work identifier, or canonical URL") String identifier) {
+		return execute("resolve_paper_identifier",
+				() -> PaperIdentifierResolutionToolResult.from(paperIdentifierLookupUseCase.resolve(identifier)));
 	}
 
 	@McpTool(name = "get_legal_full_text", title = "Find legal full text",
@@ -275,6 +297,12 @@ public class OpenScholarMcpTools {
 	private <T> T execute(String toolName, Supplier<T> action) {
 		try {
 			return toolResultBudget.requireWithinLimit(action.get());
+		}
+		catch (InvalidPaperIdentifierException exception) {
+			throw failure("INVALID_PAPER_IDENTIFIER", exception);
+		}
+		catch (PaperIdentifierNotFoundException exception) {
+			throw failure("PAPER_IDENTIFIER_NOT_FOUND", exception);
 		}
 		catch (PaperNotFoundException exception) {
 			throw failure("PAPER_NOT_FOUND", exception);
@@ -451,6 +479,16 @@ public class OpenScholarMcpTools {
 
 		private static RankingReasonToolResult from(RankingReason reason) {
 			return new RankingReasonToolResult(reason.feature(), reason.value());
+		}
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public record PaperIdentifierResolutionToolResult(UUID paperId, ResolvablePaperIdentifierType identifierType,
+			String normalizedValue) {
+
+		private static PaperIdentifierResolutionToolResult from(PaperIdentifierResolutionView resolution) {
+			return new PaperIdentifierResolutionToolResult(resolution.paperId(), resolution.identifierType(),
+					resolution.normalizedValue());
 		}
 	}
 

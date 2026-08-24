@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.openscholar.TestcontainersConfiguration;
+import com.openscholar.TestCurrentUserConfiguration;
 import com.openscholar.access.AccessDisposition;
 import com.openscholar.access.AccessHostType;
 import com.openscholar.access.AccessLocationView;
@@ -60,6 +61,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @AutoConfigureMockMvc(addFilters = false)
 @Import({
 	TestcontainersConfiguration.class,
+	TestCurrentUserConfiguration.class,
 	PaperDetailsControllerIntegrationTests.FakeAccessConfiguration.class
 })
 @SpringBootTest(classes = PaperDetailsControllerIntegrationTests.PaperDetailsTestApplication.class)

@@ -52,7 +52,7 @@ com.openscholar
 ├── jobs                   # offline embedding backfill plus durable metadata/access refresh leases
 ├── privacy                # owner-scoped personal-data export and deletion
 ├── security               # local identity or OIDC principal/JWT/scope boundary
-├── mcp                    # five tool handlers and HTTP security boundary
+├── mcp                    # six tool handlers and HTTP security boundary
 ├── api                    # Spring MVC controllers and request/response DTOs
 └── persistence            # shared persistence configuration
 ```
@@ -179,9 +179,9 @@ The related-paper endpoint remains database-only. Its opt-in hybrid read consume
 
 ## MCP architecture
 
-The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spring AI WebMVC starter. Five annotation-registered, read-oriented handlers delegate to the same application services used by REST. WebMVC plus Java 21 virtual threads fits the blocking JPA path.
+The backend exposes a stateless Streamable HTTP endpoint at `/mcp` using the Spring AI WebMVC starter. Six annotation-registered, read-oriented handlers delegate to the same application services used by REST. WebMVC plus Java 21 virtual threads fits the blocking JPA path.
 
-Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; `search_research(mode=LOCAL)` and legal-access retrieval are stored-only. Provider-backed search results expose every contribution retained by their snapshot; local execution exposes one deterministic stored provider record without inventing local provenance. The search tool's static MCP annotations remain conservative because AUTO/ONLINE can access the open world and every newly executed mode stores a snapshot. Local deployment uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
+Stateless mode suits the bounded request/response tools and horizontal scaling. Search is the only MCP tool allowed to contact discovery providers; `search_research(mode=LOCAL)`, exact-identifier resolution, and legal-access retrieval are stored-only. Exact DOI, arXiv, and OpenAlex lookup is limited to canonical papers already visible through the current owner's search snapshots or collections, so the shared catalog cannot be enumerated; [ADR 0008](decisions/0008-owner-scoped-exact-identifier-resolution.md) records that boundary. Provider-backed search results expose every contribution retained by their snapshot; local execution exposes one deterministic stored provider record without inventing local provenance. The search tool's static MCP annotations remain conservative because AUTO/ONLINE can access the open world and every newly executed mode stores a snapshot. Local deployment uses an explicit loopback MCP bearer key and fixed owner. OIDC mode uses Spring Security's stateless JWT resource server, validates signature/time/issuer/audience, requires `openscholar.mcp`, derives the owner from issuer+subject, rate-limits on a hashed principal identity, and publishes RFC 9728-style protected-resource metadata at `/.well-known/oauth-protected-resource/mcp`. Inbound bearer tokens are never forwarded to scholarly providers.
 
 The configured MCP SDK request timeout still does not provide whole-tool cancellation. Discovery-provider exchange deadlines, the 12-second coordination limit, and the 18-second search application deadline bound their own layers, but framework parsing/serialization, socket lifetime, client disconnects, and `notifications/cancelled` do not cancel the tool worker. Durable refresh jobs are REST operations and are not MCP Tasks or owned MCP job handles.
 

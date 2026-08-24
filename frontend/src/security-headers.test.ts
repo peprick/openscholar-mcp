@@ -109,6 +109,7 @@ describe("security headers", () => {
     expect(caddyfile).toContain(
       'Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=()"',
     );
+    expect(caddyfile).toContain("replace identifier REDACTED");
 
     const pdfWorker = readFileSync(
       resolve(

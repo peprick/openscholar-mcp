@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 
+import com.openscholar.paper.PaperIdentifierNormalizer;
 import com.openscholar.paper.PaperIdentifierType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -91,32 +92,9 @@ class PaperExternalIdEntity {
 				paper,
 				idType,
 				cleanNamespace,
-				normalize(idType, cleanValue),
+				PaperIdentifierNormalizer.normalize(idType, cleanValue),
 				cleanValue,
 				now);
-	}
-
-	static String normalize(PaperIdentifierType type, String value) {
-		String normalized = value.toLowerCase(Locale.ROOT);
-		if (type == PaperIdentifierType.DOI) {
-			normalized = normalized
-					.replaceFirst("^https?://(?:dx\\.)?doi\\.org/", "")
-					.replaceFirst("^doi:\\s*", "");
-		}
-		if (type == PaperIdentifierType.OPENALEX) {
-			normalized = normalized.replaceFirst("^https?://openalex\\.org/(?:works/)?", "");
-		}
-		if (type == PaperIdentifierType.ARXIV) {
-			normalized = normalized
-					.replaceFirst("^https?://(?:export\\.)?arxiv\\.org/(?:abs|pdf)/", "")
-					.replaceFirst("^arxiv:\\s*", "")
-					.replaceFirst("\\.pdf$", "");
-			if (normalized.matches(
-					"(?:\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?/\\d{7})v\\d+")) {
-				normalized = normalized.replaceFirst("v\\d+$", "");
-			}
-		}
-		return normalized.strip();
 	}
 
 	UUID id() {

@@ -26,6 +26,7 @@ import com.openscholar.paper.PaperAuthorCandidate;
 import com.openscholar.paper.PaperAuthorView;
 import com.openscholar.paper.PaperCatalog;
 import com.openscholar.paper.PaperIdentifier;
+import com.openscholar.paper.PaperIdentifierNormalizer;
 import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.paper.PaperView;
 import com.openscholar.paper.ProviderRecordCandidate;
@@ -432,7 +433,7 @@ class PaperCatalogService implements PaperCatalog {
 			}
 			String rawValue = ProviderRecordEntity.cleanRequired(
 					identifier.value(), "Paper identifier must not be blank");
-			String normalizedValue = PaperExternalIdEntity.normalize(identifier.type(), rawValue);
+			String normalizedValue = PaperIdentifierNormalizer.normalize(identifier.type(), rawValue);
 			NormalizedIdentifier value = new NormalizedIdentifier(
 					identifier.type(), namespace, normalizedValue, rawValue);
 			normalized.putIfAbsent(value.lockKey(), value);

@@ -83,6 +83,7 @@
 					replace error_description REDACTED
 					replace error_uri REDACTED
 					replace id_token REDACTED
+					replace identifier REDACTED
 					replace nonce REDACTED
 					replace q REDACTED
 					replace query REDACTED

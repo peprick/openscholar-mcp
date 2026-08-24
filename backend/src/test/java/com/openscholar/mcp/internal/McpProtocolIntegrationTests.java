@@ -105,6 +105,7 @@ class McpProtocolIntegrationTests {
 		assertThat(tools.keySet()).containsExactlyInAnyOrder(
 				"search_research",
 				"get_paper_details",
+				"resolve_paper_identifier",
 				"get_legal_full_text",
 				"search_saved_library",
 				"export_citations");
@@ -114,6 +115,8 @@ class McpProtocolIntegrationTests {
 						"languages", "limit", "cursor", "forceRefresh", "mode"),
 				Set.of("topic"), false, false, true);
 		assertToolContract(tools.get("get_paper_details"), Set.of("paperId"), Set.of("paperId"), true, true, false);
+		assertToolContract(tools.get("resolve_paper_identifier"), Set.of("identifier"), Set.of("identifier"), true,
+				true, false);
 		assertToolContract(tools.get("get_legal_full_text"), Set.of("paperId"), Set.of("paperId"), true, true, false);
 		assertToolContract(tools.get("search_saved_library"),
 				Set.of("query", "collectionId", "readingStatus", "tag", "page", "size"), Set.of(), true, true,
@@ -128,6 +131,8 @@ class McpProtocolIntegrationTests {
 		assertThat(inputProperty(tools.get("search_research"), "mode").required("type").asString())
 			.isEqualTo("string");
 		assertThat(inputProperty(tools.get("get_paper_details"), "paperId").required("type").asString())
+			.isEqualTo("string");
+		assertThat(inputProperty(tools.get("resolve_paper_identifier"), "identifier").required("type").asString())
 			.isEqualTo("string");
 		assertThat(inputProperty(tools.get("get_legal_full_text"), "paperId").required("type").asString())
 			.isEqualTo("string");
@@ -151,6 +156,12 @@ class McpProtocolIntegrationTests {
 				.isEqualTo("string");
 		JsonNode detailPaper = tools.get("get_paper_details").required("outputSchema")
 				.required("properties").required("paper");
+		JsonNode identifierResolution = tools.get("resolve_paper_identifier").required("outputSchema");
+		assertThat(arrayValues(identifierResolution.required("required")))
+			.containsExactlyInAnyOrder("paperId", "identifierType", "normalizedValue");
+		assertThat(arrayValues(identifierResolution.required("properties").required("identifierType")
+			.required("enum")))
+			.containsExactly("DOI", "ARXIV", "OPENALEX");
 		assertThat(arrayValues(detailPaper.required("required"))).doesNotContain(
 				"publisher", "institution", "volume", "issue", "pages", "articleNumber", "edition", "isbn",
 				"issn", "degree");
@@ -226,9 +237,18 @@ class McpProtocolIntegrationTests {
 		JsonNode search = callTool(10, "search_research", Map.of("topic", topic, "limit", 1));
 		JsonNode searchContent = successfulStructuredContent(search);
 		String paperId = searchContent.required("results").required(0).required("paperId").asString();
+		assertThat(researchProvider.calls()).isOne();
+
+		JsonNode resolution = successfulStructuredContent(callTool(11, "resolve_paper_identifier",
+				Map.of("identifier", "https://doi.org/10.1000/OpenScholar.MCP-Wire-Test")));
+		assertThat(resolution.required("paperId").asString()).isEqualTo(paperId);
+		assertThat(resolution.required("identifierType").asString()).isEqualTo("DOI");
+		assertThat(resolution.required("normalizedValue").asString())
+			.isEqualTo("10.1000/openscholar.mcp-wire-test");
+		assertThat(researchProvider.calls()).isOne();
 
 		JsonNode details = successfulStructuredContent(
-				callTool(11, "get_paper_details", Map.of("paperId", paperId)));
+				callTool(12, "get_paper_details", Map.of("paperId", paperId)));
 		JsonNode detailsPaper = details.required("paper");
 		assertThat(detailsPaper.required("paperId").asString()).isEqualTo(paperId);
 		assertThat(detailsPaper.has("publisher")).isFalse();
@@ -245,20 +265,39 @@ class McpProtocolIntegrationTests {
 			.isEqualTo("NOT_YET_RESOLVED");
 
 		JsonNode access = successfulStructuredContent(
-				callTool(12, "get_legal_full_text", Map.of("paperId", paperId)));
+				callTool(13, "get_legal_full_text", Map.of("paperId", paperId)));
 		assertThat(access.required("paperId").asString()).isEqualTo(paperId);
 		assertThat(access.required("disposition").asString()).isEqualTo("NOT_YET_RESOLVED");
 		assertThat(access.required("locations")).isEmpty();
 
-		JsonNode library = successfulStructuredContent(callTool(13, "search_saved_library", Map.of()));
+		JsonNode library = successfulStructuredContent(callTool(14, "search_saved_library", Map.of()));
 		assertThat(library.required("items")).isEmpty();
 		assertThat(library.required("totalElements").asLong()).isZero();
 
-		JsonNode citations = successfulStructuredContent(callTool(14, "export_citations",
+		JsonNode citations = successfulStructuredContent(callTool(15, "export_citations",
 				Map.of("paperIds", List.of(paperId), "format", "bibtex")));
 		assertThat(citations.required("format").asString()).isEqualTo("bibtex");
 		assertThat(citations.required("paperCount").asInt()).isEqualTo(1);
 		assertThat(citations.required("content").asString()).contains("Deterministic MCP paper");
+	}
+
+	@Test
+	void returnsSafeIdentifierResolutionFailuresWithoutCallingAProvider() throws Exception {
+		JsonNode invalid = callTool(16, "resolve_paper_identifier", Map.of("identifier", "not-an-identifier"));
+		JsonNode invalidResult = invalid.required("result");
+		assertThat(invalidResult.required("isError").asBoolean()).isTrue();
+		assertThat(invalidResult.required("content").required(0).required("text").asString())
+			.contains("INVALID_PAPER_IDENTIFIER")
+			.doesNotContain("Exception", "jdbc:");
+
+		String absentDoi = "10.1000/not-visible-" + UUID.randomUUID();
+		JsonNode absent = callTool(17, "resolve_paper_identifier", Map.of("identifier", absentDoi));
+		JsonNode absentResult = absent.required("result");
+		assertThat(absentResult.required("isError").asBoolean()).isTrue();
+		assertThat(absentResult.required("content").required(0).required("text").asString())
+			.contains("PAPER_IDENTIFIER_NOT_FOUND")
+			.doesNotContain(absentDoi, "Exception", "jdbc:");
+		assertThat(researchProvider.calls()).isZero();
 	}
 
 	@Test

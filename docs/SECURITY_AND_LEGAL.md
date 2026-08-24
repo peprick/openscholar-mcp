@@ -131,6 +131,7 @@ The local server binds to loopback by default. Production Compose enables OIDC a
 ## Privacy and retention
 
 - Library data and search snapshots are owner-scoped in local and OIDC modes; the latter derives ownership from validated issuer+subject rather than a client-supplied UUID.
+- Exact DOI, arXiv, and OpenAlex lookup is database-only and limited to papers already present in the current owner's searches or collections. Missing and other-owner records share the same not-found response to prevent enumeration of the canonical catalog.
 - `GET /api/v1/privacy/export` returns a no-store JSON attachment with the current user's display data, search snapshots/filters/warnings, collections, and saved memberships/tags. It intentionally omits issuer/subject and operational job history.
 - `DELETE /api/v1/privacy/account` requires exact `DELETE_MY_DATA`. It deletes the current user's search-refresh jobs, search snapshots, collections/memberships/tags, and hosted user row. Shared canonical paper/provider/access data and global access-refresh jobs remain because they are not personal ownership records. Local mode preserves the fixed bootstrap row.
 - A later valid hosted token for the same issuer+subject provisions a new, empty internal account; deletion is not an identity-provider account revocation.

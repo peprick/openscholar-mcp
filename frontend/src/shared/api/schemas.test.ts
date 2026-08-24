@@ -4,6 +4,8 @@ import {
   createSearchRequestSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
+  paperIdentifierLookupRequestSchema,
+  paperIdentifierResolutionSchema,
   relatedPapersResponseSchema,
   searchResponseSchema,
 } from "@/shared/api/schemas";
@@ -58,6 +60,40 @@ describe("backend response schemas", () => {
     expect(
       relatedPapersResponseSchema.safeParse(relatedPapersResponseFixture()).success,
     ).toBe(true);
+  });
+
+  it("validates the bounded exact-identifier request and strict resolution", () => {
+    expect(
+      paperIdentifierLookupRequestSchema.parse({
+        identifier: "  doi:10.1000/example  ",
+      }),
+    ).toEqual({ identifier: "doi:10.1000/example" });
+    expect(
+      paperIdentifierLookupRequestSchema.safeParse({ identifier: "line\nbreak" })
+        .success,
+    ).toBe(false);
+    expect(
+      paperIdentifierResolutionSchema.safeParse({
+        paperId: "11111111-1111-4111-8111-111111111111",
+        identifierType: "DOI",
+        normalizedValue: "10.1000/example",
+      }).success,
+    ).toBe(true);
+    expect(
+      paperIdentifierResolutionSchema.safeParse({
+        paperId: "11111111-1111-4111-8111-111111111111",
+        identifierType: "PMID",
+        normalizedValue: "1234",
+      }).success,
+    ).toBe(false);
+    expect(
+      paperIdentifierResolutionSchema.safeParse({
+        paperId: "11111111-1111-4111-8111-111111111111",
+        identifierType: "ARXIV",
+        normalizedValue: "2401.12345",
+        title: "Unexpected field",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects unknown search execution sources", () => {

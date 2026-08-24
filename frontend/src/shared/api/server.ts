@@ -22,6 +22,7 @@ import {
   apiProblemSchema,
   paperAccessResponseSchema,
   paperDetailsResponseSchema,
+  paperIdentifierResolutionSchema,
   relatedPapersResponseSchema,
   searchResponseSchema,
   systemStatusResponseSchema,
@@ -29,6 +30,7 @@ import {
   type CreateSearchRequest,
   type PaperAccessResponse,
   type PaperDetailsResponse,
+  type PaperIdentifierResolution,
   type RelatedPapersResponse,
   type SearchResponse,
   type SystemStatusResponse,
@@ -212,6 +214,17 @@ export async function getPaperDetails(
     `/api/v1/papers/${encodeURIComponent(paperId)}`,
     paperDetailsResponseSchema,
     "paper details",
+  )).data;
+}
+
+export async function resolvePaperIdentifier(
+  identifier: string,
+): Promise<PaperIdentifierResolution> {
+  const query = new URLSearchParams({ identifier });
+  return (await requestJson(
+    `/api/v1/papers/resolve?${query}`,
+    paperIdentifierResolutionSchema,
+    "paper identifier resolution",
   )).data;
 }
 

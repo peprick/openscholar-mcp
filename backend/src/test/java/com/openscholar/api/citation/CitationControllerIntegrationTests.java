@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.openscholar.TestcontainersConfiguration;
+import com.openscholar.TestCurrentUserConfiguration;
 import com.openscholar.api.ApiExceptionHandler;
 import com.openscholar.paper.CanonicalPaperCandidate;
 import com.openscholar.paper.DocumentType;
@@ -53,6 +54,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @AutoConfigureMockMvc(addFilters = false)
 @Import({
 	TestcontainersConfiguration.class,
+	TestCurrentUserConfiguration.class,
 	CitationControllerIntegrationTests.CitationTestConfiguration.class
 })
 @SpringBootTest(classes = CitationControllerIntegrationTests.CitationTestApplication.class)

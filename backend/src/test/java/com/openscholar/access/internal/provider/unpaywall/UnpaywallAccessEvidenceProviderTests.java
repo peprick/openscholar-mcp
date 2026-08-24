@@ -75,6 +75,32 @@ class UnpaywallAccessEvidenceProviderTests {
 	}
 
 	@Test
+	void safelyEncodesAndMatchesALegacyGraphicDoi() {
+		String doi = "10.978.86123/(SICI)1099-0844<290>#Part";
+		Harness harness = harness("backend@example.test");
+		harness.server().expect(request -> {
+			assertThat(request.getURI().getPath()).isEqualTo("/v2/" + doi.toLowerCase());
+			assertThat(request.getURI().getRawFragment()).isNull();
+		})
+				.andExpect(method(GET))
+				.andRespond(withSuccess("""
+						{"doi":"10.978.86123/(SICI)1099-0844<290>#Part","is_oa":false,"oa_status":"closed"}
+						""", MediaType.APPLICATION_JSON));
+
+		assertThat(harness.provider().resolve(new AccessEvidenceLookup(doi, null)).status())
+			.isEqualTo(AccessResolutionStatus.CLOSED);
+		harness.server().verify();
+	}
+
+	@Test
+	void rejectsPercentEncodedNonGraphicDoiCharactersBeforeProviderAccess() {
+		assertThatThrownBy(() -> new AccessEvidenceLookup(
+				"https://doi.org/10.1000/example%00hidden", null))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("DOI must be a normalized DOI identifier");
+	}
+
+	@Test
 	void capsLocationsAtTwentyAfterPromotingTheBestLocation() {
 		Harness harness = harness("backend@example.test");
 		harness.server().expect(request -> assertThat(request.getURI().getPath()).contains("10.1000"))
