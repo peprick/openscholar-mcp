@@ -29,6 +29,12 @@ The first release is a modular monolith deployed as one Spring Boot backend and 
 
 This provides one transaction boundary for normalization and persistence, low operational overhead, and clear module seams that can become services later if measured load requires it.
 
+## Browser installation and offline boundary
+
+The production frontend registers a small service worker that makes the site installable without caching application state. It precaches an account-neutral fallback and fixed install assets; manifest and icon requests are network-first with a cached fallback. Queryless, same-origin `/_next/static/` build assets are cache-first and limited to 96 runtime entries. The allowlist excludes successful HTML/RSC responses, `/api`, direct REST, MCP, authentication, OAuth metadata, exports, cross-origin traffic, ranges, and research-document extensions. Successful eligible navigations remain network-first and refresh the neutral fallback in the background; an eligible navigation whose network fetch rejects receives only that fallback. PostgreSQL remains authoritative and no search result, library record, session material, or PDF byte is written to CacheStorage.
+
+The global connectivity notice treats `navigator.onLine` only as an advisory browser signal. When it reports offline, the UI makes a bounded, same-origin, `no-store`, credentialless request to `/api/connectivity`, which bypasses hosted session refresh and succeeds only when the Next.js route can reach an `UP` Spring Boot backend. AUTO and LOCAL submissions remain enabled during that initial advisory check and when the self-hosted/local stack is reachable; the UI instead warns that online research sources may be limited. Confirmed application unreachability disables those server-backed search actions. **Check again** or a returning browser signal starts a recovery probe after transient failure, but actions resume and assistive technology receives a recovery announcement only after that probe succeeds. UI copy reports application reachability rather than asserting Internet state. The probe does not infer individual scholarly-provider health, cache its result, or queue a mutation for later replay. See [ADR 0007](decisions/0007-use-an-account-neutral-pwa-shell.md).
+
 ## Backend modules
 
 Current package-level modules:
@@ -198,6 +204,7 @@ Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported legacy revisions th
 - Guarded PostgreSQL custom-format backup and restore scripts provide checksum validation and optional `age` encryption; they do not upload, rotate, or prove restore success automatically.
 - These are deployment artifacts, not evidence of a running cloud service. The example deliberately blocks deployment until backend, frontend, Caddy, and blackbox-exporter are CI-built, pushed to their approved project repositories, rescanned by registry digest, signed/attested, and pinned. Managed PostgreSQL/PITR, public DNS/ingress, identity-provider registration, a real alert receiver, secret management, and operational evidence remain deployment decisions.
 - No object-storage service or PDF retention path exists.
+- The frontend image includes the versioned service worker and install assets; `/sw.js` is revalidated and successful user pages remain network-only.
 
 Extract ingestion workers only when background work measurably competes with interactive latency or requires independent scaling.
 

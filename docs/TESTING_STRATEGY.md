@@ -21,6 +21,7 @@
 - Durable refresh-job configuration, lease/claim state transitions, retry classification/backoff, stale-completion rejection, worker/scheduler guards, and safe error details.
 - OIDC property/JWT validation, route-scope decisions, issuer+subject resolution, protected-resource metadata/challenges, and principal rate-limit identity.
 - Frontend OIDC configuration, PKCE/state/nonce callback, ID-token/JWKS/token validation, encrypted session/refresh behavior, exact-Origin enforcement, and job response schemas.
+- PWA manifest/install fields, production/explicit-browser-test registration, service-worker update headers, auth-proxy exclusions, account-neutral fallback content and background refresh, network-first fixed install assets, the 96-entry runtime-static bound, cache allowlist/response rejection, safe app-owned cache/version cleanup, and connectivity probe/state behavior.
 
 ## Slice tests
 
@@ -80,7 +81,9 @@ If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 ## End-to-end tests
 
-The offline Playwright suite covers search/cache/provider warnings/provenance, immutable continuation, verified versus restricted access, direct PDF.js rendering and keyboard/focus/text controls, individual citation download, paper save, collection creation, reading status/tags, and selected citation export. Every scenario blocks unexpected external requests and runs serious/critical WCAG 2.2 axe checks.
+The network-isolated Playwright suite covers search/cache/provider warnings/provenance, immutable continuation, verified versus restricted access, direct PDF.js rendering and keyboard/focus/text controls, individual citation download, paper save, collection creation, reading status/tags, and selected citation export. It blocks unexpected external requests and blocks service workers so request assertions remain visible. This is not a disconnected-browser test.
+
+A dedicated PWA browser scenario permits the production worker, verifies that CacheStorage contains only allowlisted shell assets, confirms successful owned pages are absent, toggles Chromium offline, confirms application unreachability pauses both search actions, loads the account-neutral fallback, runs an accessibility scan, and verifies recovery after reconnection. Component and route tests separately cover the advisory `navigator.onLine` signal, the same-origin credentialless `no-store` probe, manual recheck after transient failure, probe-confirmed assistive-technology recovery announcements, continued use of a reachable self-hosted stack with a limited-online-sources warning, fail-closed probe responses, and bypass of hosted session refresh even with an expired cookie. Service-worker policy tests cover network-first install assets, background fallback refresh, bounded runtime-static cleanup, and deletion of only OpenScholar-owned worker state in non-production runs.
 
 The separate Compose Playwright lane drives the production Next.js build against Spring Boot, PostgreSQL, and a deterministic OpenAlex fixture. It asserts the cold `201/MISS_FETCHED` and repeated `200/EXACT_HIT` boundary, three provider records becoming two canonical DOI-deduplicated results, collection persistence/filtering, BibTeX download, and WCAG scans across search, paper, library, and collection pages. Vitest/React Testing Library retains narrower component/contract coverage. A live IdP login/refresh/logout browser run remains an external interoperability gate because it requires an actual registered client and issuer.
 
@@ -119,7 +122,7 @@ The list below is the target release gate. Unit/integration/frontend checks, con
 2. Backend unit/slice/integration, OpenAPI inventory, and ArchUnit boundary tests.
 3. Frontend unit/contract/security-header tests and production build.
 4. Backend, frontend, Caddy, and blackbox-exporter project-owned final-runtime builds and scans; a release additionally rescans their returned registry digests.
-5. Offline and Compose-backed Playwright workflows with WCAG 2.2 axe checks.
+5. Network-isolated, true PWA-offline, and Compose-backed Playwright workflows with WCAG 2.2 axe checks.
 6. Raw-wire MCP tests plus the production-applicable conformance subset.
 7. Dependency, secret, CodeQL, Trivy, and source/runtime SBOM gates.
 8. Guarded backup/restore behavior tests and monitoring configuration/rule validation.

@@ -578,6 +578,58 @@ button:disabled {
   margin: 10px 2px 0;
 }
 
+.connectivityRegion {
+  min-height: 0;
+}
+
+.connectivityRegion--offline {
+  background: var(--yellow-soft);
+  border-bottom: 1px solid rgb(118 82 14 / 23%);
+  position: sticky;
+  top: 76px;
+  z-index: 19;
+}
+
+.connectivityStatus {
+  align-items: center;
+  color: #654a18;
+  display: flex;
+  font-size: 0.78rem;
+  gap: 9px;
+  min-height: 42px;
+}
+
+.connectivityStatusDot {
+  background: currentColor;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}
+
+.connectivityStatusMessage {
+  flex: 1;
+}
+
+.connectivityRetry {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: inherit;
+  flex: 0 0 auto;
+  font: inherit;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.connectivityRetry:hover {
+  background: rgb(101 74 24 / 8%);
+}
+
+.searchButton:disabled[data-offline="true"] {
+  cursor: not-allowed;
+}
+
 .errorSummary {
   background: var(--danger-soft);
   border: 1px solid rgb(156 46 40 / 30%);
@@ -2327,6 +2379,10 @@ button:disabled {
 
   .headerInner {
     min-height: 66px;
+  }
+
+  .connectivityRegion--offline {
+    top: 66px;
   }
 
   .brand small,

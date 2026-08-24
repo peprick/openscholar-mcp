@@ -157,6 +157,8 @@ The script never deletes the source backup and never starts services.
 - Roll back an image only when its schema compatibility is known.
 - Never edit an applied Flyway migration. Use a new forward migration and a reviewed recovery plan.
 - Keep optional providers, hybrid ranking, and background workers default-off until separately verified in the target environment.
+- For a frontend rollback, verify `/sw.js` revalidation, network-first fixed install assets, the active cache version, the 96-entry `/_next/static/` bound, background refresh of the neutral fallback, a fresh browser profile, and an already-controlled profile. Prefer a forward worker release; do not force activation or delete unrelated browser caches.
+- Non-production cleanup may unregister only the exact same-origin OpenScholar `/sw.js` registration and delete only `openscholar-shell-*` caches. Never use blanket service-worker or CacheStorage deletion as a troubleshooting step on a shared origin.
 
 ## Evidence to retain
 

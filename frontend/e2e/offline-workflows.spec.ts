@@ -19,6 +19,8 @@ const ids = {
 
 const unexpectedExternalRequests = new WeakMap<Page, string[]>();
 
+test.use({ serviceWorkers: "block" });
+
 async function installOfflineNetwork(
   page: Page,
   request: APIRequestContext,

@@ -46,6 +46,11 @@ export function securityHeaders(
   ];
 }
 
+export const SERVICE_WORKER_HEADERS = [
+  { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+  { key: "Service-Worker-Allowed", value: "/" },
+] as const;
+
 const nextConfig: NextConfig = {
   agentRules: false,
   output: "standalone",
@@ -59,6 +64,10 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   async headers() {
     return [
+      {
+        source: "/sw.js",
+        headers: [...SERVICE_WORKER_HEADERS],
+      },
       {
         source: "/:path*",
         headers: securityHeaders(process.env.NODE_ENV),

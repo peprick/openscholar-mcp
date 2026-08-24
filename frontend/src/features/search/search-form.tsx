@@ -11,6 +11,7 @@ import {
   searchResponseSchema,
   type SearchMode,
 } from "@/shared/api/schemas";
+import { useConnectivity } from "@/shared/connectivity/connectivity-context";
 import { humanizeEnum } from "@/shared/formatting/display";
 
 type SearchFormProps = {
@@ -57,6 +58,7 @@ export function SearchForm({
 }: SearchFormProps): React.JSX.Element {
   const router = useRouter();
   const errorSummaryRef = useRef<HTMLDivElement>(null);
+  const { canReachApplication } = useConnectivity();
   const [pendingMode, setPendingMode] = useState<SearchMode | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [violations, setViolations] = useState<string[]>([]);
@@ -191,8 +193,12 @@ export function SearchForm({
         />
         <div className="searchActions">
           <button
+            aria-describedby={
+              !canReachApplication ? "app-connectivity-status" : undefined
+            }
             className="button button--primary searchButton"
-            disabled={pendingMode !== null}
+            data-offline={!canReachApplication ? "true" : undefined}
+            disabled={pendingMode !== null || !canReachApplication}
             name="mode"
             type="submit"
             value="AUTO"
@@ -200,8 +206,12 @@ export function SearchForm({
             {pendingMode === "AUTO" ? "Searching…" : "Search papers"}
           </button>
           <button
+            aria-describedby={
+              !canReachApplication ? "app-connectivity-status" : undefined
+            }
             className="button button--secondary searchButton"
-            disabled={pendingMode !== null}
+            data-offline={!canReachApplication ? "true" : undefined}
+            disabled={pendingMode !== null || !canReachApplication}
             name="mode"
             type="submit"
             value="LOCAL"
@@ -319,7 +329,7 @@ export function SearchForm({
           ? "Searching papers already known to OpenScholar."
           : pendingMode === "AUTO"
             ? "Searching trusted research sources."
-            : "OpenScholar combines duplicate records and checks full-text access separately."}
+            : "Search papers checks trusted research sources. Search locally uses only papers OpenScholar already knows."}
       </p>
     </form>
   );

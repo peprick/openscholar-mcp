@@ -41,7 +41,7 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 - Notes and highlights with explicit ownership and deletion semantics.
 - Evidence-linked summaries and paper comparison with prompt-injection and citation safeguards.
 - Citation graphs, research maps, and collaborative collections.
-- A read-only installable web shell for explicitly selected metadata, after server-backed local search is stable; browser cache is not an authoritative store.
+- Explicit opt-in offline metadata packs, with encryption, quota, ownership/logout, deletion, and synchronization rules; the implemented installable shell deliberately stores no user records and browser cache is not authoritative.
 - Connectivity-aware refresh deferral with reliable outage classification, capped backoff, and result linking; retryable provider errors are not automatically treated as an offline signal.
 - Additional offline embedding profiles for legally retained private content.
 - Mobile-reader and assistive-technology refinements.

@@ -9,6 +9,7 @@ Local mode remains a loopback, fixed-owner development profile with a separate M
 ## Assets
 
 - User identity, private search topics, saved papers, collections, reading status, and tags.
+- Account-neutral PWA shell assets in browser CacheStorage; no user record or document byte is intentionally cached there.
 - Canonical metadata, provenance, access-resolution evidence, cached provider responses, and job state.
 - Database/MCP/provider/OIDC credentials, signing keys, ACME account state, and backup decryption identities.
 - Application/container source, dependencies, images, SBOMs, release attestations, and CI credentials.
@@ -32,6 +33,7 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 |---|---|---|
 | Credential theft or forwarding | Backend-only provider credentials, file-backed database/session/OIDC-client secrets, sealed HttpOnly browser session, log-redaction policy, inbound tokens never forwarded, read-only filesystems | Choose secret manager/workload identity, prove signing/client/session-key rotation and revocation, audit CI/host access |
 | Identity-provider or BFF compromise | JWT signature/expiry/issuer/audience checks; route scopes; authorization code + PKCE/state/nonce; bounded JWKS/token responses; ID-token signature/claim validation; exact-Origin checks on unsafe BFF calls | Register and test a real provider, restrict redirect/logout URIs and grants, define administrator policy, monitor provider/session compromise, retest on key rotation |
+| Service-worker cache leaks account or document data | Strict same-origin static-asset allowlist; network-first fixed install assets; 96-entry runtime-static cap; successful navigations remain network-only while refreshing the neutral fallback; API/auth/MCP/export/document/range/authorization exclusions; private/no-store/Vary-star rejection; exact-worker/app-prefixed cleanup only | Explicit offline metadata packs require a separate storage, encryption, ownership/logout, deletion, quota, and synchronization design |
 | Cross-user data access / IDOR | Search snapshots and libraries use issuer+subject-derived ownership; local-catalog candidates require a paper to be visible through that owner's prior snapshot or saved collection; other-owner identifiers return not found; search-refresh visibility follows snapshot ownership; privacy export/delete are current-principal operations; negative authorization tests exist | Shared `PAPER_ACCESS` jobs are visible/retryable to every `openscholar.jobs` principal; shared canonical/access records remain by design; review every new owned resource and local ranking join |
 | MCP tool abuse | Small typed tool surface, local bearer or hosted audience/scope-checked JWT, protected-resource metadata, exact-Origin checks, bounded request/results, per-address or hashed-principal rate limits, no arbitrary SQL/shell/URL tools | In-memory limits are per instance with no aggregate budget; add edge/cluster abuse controls, trusted-proxy review, and disconnect/notification cancellation support |
 | SSRF / DNS rebinding | Provider-derived URL candidates only, HTTPS/default-port policy, DNS/address rejection, redirect revalidation, bounded no-credential probes | Maintain redirect/DNS regression tests and outbound network policy; review every new provider/fetch feature |
@@ -76,4 +78,4 @@ Account deletion removes the current principal's searches, search-refresh jobs, 
 
 ## Review triggers
 
-Revisit this model when changing the identity provider/authentication design, adding a provider, document retention/upload, LLM summarization, a write-capable MCP tool, collaboration/tenancy, object storage, a new egress path, a worker service, public metrics, or a new deployment environment. Record the reviewer, date, changed boundaries, tests, accepted residual risks, and expiry of each temporary exception.
+Revisit this model when changing the identity provider/authentication design, adding a provider, caching user metadata in the browser, changing the service-worker allowlist, adding document retention/upload, LLM summarization, a write-capable MCP tool, collaboration/tenancy, object storage, a new egress path, a worker service, public metrics, or a new deployment environment. Record the reviewer, date, changed boundaries, tests, accepted residual risks, and expiry of each temporary exception.

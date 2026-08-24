@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SearchForm } from "@/features/search/search-form";
+import { ConnectivityProvider } from "@/shared/connectivity/connectivity-context";
+import { ConnectivityStatus } from "@/shared/ui/connectivity-status";
 import { searchResponseFixture, testIds } from "@/test/fixtures";
 
 const navigation = vi.hoisted(() => ({
@@ -21,9 +23,19 @@ function jsonResponse(status: number, body: unknown): Response {
   } as unknown as Response;
 }
 
+function renderSearch(initialQuery: string): void {
+  render(
+    <ConnectivityProvider>
+      <ConnectivityStatus id="app-connectivity-status" />
+      <SearchForm initialQuery={initialQuery} />
+    </ConnectivityProvider>,
+  );
+}
+
 afterEach(() => {
   cleanup();
   navigation.push.mockReset();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -37,9 +49,7 @@ describe("SearchForm", () => {
         .mockResolvedValue(jsonResponse(status, searchResponseFixture()));
       vi.stubGlobal("fetch", fetchMock);
 
-      render(
-        <SearchForm initialQuery="  graph neural networks for drug discovery  " />,
-      );
+      renderSearch("  graph neural networks for drug discovery  ");
 
       await user.click(screen.getByText("Refine search"));
       await user.type(screen.getByLabelText("From year"), "2020");
@@ -88,7 +98,7 @@ describe("SearchForm", () => {
     const fetchMock = vi.fn(() => new Promise<Response>(() => undefined));
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<SearchForm initialQuery="protein structure prediction" />);
+    renderSearch("protein structure prediction");
     await user.click(screen.getByRole("button", { name: "Search locally" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -118,6 +128,52 @@ describe("SearchForm", () => {
     expect(screen.queryByText("Provider coverage")).not.toBeInTheDocument();
   });
 
+  it("keeps both search modes paused until a recovery probe succeeds", async () => {
+    const user = userEvent.setup();
+    let finishRecovery: (response: Response) => void = () => undefined;
+    const recovery = new Promise<Response>((resolve) => {
+      finishRecovery = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockReturnValueOnce(recovery);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+
+    renderSearch("protein structure prediction");
+
+    const onlineSearch = screen.getByRole("button", { name: "Search papers" });
+    await waitFor(() => expect(onlineSearch).toBeDisabled());
+    expect(onlineSearch).toHaveAttribute(
+      "aria-describedby",
+      "app-connectivity-status",
+    );
+
+    const localSearch = screen.getByRole("button", { name: "Search locally" });
+    expect(localSearch).toBeDisabled();
+    expect(localSearch).toHaveAttribute(
+      "aria-describedby",
+      "app-connectivity-status",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "OpenScholar can't be reached.",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/connectivity",
+      expect.objectContaining({ cache: "no-store", credentials: "omit" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(onlineSearch).toBeDisabled();
+    expect(localSearch).toBeDisabled();
+
+    finishRecovery({ ok: true } as Response);
+    await waitFor(() => expect(onlineSearch).toBeEnabled());
+    expect(localSearch).toBeEnabled();
+  });
+
   it("surfaces an RFC 9457 validation problem and its violations", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue(
@@ -138,7 +194,7 @@ describe("SearchForm", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<SearchForm initialQuery="protein structure prediction" />);
+    renderSearch("protein structure prediction");
     await user.click(screen.getByRole("button", { name: "Search papers" }));
 
     const alert = await screen.findByRole("alert");
@@ -158,7 +214,7 @@ describe("SearchForm", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<SearchForm initialQuery="retrieval augmented generation" />);
+    renderSearch("retrieval augmented generation");
     await user.click(screen.getByText("Refine search"));
     await user.type(screen.getByLabelText("From year"), "2026");
     await user.type(screen.getByLabelText("To year"), "2020");

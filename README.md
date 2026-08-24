@@ -15,6 +15,7 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 
 - Searches OpenAlex by default, with optional DataCite, DOAJ, and licence-gated CORE discovery adapters.
 - Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
+- Installs as a read-only PWA shell with an account-neutral offline fallback and plain-language connectivity status; server-backed search still requires the local or hosted OpenScholar stack.
 - Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, and provider identity.
 - Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
 - Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
@@ -167,6 +168,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 |---|---|
 | Local web application, REST API, and PostgreSQL persistence | Implemented |
 | Metadata-only local search with explicit provenance | Implemented |
+| Installable account-neutral PWA shell | Implemented; no user records or PDFs cached |
 | Five-tool MCP server | Implemented |
 | Optional hosted OIDC mode | Implemented; synthetically tested |
 | Single-host deployment and monitoring templates | Implemented and locally validated |

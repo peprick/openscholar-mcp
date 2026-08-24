@@ -7,6 +7,7 @@ import nextConfig, {
   contentSecurityPolicy,
   PRODUCTION_CONTENT_SECURITY_POLICY,
   securityHeaders,
+  SERVICE_WORKER_HEADERS,
 } from "../next.config";
 
 function directives(policy: string): Map<string, string[]> {
@@ -77,9 +78,20 @@ describe("security headers", () => {
     const rules = await nextConfig.headers();
     expect(rules).toEqual([
       {
+        source: "/sw.js",
+        headers: [...SERVICE_WORKER_HEADERS],
+      },
+      {
         source: "/:path*",
         headers: securityHeaders(process.env.NODE_ENV),
       },
+    ]);
+    expect(SERVICE_WORKER_HEADERS).toEqual([
+      {
+        key: "Cache-Control",
+        value: "no-cache, no-store, must-revalidate",
+      },
+      { key: "Service-Worker-Allowed", value: "/" },
     ]);
 
     const caddyfile = readFileSync(

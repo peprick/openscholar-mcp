@@ -38,6 +38,12 @@ openscholar.ops
 
 Inbound user or MCP tokens are never forwarded to OpenAlex, DataCite, DOAJ, CORE, Unpaywall, arXiv, or document hosts; provider credentials are server-owned and separate.
 
+## Browser cache boundary
+
+The production service worker caches only an account-neutral static fallback, the manifest/icons, and queryless same-origin `/_next/static/` build assets. Fixed manifest/icon URLs are network-first with a cached fallback; runtime `/_next/static/` entries are cache-first and capped at 96. A successful eligible navigation refreshes the neutral fallback in the background but never stores the page or RSC payload. APIs, authentication, MCP/OAuth traffic, exports, authorization/range requests, cross-origin responses, and research documents are excluded. Unsuccessful, opaque, `private`, `no-store`, and `Vary: *` responses are rejected. This positive allowlist and bound are the security boundary; response cache headers are defense in depth.
+
+The fallback contains no account data. Search results, collections, session state, and PDFs are absent from CacheStorage, so logout or account switching cannot reveal a cached owned page. Browser offline status is only advisory. When `navigator.onLine` is false, a same-origin, credentialless, `no-store` `/api/connectivity` request checks application-stack reachability without returning metrics or provider diagnostics; that public path bypasses session refresh so a probe cannot rotate or clear the hosted cookie. AUTO and LOCAL search remain enabled during the initial advisory check and when that route confirms the local/self-hosted stack; the UI warns that online research sources may be limited. Confirmed application unreachability disables those actions, and they remain disabled through explicit or signal-triggered recovery checks until a probe succeeds. No background-sync or offline-mutation queue exists. Adding user-selected metadata to browser storage requires a separate privacy, deletion, quota, and encryption review.
+
 ## MCP safety
 
 - Default to non-destructive, read-oriented tools; mark cache-affecting search honestly as non-read-only.

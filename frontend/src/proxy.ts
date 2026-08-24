@@ -21,6 +21,16 @@ const AUTH_FLOW_PATHS = new Set([
   "/api/auth/callback",
   "/api/auth/logout",
 ]);
+export const PUBLIC_PWA_PATHS = new Set([
+  "/apple-touch-icon.png",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/manifest.webmanifest",
+  "/offline.html",
+  "/sw.js",
+]);
+export const PUBLIC_CONNECTIVITY_PATH = "/api/connectivity";
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const refreshRequests = new Map<string, Promise<ValidatedTokenResponse>>();
 
@@ -67,7 +77,11 @@ function clearInvalidSession(request: NextRequest): NextResponse {
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
-  if (AUTH_FLOW_PATHS.has(request.nextUrl.pathname)) {
+  if (
+    AUTH_FLOW_PATHS.has(request.nextUrl.pathname) ||
+    PUBLIC_PWA_PATHS.has(request.nextUrl.pathname) ||
+    request.nextUrl.pathname === PUBLIC_CONNECTIVITY_PATH
+  ) {
     return NextResponse.next();
   }
 
@@ -146,6 +160,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|offline\\.html|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
