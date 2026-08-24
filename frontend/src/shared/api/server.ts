@@ -35,6 +35,7 @@ import {
   type SearchResponse,
   type SystemStatusResponse,
 } from "@/shared/api/schemas";
+import type { DeletePersonalDataRequest } from "@/shared/api/privacy-schemas";
 import { getBackendAccessToken } from "@/shared/auth/session";
 
 const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
@@ -163,6 +164,31 @@ async function requestEmpty(path: string, init: RequestInit): Promise<void> {
       response.headers.get("retry-after"),
     );
   }
+}
+
+async function requireExpectedSuccess(
+  response: Response,
+  expectedStatus: number,
+  resource: string,
+): Promise<void> {
+  if (!response.ok) {
+    throw new BackendApiError(
+      response.status,
+      await problemFrom(response),
+      response.headers.get("retry-after"),
+    );
+  }
+  if (response.status !== expectedStatus) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new BackendContractError(resource);
+  }
+}
+
+function hasJsonContentType(response: Response): boolean {
+  const contentType = response.headers.get("content-type");
+  return (
+    contentType?.split(";", 1)[0]?.trim().toLowerCase() === "application/json"
+  );
 }
 
 function paginationQuery(page: number, size: number): URLSearchParams {
@@ -394,4 +420,31 @@ export async function searchSavedLibrary(
     savedLibraryResponseSchema,
     "saved library",
   )).data;
+}
+
+export async function exportPersonalData(): Promise<Response> {
+  const response = await fetchBackend("/api/v1/privacy/export", {
+    method: "GET",
+    headers: { accept: "application/json" },
+  });
+  await requireExpectedSuccess(response, 200, "personal data export");
+  if (!hasJsonContentType(response) || response.body === null) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new BackendContractError("personal data export");
+  }
+  return response;
+}
+
+export async function deletePersonalData(
+  request: DeletePersonalDataRequest,
+): Promise<void> {
+  const response = await fetchBackend("/api/v1/privacy/account", {
+    method: "DELETE",
+    headers: {
+      accept: "application/json, application/problem+json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  await requireExpectedSuccess(response, 204, "personal data deletion");
 }

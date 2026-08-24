@@ -1,4 +1,6 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.ai.mcp.server.common.autoconfigure.McpServerStatelessAutoConfiguration
   application:
     name: openscholar-backend
   ai:
@@ -22,7 +24,7 @@ spring:
         resource-change-notification: false
         prompt-change-notification: false
         annotation-scanner:
-          enabled: true
+          enabled: false
         streamable-http:
           mcp-endpoint: /mcp
           disallow-delete: true
@@ -200,4 +202,4 @@ info:
     transport: stateless-streamable-http
     endpoint: /mcp
     maximum-tested-protocol-version: 2025-11-25
-    tool-count: 5
+    tool-count: 6

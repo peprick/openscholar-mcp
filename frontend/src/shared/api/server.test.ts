@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BackendContractError,
+  deletePersonalData,
+  exportPersonalData,
   fetchBackend,
   getNextSearchPage,
   getRelatedPapers,
@@ -242,5 +244,137 @@ describe("getNextSearchPage", () => {
       ),
       expect.objectContaining({ cache: "no-store", method: "POST" }),
     );
+  });
+});
+
+describe("privacy backend boundary", () => {
+  it("returns the validated JSON export stream without trusting attachment headers", async () => {
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "https://backend.test");
+    const payload = JSON.stringify({ userId: "private-user", searches: [] });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: {
+          "content-disposition": 'attachment; filename="backend-name.json"',
+          "content-type": "application/json; charset=utf-8",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await exportPersonalData();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/v1/privacy/export", "https://backend.test"),
+      expect.objectContaining({
+        cache: "no-store",
+        method: "GET",
+      }),
+    );
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("accept")).toBe("application/json");
+    await expect(response.text()).resolves.toBe(payload);
+  });
+
+  it.each([
+    [
+      "unexpected successful status",
+      () =>
+        new Response("{}", {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+    ],
+    [
+      "non-JSON content type",
+      () =>
+        new Response("<html>not JSON</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+    ],
+    [
+      "missing body",
+      () =>
+        new Response(null, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ],
+  ])("rejects an export with %s", async (_label, response) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response()));
+
+    await expect(exportPersonalData()).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+  });
+
+  it("translates a failed export into the safe backend API error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            type: "urn:openscholar:problem:access-denied",
+            title: "Forbidden",
+            status: 403,
+            detail: "The privacy scope is required.",
+            code: "ACCESS_DENIED",
+          },
+          {
+            status: 403,
+            headers: {
+              "content-type": "application/problem+json",
+              "retry-after": "15",
+            },
+          },
+        ),
+      ),
+    );
+
+    await expect(exportPersonalData()).rejects.toMatchObject({
+      status: 403,
+      retryAfter: "15",
+      problem: expect.objectContaining({ code: "ACCESS_DENIED" }),
+    });
+  });
+
+  it("sends only the exact confirmation and requires the backend 204", async () => {
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "https://backend.test");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      deletePersonalData({ confirmation: "DELETE_MY_DATA" }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/v1/privacy/account", "https://backend.test"),
+      expect.objectContaining({
+        body: JSON.stringify({ confirmation: "DELETE_MY_DATA" }),
+        cache: "no-store",
+        method: "DELETE",
+      }),
+    );
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("content-type")).toBe("application/json");
+  });
+
+  it("does not treat a different successful deletion status as completion", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          { deleted: true },
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(
+      deletePersonalData({ confirmation: "DELETE_MY_DATA" }),
+    ).rejects.toBeInstanceOf(BackendContractError);
   });
 });

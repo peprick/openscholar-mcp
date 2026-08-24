@@ -97,7 +97,39 @@ When an agent already has a scholarly reference, it can skip a topic search and 
 
 The call succeeds only after that paper has appeared in the current owner's search results or library. Pass the returned `paperId` to `get_paper_details`, `get_legal_full_text`, or `export_citations`.
 
-## 4. Raw protocol smoke check
+## 4. Handle tool errors
+
+Branch on `result.isError` before reading a tool's successful `structuredContent`. OpenScholar errors contain safe model-visible text and, when the client preserves MCP metadata, a versioned descriptor:
+
+```json
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "PAPER_IDENTIFIER_NOT_FOUND: No paper in this OpenScholar workspace matches that identifier. Search by topic first. [category=NOT_FOUND; retryable=false; action=SEARCH_FIRST]"
+      }
+    ],
+    "isError": true,
+    "_meta": {
+      "com.openscholar/error": {
+        "schemaVersion": 1,
+        "code": "PAPER_IDENTIFIER_NOT_FOUND",
+        "category": "NOT_FOUND",
+        "message": "No paper in this OpenScholar workspace matches that identifier. Search by topic first.",
+        "retryable": false,
+        "action": "SEARCH_FIRST"
+      }
+    }
+  }
+}
+```
+
+Programmatic clients should use `_meta["com.openscholar/error"].code` and `action`, retry the identical call only when `retryable` is true, and honor `retryAfterSeconds` when present. Some hosts may hide `_meta` from the model, so the single text item remains independently actionable; do not parse that prose as a stable machine contract. Error results deliberately omit `structuredContent` because the advertised output schema describes the successful result.
+
+Unknown tools and malformed JSON-RPC requests use a top-level JSON-RPC `error`. Missing/invalid authentication, rejected origins, oversized HTTP bodies, and request-rate limits are HTTP transport failures instead of tool errors. Partial provider coverage, stale fallback, restricted access, and no verified full-text location are successful domain results and should not be retried merely because they contain warnings.
+
+## 5. Raw protocol smoke check
 
 MCP clients perform this lifecycle automatically. These commands are useful when debugging the HTTP boundary:
 

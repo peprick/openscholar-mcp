@@ -64,10 +64,15 @@ export default function RootLayout({
                 OpenScholar shows where paper details come from and checks free
                 full-text links. It never bypasses publisher access controls.
               </p>
-              <p>
-                Save papers into collections, export citations, and read checked
-                open versions without storing source PDFs.
-              </p>
+              <div className="footerActions">
+                <p>
+                  Save papers into collections, export citations, and read checked
+                  open versions without storing source PDFs.
+                </p>
+                <Link className="footerDataLink" href={"/data" as Route}>
+                  Your data &amp; privacy <span aria-hidden="true">→</span>
+                </Link>
+              </div>
             </div>
           </footer>
         </ConnectivityProvider>

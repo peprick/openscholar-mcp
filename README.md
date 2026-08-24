@@ -21,8 +21,10 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 - Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
 - Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
 - Provides collections, reading status, tags, saved-library search, and BibTeX or CSL-JSON exports.
+- Gives readers a plain-language privacy center for downloading their OpenScholar data or deleting their owned searches and library state.
 - Opens fresh, verified, HTTPS, CORS-compatible PDFs in a browser PDF.js reader and falls back to the source site when embedded reading is not supported.
 - Exposes six bounded research tools to agents over stateless Streamable HTTP MCP.
+- Returns versioned, non-disclosing MCP tool errors with stable codes, actions, and optional retry guidance.
 
 ## Architecture
 
@@ -171,6 +173,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 | Local web application, REST API, and PostgreSQL persistence | Implemented |
 | Metadata-only local search with explicit provenance | Implemented |
 | Installable account-neutral PWA shell | Implemented; no user records or PDFs cached |
+| Personal-data export and confirmed deletion in the web app | Implemented |
 | Six-tool MCP server | Implemented |
 | Optional hosted OIDC mode | Implemented; synthetically tested |
 | Single-host deployment and monitoring templates | Implemented and locally validated |

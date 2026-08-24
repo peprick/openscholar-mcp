@@ -21,6 +21,7 @@
 - Durable refresh-job configuration, lease/claim state transitions, retry classification/backoff, stale-completion rejection, worker/scheduler guards, and safe error details.
 - OIDC property/JWT validation, route-scope decisions, issuer+subject resolution, protected-resource metadata/challenges, and principal rate-limit identity.
 - Frontend OIDC configuration, PKCE/state/nonce callback, ID-token/JWKS/token validation, encrypted session/refresh behavior, exact-Origin enforcement, and job response schemas.
+- Frontend privacy export/deletion validation, no-store attachment forwarding, safe error propagation, hosted-session expiry, accessible confirmation/success behavior, and response-loss wording that never claims a destructive action was rolled back.
 - PWA manifest/install fields, production/explicit-browser-test registration, service-worker update headers, auth-proxy exclusions, account-neutral fallback content and background refresh, network-first fixed install assets, the 96-entry runtime-static bound, cache allowlist/response rejection, safe app-owned cache/version cleanup, and connectivity probe/state behavior.
 
 ## Slice tests
@@ -30,7 +31,8 @@
 - Raw BibTeX/CSL-JSON response media types, attachment headers, sparse records, and stable citation errors.
 - Collection CRUD, saved-paper mutations, owner-scoped not-found behavior, library filters/pagination, and citation-batch attachment contracts.
 - Canonical paper details, record-level provenance, immutable credited names, date/year integrity, and stored-access summaries without provider calls.
-- MCP annotation discovery and tool validation.
+- Project-owned MCP annotation/specification discovery, closed generated input schemas, safe callback validation,
+  and successful structured-output conformance.
 - REST/MCP AUTO, ONLINE, and LOCAL contract mapping, including rejection of forced LOCAL refresh and complete result provenance.
 - Refresh-job enqueue/list/get/retry contracts and privacy export/confirmed-delete contracts.
 
@@ -63,14 +65,15 @@ The separately frozen HNSW gate uses a deterministic 10,000-vector, 1024-dimensi
 - Implemented: direct adapter tests for defaults, mode mapping/invariants, bounds, complete provider-provenance mapping, database-only behavior, stable errors, and safe unexpected failures.
 - Implemented: safe retryable `SEARCH_COORDINATION_TIMEOUT` and `SEARCH_COORDINATION_INTERRUPTED` tool mappings without nested causes or invented retry-after values.
 - Implemented: safe retryable `SEARCH_DEADLINE_EXCEEDED` and `SEARCH_EXECUTION_INTERRUPTED` REST/MCP mappings without nested causes or invented retry-after values.
-- Implemented: raw REST and MCP deadline calls prove bounded responses, provider interruption and exit, no post-timeout snapshot, stable JSON-RPC error wrapping, and no nested-cause leakage.
-- Implemented: authenticated raw JSON-RPC initialization, initialized notification, exact tool discovery, mode/source input/output schemas, conservative static annotations, full result provenance, a null-heavy structured search result, and invalid-schema rejection before provider invocation.
+- Implemented: raw REST and MCP deadline calls prove bounded responses, provider interruption and exit, no post-timeout snapshot, stable versioned tool-error metadata, and no nested-cause leakage.
+- Implemented: authenticated raw JSON-RPC initialization, initialized notification, exactly six unique tools, closed mode/source input schemas, output schemas, conservative static annotations, full result provenance, a null-heavy structured search result, and missing/additional/wrong-type argument rejection before provider invocation.
 - Implemented: successful raw structured calls for all four database-only tools, using a canonical paper created through the search tool where required.
 - Implemented: API-key, duplicate-header, exact-Origin, response-header, and disabled-until-configured security-filter coverage.
 - Implemented: hosted missing/invalid/expired/wrong-issuer/wrong-audience/insufficient-scope JWT cases, route-scope enforcement, issuer+subject ownership, protected-resource metadata/challenges, and principal-derived MCP rate-limit keys.
 - Implemented: official MCP Inspector CLI discovery and an empty-library `search_saved_library` call against the Compose image.
 - Implemented: pinned official conformance `server-initialize` and `tools-list` scenarios with `--spec-version 2025-11-25`; both pass without warnings through the loopback bearer-injection proxy.
-- Implemented: raw-wire malformed/schema-invalid input, oversized request rejection, oversized result rejection without sensitive-content leakage, restricted-access results, and mixed provider success/failure coverage.
+- Implemented: raw-wire malformed/schema-invalid input, missing-versus-other-owner descriptor equality, oversized request rejection, oversized result rejection without sensitive-content leakage, restricted-access results, and mixed provider success/failure coverage.
+- Implemented: the project-owned callback validates successful `structuredContent` before the SDK wrapper and replaces schema drift with the generic versioned `MCP_TOOL_FAILED` result without exposing validator diagnostics.
 - Current limitation: the configured 20-second MCP request timeout is not enforced by the stateless MCP Java SDK 2.0 path; the separate 18-second application deadline bounds search use-case execution instead.
 - Implemented: repeated JSON-RPC identifiers are shown not to act as idempotency keys; ordinary search fingerprint caching still yields one provider call followed by an exact hit.
 - Remaining SDK/transport limitation: client-disconnect and MCP `notifications/cancelled` propagation, framework parsing/serialization and socket-lifetime deadlines, and in-flight JDBC persistence cancellation guarantees.
@@ -81,7 +84,7 @@ If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 ## End-to-end tests
 
-The network-isolated Playwright suite covers search/cache/provider warnings/provenance, immutable continuation, verified versus restricted access, direct PDF.js rendering and keyboard/focus/text controls, individual citation download, paper save, collection creation, reading status/tags, and selected citation export. It blocks unexpected external requests and blocks service workers so request assertions remain visible. This is not a disconnected-browser test.
+The network-isolated Playwright suite covers search/cache/provider warnings/provenance, immutable continuation, verified versus restricted access, direct PDF.js rendering and keyboard/focus/text controls, individual citation download, paper save, collection creation, reading status/tags, selected citation export, and the personal-data export/confirmed-deletion journey. It blocks unexpected external requests and blocks service workers so request assertions remain visible. This is not a disconnected-browser test.
 
 A dedicated PWA browser scenario permits the production worker, verifies that CacheStorage contains only allowlisted shell assets, confirms successful owned pages are absent, toggles Chromium offline, confirms application unreachability pauses both search actions, loads the account-neutral fallback, runs an accessibility scan, and verifies recovery after reconnection. Component and route tests separately cover the advisory `navigator.onLine` signal, the same-origin credentialless `no-store` probe, manual recheck after transient failure, probe-confirmed assistive-technology recovery announcements, continued use of a reachable self-hosted stack with a limited-online-sources warning, fail-closed probe responses, and bypass of hosted session refresh even with an expired cookie. Service-worker policy tests cover network-first install assets, background fallback refresh, bounded runtime-static cleanup, and deletion of only OpenScholar-owned worker state in non-production runs.
 

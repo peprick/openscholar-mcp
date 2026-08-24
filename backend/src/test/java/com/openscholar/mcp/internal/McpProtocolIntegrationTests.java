@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +26,7 @@ import com.openscholar.access.internal.persistence.PaperAccessStore;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderAuthor;
 import com.openscholar.provider.ProviderId;
+import com.openscholar.provider.ProviderException;
 import com.openscholar.provider.ProviderPaperRecord;
 import com.openscholar.provider.ProviderSearchQuery;
 import com.openscholar.provider.ProviderSearchResult;
@@ -40,6 +42,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
@@ -72,6 +75,9 @@ class McpProtocolIntegrationTests {
 	@Autowired
 	private PaperAccessStore paperAccessStore;
 
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
 	@BeforeEach
 	void resetProvider() {
 		researchProvider.reset();
@@ -101,7 +107,9 @@ class McpProtocolIntegrationTests {
 		assertThat(response.required("jsonrpc").asString()).isEqualTo("2.0");
 		assertThat(response.required("id").asInt()).isEqualTo(2);
 
-		Map<String, JsonNode> tools = toolsByName(response.required("result").required("tools"));
+		JsonNode publishedTools = response.required("result").required("tools");
+		assertThat(publishedTools).hasSize(6);
+		Map<String, JsonNode> tools = toolsByName(publishedTools);
 		assertThat(tools.keySet()).containsExactlyInAnyOrder(
 				"search_research",
 				"get_paper_details",
@@ -223,11 +231,16 @@ class McpProtocolIntegrationTests {
 
 		JsonNode invalid = postRequest(4, "tools/call",
 				Map.of("name", "search_research", "arguments", Map.of("limit", 1)));
-		JsonNode invalidResult = invalid.required("result");
-		assertThat(invalidResult.required("isError").asBoolean()).isTrue();
-		assertThat(invalidResult.required("content").required(0).required("type").asString()).isEqualTo("text");
-		assertThat(invalidResult.required("content").required(0).required("text").asString())
-			.containsIgnoringCase("topic");
+		assertToolError(invalid, McpToolErrorCode.INVALID_REQUEST, false, null);
+
+		String unknownArgument = "private-unknown-argument-" + UUID.randomUUID();
+		JsonNode additionalProperty = callTool(5, "search_research",
+				Map.of("topic", topic, "unknownArgument", unknownArgument));
+		assertToolError(additionalProperty, McpToolErrorCode.INVALID_REQUEST, false, null);
+		assertThat(additionalProperty.toString()).doesNotContain(unknownArgument, "unknownArgument");
+
+		JsonNode wrongType = callTool(6, "search_research", Map.of("topic", List.of("not-a-string")));
+		assertToolError(wrongType, McpToolErrorCode.INVALID_REQUEST, false, null);
 		assertThat(researchProvider.calls()).isEqualTo(1);
 	}
 
@@ -284,20 +297,75 @@ class McpProtocolIntegrationTests {
 	@Test
 	void returnsSafeIdentifierResolutionFailuresWithoutCallingAProvider() throws Exception {
 		JsonNode invalid = callTool(16, "resolve_paper_identifier", Map.of("identifier", "not-an-identifier"));
-		JsonNode invalidResult = invalid.required("result");
-		assertThat(invalidResult.required("isError").asBoolean()).isTrue();
-		assertThat(invalidResult.required("content").required(0).required("text").asString())
-			.contains("INVALID_PAPER_IDENTIFIER")
-			.doesNotContain("Exception", "jdbc:");
+		assertToolError(invalid, McpToolErrorCode.INVALID_PAPER_IDENTIFIER, false, null);
+		assertThat(invalid.toString()).doesNotContain("not-an-identifier", "Exception", "jdbc:");
 
 		String absentDoi = "10.1000/not-visible-" + UUID.randomUUID();
 		JsonNode absent = callTool(17, "resolve_paper_identifier", Map.of("identifier", absentDoi));
-		JsonNode absentResult = absent.required("result");
-		assertThat(absentResult.required("isError").asBoolean()).isTrue();
-		assertThat(absentResult.required("content").required(0).required("text").asString())
-			.contains("PAPER_IDENTIFIER_NOT_FOUND")
-			.doesNotContain(absentDoi, "Exception", "jdbc:");
+		assertToolError(absent, McpToolErrorCode.PAPER_IDENTIFIER_NOT_FOUND, false, null);
+		assertThat(absent.toString()).doesNotContain(absentDoi, "Exception", "jdbc:");
 		assertThat(researchProvider.calls()).isZero();
+	}
+
+	@Test
+	void makesMissingAndOtherOwnerObjectsIndistinguishableOverTheWire() throws Exception {
+		UUID otherOwnerId = UUID.randomUUID();
+		UUID hiddenPaperId = UUID.randomUUID();
+		UUID hiddenCollectionId = UUID.randomUUID();
+		String hiddenDoi = "10.1000/private-" + UUID.randomUUID();
+		String absentDoi = "10.1000/absent-" + UUID.randomUUID();
+		OffsetDateTime now = OffsetDateTime.ofInstant(RETRIEVED_AT, ZoneOffset.UTC);
+
+		try {
+			jdbcTemplate.update(
+					"INSERT INTO app_user (id, display_name, created_at) VALUES (?, 'Other MCP owner', ?)",
+					otherOwnerId, now);
+			jdbcTemplate.update("""
+					INSERT INTO paper (
+					    id, title, normalized_title, document_type, metadata_quality,
+					    metadata_updated_at, version, created_at, updated_at
+					)
+					VALUES (?, 'Private MCP paper', 'private mcp paper', 'ARTICLE', 0, ?, 0, ?, ?)
+					""", hiddenPaperId, now, now, now);
+			jdbcTemplate.update("""
+					INSERT INTO paper_external_id (
+					    id, paper_id, id_type, namespace, normalized_value, raw_value, created_at
+					)
+					VALUES (?, ?, 'DOI', '', ?, ?, ?)
+					""", UUID.randomUUID(), hiddenPaperId, hiddenDoi, hiddenDoi, now);
+			jdbcTemplate.update("""
+					INSERT INTO library_collection (
+					    id, owner_id, name, version, created_at, updated_at
+					)
+					VALUES (?, ?, 'Private MCP collection', 0, ?, ?)
+					""", hiddenCollectionId, otherOwnerId, now, now);
+			jdbcTemplate.update("""
+					INSERT INTO collection_paper (
+					    id, collection_id, paper_id, reading_status, version, saved_at, updated_at
+					)
+					VALUES (?, ?, ?, 'UNREAD', 0, ?, ?)
+					""", UUID.randomUUID(), hiddenCollectionId, hiddenPaperId, now, now);
+
+			JsonNode hiddenIdentifier = callTool(18, "resolve_paper_identifier",
+					Map.of("identifier", hiddenDoi));
+			JsonNode missingIdentifier = callTool(19, "resolve_paper_identifier",
+					Map.of("identifier", absentDoi));
+			assertToolError(hiddenIdentifier, McpToolErrorCode.PAPER_IDENTIFIER_NOT_FOUND, false, null);
+			assertToolError(missingIdentifier, McpToolErrorCode.PAPER_IDENTIFIER_NOT_FOUND, false, null);
+			assertThat(hiddenIdentifier.required("result")).isEqualTo(missingIdentifier.required("result"));
+
+			JsonNode hiddenCollection = callTool(30, "search_saved_library",
+					Map.of("collectionId", hiddenCollectionId.toString()));
+			JsonNode missingCollection = callTool(31, "search_saved_library",
+					Map.of("collectionId", UUID.randomUUID().toString()));
+			assertToolError(hiddenCollection, McpToolErrorCode.COLLECTION_NOT_FOUND, false, null);
+			assertToolError(missingCollection, McpToolErrorCode.COLLECTION_NOT_FOUND, false, null);
+			assertThat(hiddenCollection.required("result")).isEqualTo(missingCollection.required("result"));
+		}
+		finally {
+			jdbcTemplate.update("DELETE FROM app_user WHERE id = ?", otherOwnerId);
+			jdbcTemplate.update("DELETE FROM paper WHERE id = ?", hiddenPaperId);
+		}
 	}
 
 	@Test
@@ -331,11 +399,39 @@ class McpProtocolIntegrationTests {
 		String topic = "oversized MCP result " + UUID.randomUUID();
 
 		JsonNode response = callTool(21, "search_research", Map.of("topic", topic, "limit", 1));
-		JsonNode result = response.required("result");
-		assertThat(result.required("isError").asBoolean()).isTrue();
-		String error = result.required("content").required(0).required("text").asString();
-		assertThat(error).contains("MCP_RESPONSE_TOO_LARGE", "retryable=false")
-			.doesNotContain(FakeResearchProvider.LEAK_MARKER);
+		assertToolError(response, McpToolErrorCode.MCP_RESPONSE_TOO_LARGE, false, null);
+		assertThat(response.toString()).doesNotContain(FakeResearchProvider.LEAK_MARKER);
+	}
+
+	@Test
+	void returnsRetryGuidanceWithoutExposingProviderFailures() throws Exception {
+		researchProvider.failRetryably();
+		String topic = "provider outage MCP result " + UUID.randomUUID();
+
+		JsonNode response = callTool(22, "search_research",
+				Map.of("topic", topic, "limit", 1, "mode", "ONLINE", "forceRefresh", true));
+
+		assertToolError(response, McpToolErrorCode.SEARCH_PROVIDER_UNAVAILABLE, true, 7L);
+		assertThat(response.toString()).doesNotContain(FakeResearchProvider.FAILURE_LEAK_MARKER,
+				"ProviderException", "IllegalStateException", "api-key");
+	}
+
+	@Test
+	void normalizesMalformedArgumentsButLeavesUnknownToolsAsProtocolErrors() throws Exception {
+		String invalidUuid = "private-invalid-uuid-" + UUID.randomUUID();
+		JsonNode malformedUuid = callTool(27, "get_paper_details", Map.of("paperId", invalidUuid));
+		assertToolError(malformedUuid, McpToolErrorCode.INVALID_REQUEST, false, null);
+		assertThat(malformedUuid.toString()).doesNotContain(invalidUuid, "Exception", "Failed to invoke");
+
+		String invalidStatus = "PRIVATE_READING_STATUS";
+		JsonNode malformedEnum = callTool(28, "search_saved_library",
+				Map.of("readingStatus", invalidStatus));
+		assertToolError(malformedEnum, McpToolErrorCode.INVALID_REQUEST, false, null);
+		assertThat(malformedEnum.toString()).doesNotContain(invalidStatus, "Exception", "Failed to invoke");
+
+		JsonNode unknown = callTool(29, "not_an_openscholar_tool", Map.of());
+		assertThat(unknown.has("result")).isFalse();
+		assertThat(unknown.required("error").required("code").asInt()).isEqualTo(-32602);
 	}
 
 	@Test
@@ -396,13 +492,53 @@ class McpProtocolIntegrationTests {
 	}
 
 	private JsonNode callTool(int id, String name, Map<String, ?> arguments) throws Exception {
-		return postRequest(id, "tools/call", Map.of("name", name, "arguments", arguments));
+		JsonNode response = postRequest(id, "tools/call", Map.of("name", name, "arguments", arguments));
+		assertThat(response.required("id").asInt()).isEqualTo(id);
+		return response;
 	}
 
 	private static JsonNode successfulStructuredContent(JsonNode response) {
 		JsonNode result = response.required("result");
 		assertThat(result.path("isError").asBoolean(false)).isFalse();
 		return result.required("structuredContent");
+	}
+
+	private static JsonNode assertToolError(JsonNode response, McpToolErrorCode code, boolean retryable,
+			Long retryAfterSeconds) {
+		assertThat(response.required("jsonrpc").asString()).isEqualTo("2.0");
+		assertThat(response.has("error")).isFalse();
+		JsonNode result = response.required("result");
+		assertThat(result.propertyNames()).containsExactlyInAnyOrder("content", "isError", "_meta");
+		assertThat(result.required("isError").asBoolean()).isTrue();
+		assertThat(result.has("structuredContent")).isFalse();
+		assertThat(result.required("content")).hasSize(1);
+		assertThat(result.required("content").required(0).required("type").asString()).isEqualTo("text");
+
+		McpToolError expected = new McpToolError(code, retryable, retryAfterSeconds);
+		assertThat(result.required("content").required(0).required("text").asString())
+			.isEqualTo(expected.toText());
+
+		JsonNode metadata = result.required("_meta");
+		assertThat(metadata.propertyNames()).containsExactly(SafeMcpToolMethodCallback.ERROR_META_KEY);
+		JsonNode descriptor = metadata.required(SafeMcpToolMethodCallback.ERROR_META_KEY);
+		if (retryAfterSeconds == null) {
+			assertThat(descriptor.propertyNames()).containsExactlyInAnyOrder(
+					"schemaVersion", "code", "category", "message", "retryable", "action");
+			assertThat(descriptor.has("retryAfterSeconds")).isFalse();
+		}
+		else {
+			assertThat(descriptor.propertyNames()).containsExactlyInAnyOrder(
+					"schemaVersion", "code", "category", "message", "retryable", "action",
+					"retryAfterSeconds");
+			assertThat(descriptor.required("retryAfterSeconds").asLong()).isEqualTo(retryAfterSeconds);
+		}
+		assertThat(descriptor.required("schemaVersion").asInt()).isEqualTo(McpToolError.SCHEMA_VERSION);
+		assertThat(descriptor.required("code").asString()).isEqualTo(code.name());
+		assertThat(descriptor.required("category").asString()).isEqualTo(expected.category());
+		assertThat(descriptor.required("message").asString()).isEqualTo(expected.message());
+		assertThat(descriptor.required("retryable").asBoolean()).isEqualTo(retryable);
+		assertThat(descriptor.required("action").asString()).isEqualTo(expected.action());
+		return descriptor;
 	}
 
 	private JsonNode postRequest(int id, String method, Map<String, ?> params, boolean sendProtocolVersion)
@@ -457,6 +593,7 @@ class McpProtocolIntegrationTests {
 		assertThat(tool).isNotNull();
 		JsonNode inputSchema = tool.required("inputSchema");
 		assertThat(inputSchema.required("type").asString()).isEqualTo("object");
+		assertThat(inputSchema.required("additionalProperties").asBoolean()).isFalse();
 		assertThat(inputSchema.required("properties").propertyNames()).containsExactlyInAnyOrderElementsOf(properties);
 		assertThat(arrayValues(inputSchema.path("required"))).containsExactlyInAnyOrderElementsOf(required);
 
@@ -507,10 +644,12 @@ class McpProtocolIntegrationTests {
 	static final class FakeResearchProvider implements ResearchProvider {
 
 		private static final String LEAK_MARKER = "MCP_RESULT_MUST_NOT_LEAK";
+		private static final String FAILURE_LEAK_MARKER = "MCP_PROVIDER_FAILURE_MUST_NOT_LEAK";
 
 		private final AtomicInteger calls = new AtomicInteger();
 		private final AtomicBoolean oversized = new AtomicBoolean();
 		private final AtomicBoolean restricted = new AtomicBoolean();
+		private final AtomicBoolean unavailable = new AtomicBoolean();
 
 		@Override
 		public ProviderId id() {
@@ -520,6 +659,11 @@ class McpProtocolIntegrationTests {
 		@Override
 		public ProviderSearchResult search(ProviderSearchQuery query) {
 			calls.incrementAndGet();
+			if (unavailable.get()) {
+				throw new ProviderException(ProviderId.OPENALEX, "PRIVATE_PROVIDER_CODE",
+						FAILURE_LEAK_MARKER + " api-key=private", true, Duration.ofMillis(6_001),
+						new IllegalStateException(FAILURE_LEAK_MARKER));
+			}
 			String providerRecordId = oversized.get()
 					? "W-MCP-WIRE-OVERSIZED"
 					: restricted.get() ? "W-MCP-WIRE-RESTRICTED" : "W-MCP-WIRE-TEST";
@@ -555,6 +699,7 @@ class McpProtocolIntegrationTests {
 			calls.set(0);
 			oversized.set(false);
 			restricted.set(false);
+			unavailable.set(false);
 		}
 
 		void returnOversizedResult() {
@@ -563,6 +708,10 @@ class McpProtocolIntegrationTests {
 
 		void returnRestrictedRecord() {
 			restricted.set(true);
+		}
+
+		void failRetryably() {
+			unavailable.set(true);
 		}
 
 		int calls() {

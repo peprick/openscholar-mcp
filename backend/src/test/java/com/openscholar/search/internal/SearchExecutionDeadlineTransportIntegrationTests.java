@@ -151,9 +151,17 @@ class SearchExecutionDeadlineTransportIntegrationTests {
 			assertThat(toolResult.required("isError").asBoolean()).isTrue();
 			assertThat(errorContent.required("type").asString()).isEqualTo("text");
 			assertThat(errorContent.required("text").asString())
-					.contains("SEARCH_DEADLINE_EXCEEDED: Search execution deadline exceeded; retryable=true")
-					.endsWith("SEARCH_DEADLINE_EXCEEDED: Search execution deadline exceeded; retryable=true")
+					.isEqualTo("SEARCH_DEADLINE_EXCEEDED: Search exceeded its execution time limit. "
+							+ "Retry later or narrow the request. "
+							+ "[category=TRANSIENT; retryable=true; action=RETRY]")
 					.doesNotContain(NESTED_SECRET);
+			JsonNode descriptor = toolResult.required("_meta").required("com.openscholar/error");
+			assertThat(descriptor.required("schemaVersion").asInt()).isEqualTo(1);
+			assertThat(descriptor.required("code").asString()).isEqualTo("SEARCH_DEADLINE_EXCEEDED");
+			assertThat(descriptor.required("category").asString()).isEqualTo("TRANSIENT");
+			assertThat(descriptor.required("retryable").asBoolean()).isTrue();
+			assertThat(descriptor.required("action").asString()).isEqualTo("RETRY");
+			assertThat(descriptor.has("retryAfterSeconds")).isFalse();
 			assertThat(toolResult.has("structuredContent")).isFalse();
 			assertCancelledWithoutSnapshot(fingerprint);
 		}

@@ -1187,10 +1187,12 @@ components:
           enum:
             - VALIDATION_FAILED
             - INVALID_REQUEST
+            - INVALID_PAPER_IDENTIFIER
             - UNSUPPORTED_CITATION_FORMAT
             - SEARCH_NOT_FOUND
             - SEARCH_PAGE_EXHAUSTED
             - PAPER_NOT_FOUND
+            - PAPER_IDENTIFIER_NOT_FOUND
             - COLLECTION_NOT_FOUND
             - SAVED_PAPER_NOT_FOUND
             - REFRESH_JOB_NOT_FOUND

@@ -54,6 +54,7 @@ The fallback contains no account data. Search results, collections, session stat
 - Apply authorization in services, not just MCP adapters.
 - Treat annotations as hints, not access-control enforcement.
 - Limit response sizes and redact sensitive fields.
+- Map MCP failures by exception class to fixed, versioned descriptors; never copy submitted values, provider payloads, exception messages/causes, SQL details, or credentials into tool results.
 
 ## URL and document security
 
@@ -134,6 +135,7 @@ The local server binds to loopback by default. Production Compose enables OIDC a
 - Exact DOI, arXiv, and OpenAlex lookup is database-only and limited to papers already present in the current owner's searches or collections. Missing and other-owner records share the same not-found response to prevent enumeration of the canonical catalog.
 - `GET /api/v1/privacy/export` returns a no-store JSON attachment with the current user's display data, search snapshots/filters/warnings, collections, and saved memberships/tags. It intentionally omits issuer/subject and operational job history.
 - `DELETE /api/v1/privacy/account` requires exact `DELETE_MY_DATA`. It deletes the current user's search-refresh jobs, search snapshots, collections/memberships/tags, and hosted user row. Shared canonical paper/provider/access data and global access-refresh jobs remain because they are not personal ownership records. Local mode preserves the fixed bootstrap row.
+- The `/data` web privacy center calls those APIs only through same-origin, no-store Next.js routes. The export route forwards only safe attachment headers; the deletion route validates the exact confirmation shape before backend access and expires the OpenScholar hosted-session cookie only after successful deletion. Because a response can be lost after a committed delete, an unconfirmed browser result never claims that data was preserved and directs the user to refresh before retrying. Neither route places personal data in CacheStorage.
 - A later valid hosted token for the same issuer+subject provisions a new, empty internal account; deletion is not an identity-provider account revocation.
 - Minimize provider response retention.
 - Avoid sending private user data to providers.

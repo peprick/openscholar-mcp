@@ -30,7 +30,6 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 
 ## 4. Strengthen the agent experience
 
-- Improve structured MCP errors without exposing provider payloads or internal infrastructure.
 - Propagate client cancellation when the Java MCP transport provides a reliable supported path.
 - Consider MCP Tasks or owned job handles only for workflows that become genuinely long-running.
 - Keep collection mutations disabled until authorization and explicit host/user confirmation behavior are proven across supported clients.

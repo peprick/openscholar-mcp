@@ -7,6 +7,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 }
 
 const ids = Object.freeze({
+  user: "3b46419d-3bdf-42c8-82b2-6fac9cd8dd2d",
   search: "550e8400-e29b-41d4-a716-446655440000",
   nextSearch: "6ce18ca9-4d49-45e7-aa2b-b5208dfa1c3c",
   verifiedPaper: "22c1800e-77f4-4aa9-98d7-5f79fa9a8a1c",
@@ -84,6 +85,27 @@ function initialState() {
   return {
     query: "graph neural networks for drug discovery",
     searchMode: "AUTO",
+    searches: [
+      {
+        searchId: ids.search,
+        query: "graph neural networks for drug discovery",
+        requestedMode: "AUTO",
+        executionSource: "EXACT_CACHE",
+        filters: {
+          yearFrom: 2020,
+          yearTo: 2026,
+          documentTypes: ["ARTICLE"],
+          openAccessOnly: true,
+          minimumCitations: 5,
+          languages: ["en"],
+          pageSize: 20,
+        },
+        searchedAt: "2026-08-20T09:20:00Z",
+        freshUntil: "2026-08-20T10:20:00Z",
+        resultCount: 1,
+        warnings: ["CROSSREF_SYNTHETIC_FAILURE"],
+      },
+    ],
     collections: [
       {
         collectionId: ids.collection,
@@ -113,6 +135,32 @@ function initialState() {
 }
 
 let state = initialState();
+
+function privacyExport() {
+  return {
+    userId: ids.user,
+    displayName: "Offline Researcher",
+    accountCreatedAt: "2026-08-01T08:00:00Z",
+    generatedAt: "2026-08-20T12:00:00Z",
+    searches: state.searches,
+    collections: state.collections.map((collection) => ({
+      collectionId: collection.collectionId,
+      name: collection.name,
+      description: collection.description,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+    })),
+    savedPapers: state.savedPapers.map((paper) => ({
+      collectionId: paper.collectionId,
+      paperId: paper.paperId,
+      title: paper.title,
+      readingStatus: paper.readingStatus,
+      tags: paper.tags,
+      savedAt: paper.savedAt,
+      updatedAt: paper.updatedAt,
+    })),
+  };
+}
 
 function author(name, openAlexId) {
   return {
@@ -549,6 +597,25 @@ async function handle(request, response) {
       status: "UP",
       timestamp: "2026-08-20T09:00:00Z",
     });
+    return;
+  }
+  if (path === "/api/v1/privacy/export" && request.method === "GET") {
+    json(response, 200, privacyExport(), {
+      "content-disposition":
+        'attachment; filename="openscholar-personal-data.json"',
+    });
+    return;
+  }
+  if (path === "/api/v1/privacy/account" && request.method === "DELETE") {
+    const body = await requestBody(request);
+    if (body.confirmation !== "DELETE_MY_DATA") {
+      problem(response, 400, "The exact DELETE_MY_DATA confirmation is required.");
+      return;
+    }
+    state.searches = [];
+    state.collections = [];
+    state.savedPapers = [];
+    empty(response);
     return;
   }
   if (path === "/api/v1/searches" && request.method === "POST") {

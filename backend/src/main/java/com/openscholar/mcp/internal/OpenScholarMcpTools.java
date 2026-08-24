@@ -299,78 +299,67 @@ public class OpenScholarMcpTools {
 			return toolResultBudget.requireWithinLimit(action.get());
 		}
 		catch (InvalidPaperIdentifierException exception) {
-			throw failure("INVALID_PAPER_IDENTIFIER", exception);
+			throw failure(McpToolErrorCode.INVALID_PAPER_IDENTIFIER);
 		}
 		catch (PaperIdentifierNotFoundException exception) {
-			throw failure("PAPER_IDENTIFIER_NOT_FOUND", exception);
+			throw failure(McpToolErrorCode.PAPER_IDENTIFIER_NOT_FOUND);
 		}
 		catch (PaperNotFoundException exception) {
-			throw failure("PAPER_NOT_FOUND", exception);
+			throw failure(McpToolErrorCode.PAPER_NOT_FOUND);
 		}
 		catch (CollectionNotFoundException exception) {
-			throw failure("COLLECTION_NOT_FOUND", exception);
+			throw failure(McpToolErrorCode.COLLECTION_NOT_FOUND);
 		}
 		catch (UnsupportedCitationFormatException exception) {
-			throw failure("UNSUPPORTED_CITATION_FORMAT", exception);
+			throw failure(McpToolErrorCode.UNSUPPORTED_CITATION_FORMAT);
 		}
 		catch (SearchCoordinationTimeoutException exception) {
-			throw new SafeMcpToolException("SEARCH_COORDINATION_TIMEOUT: " + exception.getMessage()
-					+ retrySuffix(true, null));
+			throw retryableFailure(McpToolErrorCode.SEARCH_COORDINATION_TIMEOUT);
 		}
 		catch (SearchCoordinationInterruptedException exception) {
-			throw new SafeMcpToolException("SEARCH_COORDINATION_INTERRUPTED: " + exception.getMessage()
-					+ retrySuffix(true, null));
+			throw retryableFailure(McpToolErrorCode.SEARCH_COORDINATION_INTERRUPTED);
 		}
 		catch (SearchDeadlineExceededException exception) {
-			throw new SafeMcpToolException("SEARCH_DEADLINE_EXCEEDED: " + exception.getMessage()
-					+ retrySuffix(true, null));
+			throw retryableFailure(McpToolErrorCode.SEARCH_DEADLINE_EXCEEDED);
 		}
 		catch (SearchExecutionInterruptedException exception) {
-			throw new SafeMcpToolException("SEARCH_EXECUTION_INTERRUPTED: " + exception.getMessage()
-					+ retrySuffix(true, null));
+			throw retryableFailure(McpToolErrorCode.SEARCH_EXECUTION_INTERRUPTED);
 		}
 		catch (SearchUnavailableException exception) {
-			throw new SafeMcpToolException("SEARCH_PROVIDER_UNAVAILABLE: " + exception.getMessage()
-					+ retrySuffix(exception.retryable(), exception.retryAfter()));
+			throw failure(McpToolErrorCode.SEARCH_PROVIDER_UNAVAILABLE, exception.retryable(),
+					exception.retryAfter());
 		}
 		catch (AccessRefreshTooSoonException exception) {
-			throw new SafeMcpToolException("ACCESS_REFRESH_RATE_LIMITED: " + exception.getMessage()
-					+ retrySuffix(true, exception.retryAfter()));
+			throw failure(McpToolErrorCode.ACCESS_REFRESH_RATE_LIMITED, true, exception.retryAfter());
 		}
 		catch (AccessUnavailableException exception) {
-			throw new SafeMcpToolException("ACCESS_PROVIDERS_UNAVAILABLE: " + exception.getMessage()
-					+ retrySuffix(exception.retryable(), exception.retryAfter()));
+			throw failure(McpToolErrorCode.ACCESS_PROVIDERS_UNAVAILABLE, exception.retryable(),
+					exception.retryAfter());
 		}
 		catch (McpToolResultTooLargeException exception) {
-			throw new SafeMcpToolException(
-					"MCP_RESPONSE_TOO_LARGE: The tool result exceeds the configured response budget; retryable=false");
+			throw failure(McpToolErrorCode.MCP_RESPONSE_TOO_LARGE);
 		}
 		catch (IllegalArgumentException exception) {
-			throw failure("INVALID_REQUEST", exception);
+			throw failure(McpToolErrorCode.INVALID_REQUEST);
 		}
 		catch (RuntimeException exception) {
 			LOGGER.error("Unexpected MCP tool failure: tool={}, exceptionType={}", toolName,
 					exception.getClass().getName());
-			throw new SafeMcpToolException("MCP_TOOL_FAILED: The tool could not complete safely.");
+			throw failure(McpToolErrorCode.MCP_TOOL_FAILED);
 		}
 	}
 
-	private static SafeMcpToolException failure(String code, RuntimeException exception) {
-		String message = exception.getMessage();
-		return new SafeMcpToolException(code + ": "
-				+ (message == null || message.isBlank() ? "The tool request could not be completed." : message));
+	private static McpToolExecutionException failure(McpToolErrorCode code) {
+		return new McpToolExecutionException(McpToolError.nonRetryable(code));
 	}
 
-	private static String retrySuffix(boolean retryable, java.time.Duration retryAfter) {
-		String suffix = "; retryable=" + retryable;
-		return retryAfter == null ? suffix : suffix + "; retryAfterSeconds=" + Math.max(1, retryAfter.toSeconds());
+	private static McpToolExecutionException retryableFailure(McpToolErrorCode code) {
+		return new McpToolExecutionException(McpToolError.retryable(code));
 	}
 
-	private static final class SafeMcpToolException extends RuntimeException {
-
-		private SafeMcpToolException(String message) {
-			super(message);
-		}
+	private static McpToolExecutionException failure(McpToolErrorCode code, boolean retryable,
+			java.time.Duration retryAfter) {
+		return new McpToolExecutionException(McpToolError.from(code, retryable, retryAfter));
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)

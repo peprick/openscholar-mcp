@@ -189,7 +189,7 @@ class OpenScholarMcpToolsTests {
 			Throwable failure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null, null,
 					null, invalidSize, null, null, null));
 
-			assertSafeFailure(failure, "INVALID_REQUEST: MCP page size must be between 1 and 25");
+			assertSafeFailure(failure, McpToolErrorCode.INVALID_REQUEST);
 		}
 		assertThat(search.calls).isZero();
 	}
@@ -199,7 +199,7 @@ class OpenScholarMcpToolsTests {
 		Throwable failure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null, null,
 				null, null, null, true, SearchMode.LOCAL));
 
-		assertSafeFailure(failure, "INVALID_REQUEST: Local search cannot force a provider refresh");
+		assertSafeFailure(failure, McpToolErrorCode.INVALID_REQUEST);
 		assertThat(search.calls).isZero();
 	}
 
@@ -256,11 +256,11 @@ class OpenScholarMcpToolsTests {
 	void paperIdentifierResolutionExposesStableSafeFailures() {
 		paperIdentifierLookup.failure = new InvalidPaperIdentifierException();
 		assertSafeFailure(catchThrowable(() -> tools.resolvePaperIdentifier("not-an-identifier")),
-				"INVALID_PAPER_IDENTIFIER: Identifier must be a DOI, arXiv identifier, or OpenAlex work identifier.");
+				McpToolErrorCode.INVALID_PAPER_IDENTIFIER);
 
 		paperIdentifierLookup.failure = new PaperIdentifierNotFoundException();
 		assertSafeFailure(catchThrowable(() -> tools.resolvePaperIdentifier("10.1000/private-paper")),
-				"PAPER_IDENTIFIER_NOT_FOUND: No visible paper was found for that identifier.");
+				McpToolErrorCode.PAPER_IDENTIFIER_NOT_FOUND);
 
 		assertThat(paperIdentifierLookup.calls).isEqualTo(2);
 		assertThat(search.calls).isZero();
@@ -289,7 +289,7 @@ class OpenScholarMcpToolsTests {
 	void legalFullTextRejectsANullPaperIdBeforeReadingAccess() {
 		Throwable failure = catchThrowable(() -> tools.getLegalFullText(null));
 
-		assertSafeFailure(failure, "INVALID_REQUEST: paperId must not be null");
+		assertSafeFailure(failure, McpToolErrorCode.INVALID_REQUEST);
 		assertThat(paperAccess.getCalls).isZero();
 		assertThat(paperAccess.resolveCalls).isZero();
 	}
@@ -333,7 +333,7 @@ class OpenScholarMcpToolsTests {
 
 		Throwable failure = catchThrowable(
 				() -> tools.searchSavedLibrary(null, null, null, null, 0, 26));
-		assertSafeFailure(failure, "INVALID_REQUEST: MCP page size must be between 1 and 25");
+		assertSafeFailure(failure, McpToolErrorCode.INVALID_REQUEST);
 		assertThat(library.calls).isOne();
 	}
 
@@ -389,43 +389,41 @@ class OpenScholarMcpToolsTests {
 
 		Throwable failure = catchThrowable(() -> tools.exportCitations(List.of(PAPER_ID), "bibtex"));
 
-		assertSafeFailure(failure,
-				"MCP_RESPONSE_TOO_LARGE: The tool result exceeds the configured response budget; retryable=false");
+		assertSafeFailure(failure, McpToolErrorCode.MCP_RESPONSE_TOO_LARGE);
 		assertThat(failure.getMessage()).doesNotContain(oversizedContent, "sensitive-result");
 	}
 
 	@Test
 	void citationsRejectInvalidListsAndFormatsBeforeCallingTheUseCase() {
 		assertSafeFailure(catchThrowable(() -> tools.exportCitations(null, null)),
-				"INVALID_REQUEST: paperIds must not be null");
+				McpToolErrorCode.INVALID_REQUEST);
 		assertSafeFailure(catchThrowable(() -> tools.exportCitations(paperIds(26), "bibtex")),
-				"INVALID_REQUEST: MCP citation exports can contain at most 25 papers");
+				McpToolErrorCode.INVALID_REQUEST);
 		assertSafeFailure(catchThrowable(() -> tools.exportCitations(Collections.singletonList(null), "bibtex")),
-				"INVALID_REQUEST: paperIds must not contain null values");
+				McpToolErrorCode.INVALID_REQUEST);
 		assertSafeFailure(catchThrowable(() -> tools.exportCitations(List.of(PAPER_ID), "ris")),
-				"UNSUPPORTED_CITATION_FORMAT: Citation format must be one of: bibtex, csl-json");
+				McpToolErrorCode.UNSUPPORTED_CITATION_FORMAT);
 
 		assertThat(citations.calls).isZero();
 	}
 
 	@Test
 	void expectedDomainFailuresExposeStableCodesWithoutNestedCauseDetails() {
-		search.failure = new SearchUnavailableException("Provider temporarily unavailable", true,
+		search.failure = new SearchUnavailableException("provider-body=" + NESTED_SECRET, true,
 				Duration.ofSeconds(7), new IllegalStateException(NESTED_SECRET));
 		Throwable searchFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
 				null, null, null, null, null, null));
-		assertSafeFailure(searchFailure,
-				"SEARCH_PROVIDER_UNAVAILABLE: Provider temporarily unavailable; retryable=true; retryAfterSeconds=7");
-		assertThat(searchFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
+		assertSafeFailure(searchFailure, McpToolErrorCode.SEARCH_PROVIDER_UNAVAILABLE, true, 7L);
+		assertThat(searchFailure.getMessage()).doesNotContain(NESTED_SECRET, "provider-body", "IllegalStateException");
 
 		paperDetails.failure = new PaperNotFoundException(PAPER_ID);
 		assertSafeFailure(catchThrowable(() -> tools.getPaperDetails(PAPER_ID)),
-				"PAPER_NOT_FOUND: Paper not found: " + PAPER_ID);
+				McpToolErrorCode.PAPER_NOT_FOUND);
 
 		library.failure = new CollectionNotFoundException(COLLECTION_ID);
 		assertSafeFailure(catchThrowable(
 				() -> tools.searchSavedLibrary(null, COLLECTION_ID, null, null, null, null)),
-				"COLLECTION_NOT_FOUND: Collection not found: " + COLLECTION_ID);
+				McpToolErrorCode.COLLECTION_NOT_FOUND);
 	}
 
 	@Test
@@ -437,16 +435,14 @@ class OpenScholarMcpToolsTests {
 		Throwable timeoutFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
 				null, null, null, null, null, null));
 
-		assertSafeFailure(timeoutFailure,
-				"SEARCH_COORDINATION_TIMEOUT: Search coordination wait timed out; retryable=true");
+		assertSafeFailure(timeoutFailure, McpToolErrorCode.SEARCH_COORDINATION_TIMEOUT, true, null);
 		assertThat(timeoutFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
 
 		search.failure = new SearchCoordinationInterruptedException(new InterruptedException(NESTED_SECRET));
 		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
 				null, null, null, null, null, null));
 
-		assertSafeFailure(interruptedFailure,
-				"SEARCH_COORDINATION_INTERRUPTED: Search coordination wait was interrupted; retryable=true");
+		assertSafeFailure(interruptedFailure, McpToolErrorCode.SEARCH_COORDINATION_INTERRUPTED, true, null);
 		assertThat(interruptedFailure.getMessage()).doesNotContain(NESTED_SECRET, "InterruptedException");
 	}
 
@@ -459,29 +455,27 @@ class OpenScholarMcpToolsTests {
 		Throwable deadlineFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
 				null, null, null, null, null, null));
 
-		assertSafeFailure(deadlineFailure,
-				"SEARCH_DEADLINE_EXCEEDED: Search execution deadline exceeded; retryable=true");
+		assertSafeFailure(deadlineFailure, McpToolErrorCode.SEARCH_DEADLINE_EXCEEDED, true, null);
 		assertThat(deadlineFailure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
 
 		search.failure = new SearchExecutionInterruptedException(new InterruptedException(NESTED_SECRET));
 		Throwable interruptedFailure = catchThrowable(() -> tools.searchResearch("agent systems", null, null, null, null,
 				null, null, null, null, null, null));
 
-		assertSafeFailure(interruptedFailure,
-				"SEARCH_EXECUTION_INTERRUPTED: Search execution was interrupted; retryable=true");
+		assertSafeFailure(interruptedFailure, McpToolErrorCode.SEARCH_EXECUTION_INTERRUPTED, true, null);
 		assertThat(interruptedFailure.getMessage()).doesNotContain(NESTED_SECRET, "InterruptedException");
 	}
 
 	@Test
 	void accessFailuresExposeRetryMetadataWithoutNestedCauseDetails() {
-		paperAccess.failure = new AccessUnavailableException("Access providers unavailable", false,
+		paperAccess.failure = new AccessUnavailableException("access-provider-body=" + NESTED_SECRET, false,
 				Duration.ofSeconds(9), new IllegalStateException(NESTED_SECRET));
 
 		Throwable failure = catchThrowable(() -> tools.getLegalFullText(PAPER_ID));
 
-		assertSafeFailure(failure,
-				"ACCESS_PROVIDERS_UNAVAILABLE: Access providers unavailable; retryable=false; retryAfterSeconds=9");
-		assertThat(failure.getMessage()).doesNotContain(NESTED_SECRET, "IllegalStateException");
+		assertSafeFailure(failure, McpToolErrorCode.ACCESS_PROVIDERS_UNAVAILABLE);
+		assertThat(failure.getMessage()).doesNotContain(NESTED_SECRET, "access-provider-body",
+				"IllegalStateException", "retryAfterSeconds");
 		assertThat(paperAccess.resolveCalls).isZero();
 	}
 
@@ -491,7 +485,7 @@ class OpenScholarMcpToolsTests {
 
 		Throwable failure = catchThrowable(() -> tools.getPaperDetails(PAPER_ID));
 
-		assertSafeFailure(failure, "MCP_TOOL_FAILED: The tool could not complete safely.");
+		assertSafeFailure(failure, McpToolErrorCode.MCP_TOOL_FAILED);
 		assertThat(failure.getMessage()).doesNotContain("raw outer failure", NESTED_SECRET, "IllegalArgumentException");
 		assertThat(paperAccess.getCalls).isZero();
 	}
@@ -509,8 +503,19 @@ class OpenScholarMcpToolsTests {
 				budget);
 	}
 
-	private static void assertSafeFailure(Throwable failure, String message) {
-		assertThat(failure).isInstanceOf(RuntimeException.class).hasMessage(message).hasNoCause();
+	private static void assertSafeFailure(Throwable failure, McpToolErrorCode code) {
+		assertSafeFailure(failure, code, false, null);
+	}
+
+	private static void assertSafeFailure(Throwable failure, McpToolErrorCode code, boolean retryable,
+			Long retryAfterSeconds) {
+		assertThat(failure).isInstanceOf(McpToolExecutionException.class).hasNoCause();
+		McpToolExecutionException mappedFailure = (McpToolExecutionException) failure;
+		McpToolError error = mappedFailure.error();
+		assertThat(error.code()).isEqualTo(code);
+		assertThat(error.retryable()).isEqualTo(retryable);
+		assertThat(error.retryAfterSeconds()).isEqualTo(retryAfterSeconds);
+		assertThat(failure).hasMessage(error.toText());
 	}
 
 	private static final class RecordingSearchUseCase implements SearchResearchUseCase {

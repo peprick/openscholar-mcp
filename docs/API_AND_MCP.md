@@ -153,6 +153,8 @@ DELETE /api/v1/privacy/account
 
 OIDC mode requires `openscholar.privacy`. Export returns a no-store JSON attachment containing only the current principal's identity display data, search snapshots/filters, collections, and saved-paper memberships. Account deletion requires the exact `DELETE_MY_DATA` confirmation and deletes that principal's search snapshots, search-refresh jobs, collections/memberships/tags, and OIDC user row. Shared canonical paper/provider/access metadata and global access-refresh jobs are not personal-account records and are not deleted. A later valid token for the same issuer+subject provisions a new empty internal account. Local mode preserves the fixed bootstrap user while deleting its personal search/library data.
 
+The web privacy center at `/data` exposes both controls through same-origin Next.js routes. `GET /api/privacy/export` forwards the authenticated request server-side and returns only allowlisted attachment headers with `Cache-Control: no-store`. `DELETE /api/privacy/account` accepts only the exact confirmation object, forwards no additional client fields, and clears the OpenScholar hosted-session cookie after a successful deletion. These browser routes do not expose issuer/subject identifiers, shared catalog records, PDFs, provider diagnostics, refresh jobs, or operational metrics.
+
 ### Operations
 
 ```http
@@ -178,6 +180,59 @@ The implemented transport is stateless Streamable HTTP through `spring-ai-starte
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Local mode requires the configured MCP bearer key. OIDC mode delegates bearer validation to the JWT resource server and requires `openscholar.mcp`; present `Origin` headers must still exactly match the configured allow-list.
 
 The adapter registers six read-oriented tools. `search_research` in `AUTO` or `ONLINE` mode may contact the enabled discovery-provider set and update internal metadata/search caches; `LOCAL` is database-only but still stores an immutable owned snapshot. Because MCP annotations describe the whole tool rather than one invocation, `search_research` retains `readOnlyHint=false`, `idempotentHint=false`, and `openWorldHint=true` for every mode. Every discovery adapter has a configurable 10-second default whole-exchange deadline and 8 MiB streamed body limit. A separate configurable 12-second default bounds only acquisition of the JVM-local search-coordination stripe. The shared 18-second execution deadline bounds the application work for `search_research` as well as REST search operations. It excludes MCP input parsing/schema validation, tool DTO/framework serialization, and socket lifetime. The other five tools are database-only; none mutates user collections or reading state. MCP-specific search/library pages and citation batches are capped at 25 items.
+
+### MCP tool errors
+
+An input or tool-execution failure is a successful HTTP/JSON-RPC exchange whose tool result has `isError: true`. It contains exactly one fixed, safe text item for agents and a versioned OpenScholar descriptor for hosts that retain MCP metadata:
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "SEARCH_PROVIDER_UNAVAILABLE: Research sources could not complete the search. [category=UPSTREAM_UNAVAILABLE; retryable=true; action=RETRY_OR_USE_LOCAL_SEARCH; retryAfterSeconds=7]"
+    }
+  ],
+  "isError": true,
+  "_meta": {
+    "com.openscholar/error": {
+      "schemaVersion": 1,
+      "code": "SEARCH_PROVIDER_UNAVAILABLE",
+      "category": "UPSTREAM_UNAVAILABLE",
+      "message": "Research sources could not complete the search.",
+      "retryable": true,
+      "action": "RETRY_OR_USE_LOCAL_SEARCH",
+      "retryAfterSeconds": 7
+    }
+  }
+}
+```
+
+The descriptor fields are closed, allow-listed values: `schemaVersion`, stable `code`, broad `category`, fixed safe `message`, boolean `retryable`, stable `action`, and an optional positive `retryAfterSeconds`. A retry delay appears only when the identical request is retryable and a trusted positive delay no greater than one day is available; fractional seconds round up. Callers should branch on `isError`, use `_meta["com.openscholar/error"]` when their host preserves it, retry only when `retryable=true`, and treat the text as a model-visible fallback rather than a parsing contract.
+
+The version 1 machine catalog is:
+
+| Code | Category | Retryability and action |
+|---|---|---|
+| `INVALID_REQUEST` | `INVALID_INPUT` | non-retryable; `CORRECT_INPUT` |
+| `INVALID_PAPER_IDENTIFIER` | `INVALID_INPUT` | non-retryable; `CORRECT_INPUT` |
+| `UNSUPPORTED_CITATION_FORMAT` | `INVALID_INPUT` | non-retryable; `CORRECT_INPUT` |
+| `PAPER_NOT_FOUND` | `NOT_FOUND` | non-retryable; `USE_DIFFERENT_PAPER` |
+| `PAPER_IDENTIFIER_NOT_FOUND` | `NOT_FOUND` | non-retryable; `SEARCH_FIRST` |
+| `COLLECTION_NOT_FOUND` | `NOT_FOUND` | non-retryable; `SELECT_VISIBLE_COLLECTION` |
+| `SEARCH_COORDINATION_TIMEOUT` | `TRANSIENT` | retryable; `RETRY` |
+| `SEARCH_COORDINATION_INTERRUPTED` | `TRANSIENT` | retryable; `RETRY` |
+| `SEARCH_DEADLINE_EXCEEDED` | `TRANSIENT` | retryable; `RETRY` |
+| `SEARCH_EXECUTION_INTERRUPTED` | `TRANSIENT` | retryable; `RETRY` |
+| `SEARCH_PROVIDER_UNAVAILABLE` | `UPSTREAM_UNAVAILABLE` | retryable: `RETRY_OR_USE_LOCAL_SEARCH`; otherwise `USE_LOCAL_SEARCH` |
+| `ACCESS_REFRESH_RATE_LIMITED` | `RATE_LIMITED` | retryable; `WAIT_AND_RETRY` |
+| `ACCESS_PROVIDERS_UNAVAILABLE` | `UPSTREAM_UNAVAILABLE` | retryable: `RETRY`; otherwise `CONTACT_OPERATOR` |
+| `MCP_RESPONSE_TOO_LARGE` | `RESOURCE_LIMIT` | non-retryable; `REDUCE_RESULT_SIZE` |
+| `MCP_TOOL_FAILED` | `INTERNAL` | non-retryable; `CONTACT_OPERATOR` |
+
+Current categories cover invalid input, owner-indistinguishable not-found results, transient search interruption/deadline failures, unavailable research sources, response-size limits, and generic internal failure. Validation messages, submitted values, identifiers, topics, cursors, provider payloads and URLs, exception details, SQL/JDBC text, and credentials are never copied into the descriptor. Missing and other-owner resources deliberately produce the same complete error shape. Partial-provider results, stale fallback, restricted access, and a completed access check with no verified location remain successful typed results rather than errors.
+
+Error results omit `structuredContent`. Every advertised `outputSchema` continues to describe that tool's successful result, and MCP `2025-11-25` requires structured output to conform to the advertised schema. OpenScholar closes generated input schemas to unknown properties and validates both input and successful structured output inside the safe callback. Unknown tools and malformed JSON-RPC envelopes remain JSON-RPC protocol errors. Authentication, authorization, Origin, request-size, and request-rate failures remain HTTP errors or Problem Details at the transport boundary. [ADR 0009](decisions/0009-versioned-safe-mcp-tool-errors.md) records this separation.
 
 ## MVP MCP tools
 
@@ -263,7 +318,7 @@ Resources expose metadata or user-authorized content, never arbitrary URLs or un
 - Every protected MCP response carries a request ID that is also placed in logging context.
 - The configured `spring.ai.mcp.server.request-timeout` is 20 seconds, but the stateless MCP Java SDK 2.0 path does not currently enforce it as whole-tool cancellation.
 - Client-disconnect propagation, MCP `notifications/cancelled`, request parsing/validation deadlines, framework serialization deadlines, and socket-lifetime enforcement remain follow-ups on the pinned stateless SDK.
-- Tool failures use safe text with stable prefixes such as `INVALID_REQUEST`, `PAPER_NOT_FOUND`, `SEARCH_COORDINATION_TIMEOUT`, `SEARCH_COORDINATION_INTERRUPTED`, `SEARCH_DEADLINE_EXCEEDED`, `SEARCH_EXECUTION_INTERRUPTED`, and provider-unavailable codes. Restricted access is a successful access status; dedicated structured tool-error contracts remain planned.
+- Tool failures use fixed safe text plus versioned metadata under `_meta["com.openscholar/error"]`; errors never populate a tool's success-only `structuredContent`. Restricted access remains a successful access status.
 
 ## Compatibility testing
 

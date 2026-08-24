@@ -228,6 +228,25 @@ button:disabled {
   margin: 0;
 }
 
+.footerActions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  text-align: right;
+}
+
+.footerDataLink {
+  color: var(--green);
+  font-size: 0.8rem;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.footerDataLink:hover {
+  color: var(--green-dark);
+  text-decoration: underline;
+}
+
 .eyebrow {
   color: var(--green);
   display: block;
@@ -1955,6 +1974,185 @@ button:disabled {
   font-size: 0.68rem;
 }
 
+.dataPage {
+  max-width: 1080px;
+}
+
+.dataIntro {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0 34px;
+}
+
+.dataIntro h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(3.4rem, 8vw, 6.8rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
+  margin: 14px 0 24px;
+}
+
+.dataIntro p {
+  color: var(--ink-soft);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1rem, 2vw, 1.18rem);
+  line-height: 1.7;
+  margin: 0;
+  max-width: 790px;
+}
+
+.privacyActions {
+  display: grid;
+  gap: 22px;
+  margin-top: 38px;
+}
+
+.privacyCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: clamp(24px, 4vw, 48px);
+  grid-template-columns: 52px minmax(0, 1fr);
+  overflow: hidden;
+  padding: clamp(28px, 5vw, 48px);
+}
+
+.privacyCard--danger {
+  border-color: rgb(156 46 40 / 28%);
+}
+
+.privacyCardNumber {
+  color: var(--orange);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.92rem;
+  padding-top: 5px;
+}
+
+.privacyCard--danger .privacyCardNumber,
+.privacyCard--danger .eyebrow {
+  color: var(--danger);
+}
+
+.privacyCardBody {
+  min-width: 0;
+}
+
+.privacyCardBody > h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4.2vw, 3.25rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.04;
+  margin: 10px 0 16px;
+}
+
+.privacyCardBody > p {
+  color: var(--ink-soft);
+  line-height: 1.7;
+  margin: 0;
+  max-width: 760px;
+}
+
+.privacyPlainList {
+  color: var(--ink-soft);
+  display: grid;
+  font-size: 0.86rem;
+  gap: 7px;
+  line-height: 1.55;
+  margin: 22px 0 26px;
+  max-width: 760px;
+  padding-left: 20px;
+}
+
+.privacyBoundaryNote {
+  background: var(--surface-muted);
+  border-left: 3px solid rgb(156 46 40 / 48%);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-top: 24px;
+  max-width: 760px;
+  padding: 17px 19px;
+}
+
+.privacyBoundaryNote strong {
+  display: block;
+  font-size: 0.78rem;
+  margin-bottom: 5px;
+}
+
+.privacyBoundaryNote p {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.privacyDeleteForm {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+  max-width: 620px;
+  padding-top: 26px;
+}
+
+.privacyDeleteForm code {
+  background: var(--danger-soft);
+  border-radius: 4px;
+  color: var(--danger);
+  font-size: 0.72rem;
+  padding: 2px 5px;
+}
+
+.privacyDeleteForm input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+.privacyDeleteButton {
+  justify-self: start;
+}
+
+.privacyDeleteButton:disabled {
+  cursor: not-allowed;
+}
+
+.privacyFeedback {
+  font-size: 0.8rem;
+  font-weight: 650;
+  margin: 14px 0 0;
+  max-width: 680px;
+}
+
+.privacyFeedback--status {
+  color: var(--green-dark);
+}
+
+.privacyFeedback--error {
+  color: var(--danger);
+}
+
+.privacyComplete {
+  background: var(--green-soft);
+  border: 1px solid rgb(21 92 71 / 22%);
+  border-radius: var(--radius);
+  margin-top: 28px;
+  max-width: 620px;
+  padding: 20px;
+}
+
+.privacyComplete .privacyFeedback {
+  font-size: 0.95rem;
+  margin-top: 0;
+}
+
+.privacyComplete > p {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  margin: 5px 0 17px;
+}
+
 .libraryPage,
 .collectionPage {
   max-width: 1260px;
@@ -2569,8 +2767,35 @@ button:disabled {
     justify-content: center;
   }
 
+  .footerActions {
+    justify-items: start;
+    text-align: left;
+  }
+
   .page {
     padding-top: 26px;
+  }
+
+  .dataIntro {
+    padding-bottom: 28px;
+  }
+
+  .privacyActions {
+    margin-top: 26px;
+  }
+
+  .privacyCard {
+    gap: 10px;
+    grid-template-columns: 1fr;
+    padding: 25px 21px;
+  }
+
+  .privacyCardNumber {
+    padding-top: 0;
+  }
+
+  .privacyDeleteButton {
+    width: 100%;
   }
 
   .pageToolbar {
