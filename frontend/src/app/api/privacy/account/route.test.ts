@@ -111,6 +111,7 @@ describe("personal-data deletion BFF route", () => {
     });
     expect(response.status).toBe(204);
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("clear-site-data")).toBe('"storage"');
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
@@ -123,6 +124,7 @@ describe("personal-data deletion BFF route", () => {
     );
 
     expect(response.status).toBe(204);
+    expect(response.headers.get("clear-site-data")).toBe('"storage"');
     expect(response.headers.get("set-cookie")).toContain(
       `${AUTH_SESSION_COOKIE}=`,
     );
@@ -159,6 +161,7 @@ describe("personal-data deletion BFF route", () => {
       expect(response.status).toBe(status);
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(response.headers.get("retry-after")).toBe(retryAfter);
+      expect(response.headers.get("clear-site-data")).toBeNull();
       expect(response.headers.get("set-cookie")).toBeNull();
       await expect(response.json()).resolves.toMatchObject({ code });
     },

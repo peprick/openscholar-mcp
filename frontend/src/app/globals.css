@@ -2431,6 +2431,53 @@ button:disabled {
   gap: 15px;
 }
 
+.offlinePackSettings {
+  align-items: start;
+  background: var(--green-soft);
+  border: 1px solid rgb(21 92 71 / 22%);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 42px;
+  grid-template-columns: minmax(250px, 0.9fr) minmax(320px, 1.1fr);
+  margin-top: 46px;
+  padding: clamp(24px, 5vw, 42px);
+}
+
+.offlinePackSummary h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  margin: 7px 0 12px;
+}
+
+.offlinePackSummary > p {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.65;
+  margin: 0;
+  max-width: 600px;
+}
+
+.offlinePackSummary .offlinePackStored {
+  color: var(--green-dark);
+  font-weight: 750;
+  margin-top: 14px;
+}
+
+.offlinePackControls,
+.offlinePackForm {
+  display: grid;
+  gap: 14px;
+}
+
+.offlinePackButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
 .collectionSettingsActions,
 .collectionPaperButtons {
   display: flex;
@@ -2537,6 +2584,7 @@ button:disabled {
   .collectionCreateForm,
   .libraryFilterForm,
   .collectionSettings,
+  .offlinePackSettings,
   .savePaperForm,
   .savePaperPanel {
     grid-template-columns: 1fr;
@@ -2550,6 +2598,7 @@ button:disabled {
   .libraryFilterForm .button,
   .collectionSettingsActions .button,
   .collectionPaperButtons .button,
+  .offlinePackButtons .button,
   .savePaperPanel > .button,
   .savePaperForm > .button {
     width: 100%;

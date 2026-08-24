@@ -64,6 +64,7 @@ describe("hosted session refresh proxy", () => {
     expect(matcher).toContain("sw\\.js");
     expect(matcher).toContain("manifest\\.webmanifest");
     expect(matcher).toContain("offline\\.html");
+    expect(matcher).toContain("offline-pack\\.js");
   });
 
   it("keeps the credentialless connectivity probe outside session refresh", async () => {

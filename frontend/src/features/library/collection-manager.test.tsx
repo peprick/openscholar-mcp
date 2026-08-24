@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CollectionManager } from "@/features/library/collection-manager";
 import {
@@ -11,8 +11,12 @@ import {
 } from "@/test/fixtures";
 
 const navigation = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+const loadRuntime = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
+vi.mock("@/pwa/offline-pack-loader", () => ({
+  loadOfflinePackRuntime: loadRuntime,
+}));
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -20,6 +24,11 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+beforeEach(() => {
+  loadRuntime.mockReset();
+  vi.stubGlobal("indexedDB", undefined);
+});
 
 afterEach(() => {
   cleanup();
@@ -107,6 +116,52 @@ describe("CollectionManager", () => {
     await user.click(screen.getByRole("button", { name: "Delete collection" }));
     await waitFor(() => expect(navigation.push).toHaveBeenCalledWith("/library"));
     expect(navigation.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("locks and purges this collection's device copy before server deletion", async () => {
+    const user = userEvent.setup();
+    const lock = vi.fn();
+    const purgeCollection = vi.fn().mockResolvedValue(false);
+    loadRuntime.mockResolvedValue({ lock, purgeCollection });
+    vi.stubGlobal("indexedDB", {});
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    await waitFor(() => expect(purgeCollection).toHaveBeenCalledWith(testIds.collection));
+    expect(lock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/collections/${testIds.collection}`,
+      { method: "DELETE" },
+    );
+    expect(purgeCollection.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("does not delete the server collection when local cleanup fails", async () => {
+    const user = userEvent.setup();
+    loadRuntime.mockResolvedValue({
+      lock: vi.fn(),
+      purgeCollection: vi.fn().mockRejectedValue(new Error("storage blocked")),
+    });
+    vi.stubGlobal("indexedDB", {});
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    expect(
+      await screen.findByText(
+        "The encrypted offline copy could not be cleared, so the collection was not deleted.",
+      ),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns to the preceding page after removing its final membership", async () => {

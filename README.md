@@ -15,7 +15,7 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 
 - Searches OpenAlex by default, with optional DataCite, DOAJ, and licence-gated CORE discovery adapters.
 - Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
-- Installs as a read-only PWA shell with an account-neutral offline fallback and plain-language connectivity status; server-backed search still requires the local or hosted OpenScholar stack.
+- Installs as a PWA with an account-neutral fallback and one explicit, passphrase-encrypted, metadata-only offline collection; server-backed search still requires the local or hosted OpenScholar stack.
 - Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, and provider identity.
 - Opens an owner-visible canonical paper directly from a DOI, arXiv, or OpenAlex reference without calling a provider.
 - Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
@@ -39,6 +39,8 @@ flowchart LR
 ```
 
 The browser talks to same-origin Next.js route handlers. Those handlers and the MCP adapter call the same Spring application use cases, so authentication, ownership, validation, and provider policies stay centralized.
+
+Offline use is deliberately narrow: one selected collection can be saved as a read-only full snapshot and refreshed manually. The encrypted IndexedDB copy contains no PDF or access URL, can become stale, and may be evicted by the browser; it is not a backup or a replacement for PostgreSQL. A weak passphrase or a compromised browser/device can still expose it.
 
 ## Quick start
 
@@ -172,7 +174,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 |---|---|
 | Local web application, REST API, and PostgreSQL persistence | Implemented |
 | Metadata-only local search with explicit provenance | Implemented |
-| Installable account-neutral PWA shell | Implemented; no user records or PDFs cached |
+| Installable PWA and encrypted offline collection | Implemented; one opt-in metadata pack, no stored PDFs or offline mutations |
 | Personal-data export and confirmed deletion in the web app | Implemented |
 | Six-tool MCP server | Implemented |
 | Optional hosted OIDC mode | Implemented; synthetically tested |

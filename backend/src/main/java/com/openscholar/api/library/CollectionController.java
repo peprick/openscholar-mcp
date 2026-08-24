@@ -8,6 +8,7 @@ import com.openscholar.library.CollectionDetailsView;
 import com.openscholar.library.CollectionSummaryView;
 import com.openscholar.library.LibraryPage;
 import com.openscholar.library.LibraryUseCase;
+import com.openscholar.library.OfflineCollectionPackUseCase;
 import com.openscholar.library.ReadingStatus;
 import com.openscholar.library.SavedPaperView;
 import jakarta.validation.Valid;
@@ -16,6 +17,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.ObjectMapper;
 
 @Validated
 @RestController
@@ -36,8 +40,15 @@ public class CollectionController {
 
 	private final LibraryUseCase library;
 
-	public CollectionController(LibraryUseCase library) {
+	private final OfflineCollectionPackUseCase offlinePacks;
+
+	private final ObjectMapper objectMapper;
+
+	public CollectionController(LibraryUseCase library, OfflineCollectionPackUseCase offlinePacks,
+			ObjectMapper objectMapper) {
 		this.library = library;
+		this.offlinePacks = offlinePacks;
+		this.objectMapper = objectMapper;
 	}
 
 	@GetMapping
@@ -57,6 +68,18 @@ public class CollectionController {
 			@RequestParam(defaultValue = "0") @Min(0) int page,
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
 		return library.getCollection(collectionId, page, size);
+	}
+
+	@GetMapping(value = "/{collectionId}/offline-pack", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<byte[]> getOfflinePack(@PathVariable UUID collectionId) {
+		byte[] payload = OfflineCollectionPackJsonWriter.write(objectMapper,
+				offlinePacks.getOfflinePack(collectionId));
+		return ResponseEntity.ok()
+			.contentType(MediaType.APPLICATION_JSON)
+			.contentLength(payload.length)
+			.cacheControl(CacheControl.noStore())
+			.header("X-Content-Type-Options", "nosniff")
+			.body(payload);
 	}
 
 	@PatchMapping("/{collectionId}")

@@ -17,6 +17,16 @@ interface SavedPaperRepository extends JpaRepository<SavedPaperEntity, UUID> {
 
 	Page<SavedPaperEntity> findByCollection_Id(UUID collectionId, Pageable pageable);
 
+	@Query("""
+			select saved
+			from SavedPaperEntity saved
+			where saved.collection.id = :collectionId
+			  and saved.collection.ownerId = :ownerId
+			order by saved.paperId, saved.id
+			""")
+	List<SavedPaperEntity> findForOfflinePack(@Param("collectionId") UUID collectionId,
+			@Param("ownerId") UUID ownerId, Pageable pageable);
+
 	long countByCollection_Id(UUID collectionId);
 
 	@Query("""

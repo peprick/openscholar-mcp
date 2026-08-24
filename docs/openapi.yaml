@@ -525,6 +525,64 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/collections/{collectionId}/offline-pack:
+    parameters:
+      - $ref: "#/components/parameters/CollectionId"
+    get:
+      tags: [Collections]
+      operationId: getOfflineCollectionPack
+      summary: Read a bounded metadata-only offline snapshot
+      description: |
+        Returns one complete, replace-in-full snapshot of a principal-owned collection. The
+        snapshot is assembled only from stored canonical metadata and never invokes a research
+        or access provider. Papers are ordered by `paperId`; author names, identifiers, ISBNs,
+        ISSNs, and tags use stable canonical ordering. Missing and other-principal collection IDs
+        both return `COLLECTION_NOT_FOUND`.
+
+        Version 1 contains collection name/description, bibliographic metadata, reading status,
+        and tags only. It excludes abstracts/full text, PDFs, access/provider/provenance URLs,
+        citation or operational metrics, jobs, owner identifiers, and mutation/synchronization
+        state. The server never truncates a pack: collections over 500 papers or whose exact
+        serialized UTF-8 JSON exceeds 1,048,576 bytes return `OFFLINE_PACK_TOO_LARGE`.
+      security:
+        - HostedOidc: [openscholar.library]
+      responses:
+        "200":
+          description: The complete metadata-only collection snapshot.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfflineCollectionPack"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The collection is absent or not visible to this principal.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "422":
+          description: The collection exceeds the item or exact serialized-byte boundary.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
   /api/v1/collections/{collectionId}/papers/{paperId}:
     parameters:
       - $ref: "#/components/parameters/CollectionId"
@@ -1194,6 +1252,7 @@ components:
             - PAPER_NOT_FOUND
             - PAPER_IDENTIFIER_NOT_FOUND
             - COLLECTION_NOT_FOUND
+            - OFFLINE_PACK_TOO_LARGE
             - SAVED_PAPER_NOT_FOUND
             - REFRESH_JOB_NOT_FOUND
             - REFRESH_JOB_NOT_RETRYABLE
@@ -2124,6 +2183,127 @@ components:
             maxLength: 40
             pattern: '\S'
           description: Tags are whitespace-collapsed and lowercased; normalized duplicates are rejected and responses are sorted.
+      additionalProperties: false
+    OfflineCollectionPack:
+      type: object
+      description: |
+        A manual, replace-in-full version 1 snapshot. It is not a synchronization cursor and
+        contains no document bytes, access locations, provider URLs, or operational data.
+      required: [schemaVersion, generatedAt, collection, papers]
+      properties:
+        schemaVersion:
+          type: integer
+          format: int32
+          const: 1
+        generatedAt:
+          $ref: "#/components/schemas/Instant"
+        collection:
+          $ref: "#/components/schemas/OfflineCollectionMetadata"
+        papers:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/OfflineCollectionPaper"
+      additionalProperties: false
+    OfflineCollectionMetadata:
+      type: object
+      required: [collectionId, name, description]
+      properties:
+        collectionId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: [string, "null"]
+          maxLength: 1000
+      additionalProperties: false
+    OfflineCollectionPaper:
+      type: object
+      description: Stored bibliographic metadata plus this collection's reading state and tags.
+      required:
+        - paperId
+        - title
+        - authors
+        - publicationDate
+        - publicationYear
+        - documentType
+        - language
+        - venueName
+        - identifiers
+        - publisher
+        - institution
+        - volume
+        - issue
+        - pages
+        - articleNumber
+        - edition
+        - isbn
+        - issn
+        - degree
+        - readingStatus
+        - tags
+      properties:
+        paperId:
+          $ref: "#/components/schemas/Uuid"
+        title:
+          type: string
+          minLength: 1
+        authors:
+          type: array
+          description: Credited display names in author-position order; external author IDs are omitted.
+          items:
+            type: string
+        publicationDate:
+          $ref: "#/components/schemas/NullableLocalDate"
+        publicationYear:
+          $ref: "#/components/schemas/NullableInteger"
+        documentType:
+          $ref: "#/components/schemas/DocumentType"
+        language:
+          $ref: "#/components/schemas/NullableString"
+        venueName:
+          $ref: "#/components/schemas/NullableString"
+        identifiers:
+          type: array
+          description: Stored bibliographic identifier values; never access or provider URLs.
+          items:
+            $ref: "#/components/schemas/PaperIdentifier"
+        publisher:
+          $ref: "#/components/schemas/NullableString"
+        institution:
+          $ref: "#/components/schemas/NullableString"
+        volume:
+          $ref: "#/components/schemas/NullableString"
+        issue:
+          $ref: "#/components/schemas/NullableString"
+        pages:
+          $ref: "#/components/schemas/NullableString"
+        articleNumber:
+          $ref: "#/components/schemas/NullableString"
+        edition:
+          $ref: "#/components/schemas/NullableString"
+        isbn:
+          type: array
+          items:
+            type: string
+        issn:
+          type: array
+          items:
+            type: string
+        degree:
+          $ref: "#/components/schemas/NullableString"
+        readingStatus:
+          $ref: "#/components/schemas/ReadingStatus"
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
       additionalProperties: false
     CollectionSummary:
       type: object

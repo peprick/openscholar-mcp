@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -25,6 +26,7 @@ import javax.sql.DataSource;
 
 import com.openscholar.TestcontainersConfiguration;
 import com.openscholar.library.LibraryUseCase;
+import com.openscholar.library.OfflineCollectionPackUseCase;
 import com.openscholar.library.ReadingStatus;
 import com.openscholar.paper.CanonicalPaperCandidate;
 import com.openscholar.paper.DocumentType;
@@ -42,6 +44,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -156,6 +159,70 @@ class LibraryControllerIntegrationTests {
 	}
 
 	@Test
+	void offlinePackIsAnExactNoStoreMetadataOnlySnapshot() throws Exception {
+		UUID collectionId = createCollection("Offline foundations", "Review before the seminar");
+		mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", collectionId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.schemaVersion").value(1))
+			.andExpect(jsonPath("$.papers").isEmpty());
+
+		UUID paperId = createRichPaper();
+		library.addPaper(collectionId, paperId, ReadingStatus.READING, List.of("zeta", "alpha"));
+
+		MvcResult result = mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", collectionId))
+			.andExpect(status().isOk())
+			.andExpect(content().contentType(MediaType.APPLICATION_JSON))
+			.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+			.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+			.andReturn();
+
+		byte[] bytes = result.getResponse().getContentAsByteArray();
+		assertThat(result.getResponse().getHeader(HttpHeaders.CONTENT_LENGTH)).isEqualTo(Integer.toString(bytes.length));
+		assertThat(bytes.length).isLessThanOrEqualTo(OfflineCollectionPackUseCase.MAX_SERIALIZED_BYTES);
+		JsonNode body = objectMapper.readTree(bytes);
+		assertThat(body.propertyNames()).containsExactly("schemaVersion", "generatedAt", "collection", "papers");
+		assertThat(Instant.parse(body.required("generatedAt").asString())).isBeforeOrEqualTo(Instant.now());
+		assertThat(body.required("collection").propertyNames())
+			.containsExactly("collectionId", "name", "description");
+		assertThat(body.required("collection").required("collectionId").asString()).isEqualTo(collectionId.toString());
+		JsonNode paper = body.required("papers").get(0);
+		assertThat(paper.propertyNames()).containsExactly(
+				"paperId", "title", "authors", "publicationDate", "publicationYear", "documentType", "language",
+				"venueName", "identifiers", "publisher", "institution", "volume", "issue", "pages",
+				"articleNumber", "edition", "isbn", "issn", "degree", "readingStatus", "tags");
+		assertThat(paper.required("paperId").asString()).isEqualTo(paperId.toString());
+		assertThat(paper.required("authors").get(0).asString()).isEqualTo("Ada First");
+		assertThat(paper.required("authors").get(1).asString()).isEqualTo("Grace Second");
+		assertThat(paper.required("identifiers").get(0).required("type").asString()).isEqualTo("DOI");
+		assertThat(paper.required("identifiers").get(1).required("type").asString()).isEqualTo("REPOSITORY");
+		assertThat(paper.required("isbn").get(0).asString()).isEqualTo("a-isbn");
+		assertThat(paper.required("issn").get(0).asString()).isEqualTo("a-issn");
+		assertThat(paper.required("tags").get(0).asString()).isEqualTo("alpha");
+		assertThat(paper.required("readingStatus").asString()).isEqualTo("READING");
+		assertThat(result.getResponse().getContentAsString())
+			.doesNotContain("SECRET_ABSTRACT_TOKEN", "SECRET_PROVIDER_TOKEN", "citationCount", "abstractText",
+					"provider", "provenance", "access", "pdf", "savedAt", "updatedAt", "orcid", "openAlexId");
+	}
+
+	@Test
+	void offlinePackRejectsAnOversizedSerializedSnapshotWithoutEchoingMetadata() throws Exception {
+		UUID paperId = createPaper("Initially bounded", null, "Test Author");
+		UUID collectionId = createCollection("Byte boundary", null);
+		library.addPaper(collectionId, paperId, ReadingStatus.UNREAD, List.of());
+		String marker = "OVERSIZED_PRIVATE_METADATA";
+		jdbcTemplate.update("update paper set title = ? where id = ?",
+				marker + "x".repeat(OfflineCollectionPackUseCase.MAX_SERIALIZED_BYTES), paperId);
+
+		MvcResult result = mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", collectionId))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+			.andExpect(jsonPath("$.code").value("OFFLINE_PACK_TOO_LARGE"))
+			.andReturn();
+
+		assertThat(result.getResponse().getContentAsString()).doesNotContain(marker, paperId.toString());
+	}
+
+	@Test
 	void collectionAccessIsAlwaysScopedToTheBootstrapOwner() throws Exception {
 		UUID paperId = createPaper("Foreign saved paper", null, "Foreign Author");
 		UUID foreignUserId = UUID.randomUUID();
@@ -178,6 +245,15 @@ class LibraryControllerIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.totalElements").value(0));
 		mockMvc.perform(get("/api/v1/collections/{collectionId}", foreignCollectionId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("COLLECTION_NOT_FOUND"));
+		mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", foreignCollectionId))
+			.andExpect(status().isNotFound())
+			.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+			.andExpect(jsonPath("$.code").value("COLLECTION_NOT_FOUND"))
+			.andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+					"Not locally visible"))));
+		mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", UUID.randomUUID()))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("COLLECTION_NOT_FOUND"));
 		mockMvc
@@ -428,6 +504,51 @@ class LibraryControllerIntegrationTests {
 		ProviderRecordCandidate providerRecord = new ProviderRecordCandidate("OpenAlex", "W-LIBRARY-" + suffix,
 				RETRIEVED_AT, RETRIEVED_AT, URI.create("https://api.openalex.org/works/W-LIBRARY-" + suffix), false,
 				URI.create("https://openalex.org/W-LIBRARY-" + suffix), null, Map.of("libraryFixture", true));
+		UUID paperId = paperCatalog.upsert(candidate, providerRecord, RETRIEVED_AT).id();
+		createdPaperIds.add(paperId);
+		return paperId;
+	}
+
+	private UUID createRichPaper() {
+		String suffix = UUID.randomUUID().toString().replace("-", "");
+		CanonicalPaperCandidate candidate = new CanonicalPaperCandidate(
+				"A metadata-only thesis",
+				"SECRET_ABSTRACT_TOKEN",
+				LocalDate.of(2025, 6, 7),
+				2025,
+				DocumentType.THESIS,
+				"en",
+				"Institutional Repository",
+				321,
+				RETRIEVED_AT,
+				List.of(
+						new PaperIdentifier(PaperIdentifierType.REPOSITORY, "university", "repo-" + suffix),
+						new PaperIdentifier(PaperIdentifierType.DOI, "", "10.5555/" + suffix)),
+				List.of(
+						new PaperAuthorCandidate("A-SECOND-" + suffix, "Grace Second", "0000-0002-0000-0002", 1,
+								false),
+						new PaperAuthorCandidate("A-FIRST-" + suffix, "Ada First", "0000-0001-0000-0001", 0,
+								true)),
+				"Scholarly Press",
+				"OpenScholar University",
+				"4",
+				"2",
+				"10-20",
+				"e7",
+				"Second",
+				List.of("z-isbn", "a-isbn"),
+				List.of("z-issn", "a-issn"),
+				"PhD");
+		ProviderRecordCandidate providerRecord = new ProviderRecordCandidate(
+				"OpenAlex",
+				"W-RICH-" + suffix,
+				RETRIEVED_AT,
+				RETRIEVED_AT,
+				URI.create("https://api.openalex.org/SECRET_PROVIDER_TOKEN/" + suffix),
+				false,
+				URI.create("https://openalex.org/W-RICH-" + suffix),
+				URI.create("https://example.org/private.pdf"),
+				Map.of("secret", "SECRET_PROVIDER_TOKEN"));
 		UUID paperId = paperCatalog.upsert(candidate, providerRecord, RETRIEVED_AT).id();
 		createdPaperIds.add(paperId);
 		return paperId;

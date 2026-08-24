@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { CollectionManager } from "@/features/library/collection-manager";
+import { OfflinePackManager } from "@/features/library/offline-pack-manager";
 import { BackendApiError, getCollection } from "@/shared/api/server";
 
 export const metadata: Metadata = {
@@ -49,6 +50,9 @@ export default async function CollectionPage({
       <CollectionManager
         collection={collection}
         key={`${collection.collectionId}:${collection.papers.page}:${collection.papers.totalElements}:${collection.papers.items.map((paper) => paper.updatedAt).join(",")}`}
+        offlineAccess={
+          <OfflinePackManager collectionId={collection.collectionId} />
+        }
       />
       {collection.papers.totalPages > 1 ? (
         <nav aria-label="Collection paper pages" className="pagination">

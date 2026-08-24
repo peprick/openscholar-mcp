@@ -28,6 +28,7 @@ export const PUBLIC_PWA_PATHS = new Set([
   "/icon-512.png",
   "/manifest.webmanifest",
   "/offline.html",
+  "/offline-pack.js",
   "/sw.js",
 ]);
 export const PUBLIC_CONNECTIVITY_PATH = "/api/connectivity";
@@ -160,6 +161,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|offline\\.html|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|offline\\.html|offline-pack\\.js|pdfjs/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

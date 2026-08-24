@@ -114,6 +114,7 @@ Current access verification returns `404 PAPER_NOT_FOUND` for an unknown canonic
 GET    /api/v1/collections
 POST   /api/v1/collections
 GET    /api/v1/collections/{collectionId}
+GET    /api/v1/collections/{collectionId}/offline-pack
 PATCH  /api/v1/collections/{collectionId}
 DELETE /api/v1/collections/{collectionId}
 PUT    /api/v1/collections/{collectionId}/papers/{paperId}
@@ -124,6 +125,10 @@ POST   /api/v1/citations/export
 ```
 
 Every collection read/write is owner-scoped. Local mode resolves the fixed development owner; OIDC mode resolves or creates an internal user for the validated issuer+subject. Collection names contain 1–120 characters; descriptions are optional and bounded to 1,000 characters. `PUT` creates or replaces a paper membership, while `PATCH` requires an existing membership. A membership records `UNREAD`, `READING`, or `COMPLETED` and zero to ten canonical tags. Tags are trimmed, internal whitespace is collapsed, values are lowercased with locale-independent rules, and each tag is limited to 40 characters. Deleting a paper membership is idempotent; an unknown or other-owner collection returns `404 COLLECTION_NOT_FOUND`.
+
+`GET /api/v1/collections/{collectionId}/offline-pack` is an explicit, manual full-snapshot read for offline clients. It returns schema version `1`, a generation timestamp, collection name/description, and at most 500 saved papers containing bibliographic metadata, reading status, and tags. It reads only the owner-scoped database snapshot and makes no provider or access request. Abstract/full text, PDFs, access and provider URLs, provenance, citation/operational metrics, jobs, owner identifiers, and mutation/sync state are absent. Papers and nested identifier/name/tag lists have deterministic ordering.
+
+The response is serialized once and returned with `Cache-Control: no-store`. Its exact UTF-8 JSON must not exceed 1,048,576 bytes. Either more than 500 saved papers or a larger serialized body fails atomically with `422 OFFLINE_PACK_TOO_LARGE`; the server never truncates a snapshot. Missing and other-owner collection IDs both return `404 COLLECTION_NOT_FOUND`. This endpoint supplies a replace-in-full metadata snapshot only—it does not store browser data, queue offline mutations, or make collection timestamps into synchronization revisions.
 
 `GET /api/v1/library/papers` supports bounded `q`, `collectionId`, `readingStatus`, `tag`, `page`, and `size` parameters. Lexical matching covers collection name, paper title, abstract, venue, and credited author name. `%`, `_`, and `\` in `q` are treated literally rather than as SQL wildcards. Results are deterministic and retain one row per collection membership; a canonical paper saved in two collections therefore appears twice.
 

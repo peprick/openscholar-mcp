@@ -6,6 +6,7 @@ import {
   exportPersonalData,
   fetchBackend,
   getNextSearchPage,
+  getOfflineCollectionPack,
   getRelatedPapers,
   resolvePaperIdentifier,
 } from "@/shared/api/server";
@@ -15,6 +16,7 @@ import {
   sealAuthSession,
 } from "@/shared/auth/session";
 import {
+  offlineCollectionPackFixture,
   relatedPapersResponseFixture,
   searchResponseFixture,
   testIds,
@@ -52,6 +54,23 @@ function configureHostedAuth(): void {
     "OPENSCHOLAR_OIDC_POST_LOGOUT_REDIRECT_URI",
     "https://research.test/",
   );
+}
+
+function offlinePackJsonWithByteLength(targetBytes: number): {
+  json: string;
+  payload: ReturnType<typeof offlineCollectionPackFixture>;
+} {
+  const payload = offlineCollectionPackFixture();
+  payload.papers[0]!.title = "";
+  const emptyTitleJson = JSON.stringify(payload);
+  const paddingLength = targetBytes - Buffer.byteLength(emptyTitleJson, "utf8");
+  if (paddingLength < 1) throw new Error("Target is too small for an offline pack");
+  payload.papers[0]!.title = "x".repeat(paddingLength);
+  const json = JSON.stringify(payload);
+  if (Buffer.byteLength(json, "utf8") !== targetBytes) {
+    throw new Error("Could not create an exact-size offline pack fixture");
+  }
+  return { json, payload };
 }
 
 afterEach(() => {
@@ -160,6 +179,141 @@ describe("getRelatedPapers", () => {
     await expect(
       getRelatedPapers(testIds.paper.toUpperCase()),
     ).resolves.toEqual(relatedPapersResponseFixture());
+  });
+});
+
+describe("getOfflineCollectionPack", () => {
+  it("uses the single bounded backend export endpoint without pagination", async () => {
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "http://backend.test:8080");
+    const payload = offlineCollectionPackFixture();
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json(payload, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOfflineCollectionPack(testIds.collection)).resolves.toEqual(
+      payload,
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL(
+        `/api/v1/collections/${testIds.collection}/offline-pack`,
+        "http://backend.test:8080",
+      ),
+      expect.objectContaining({
+        cache: "no-store",
+        headers: expect.any(Headers),
+      }),
+    );
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get("accept")).toBe("application/json");
+  });
+
+  it("rejects a backend payload that adds an abstract", async () => {
+    const payload = offlineCollectionPackFixture();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          ...payload,
+          papers: [{ ...payload.papers[0], abstractText: "private expansion" }],
+        }),
+      ),
+    );
+
+    await expect(getOfflineCollectionPack(testIds.collection)).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+  });
+
+  it("accepts an exact 1 MiB JSON response", async () => {
+    const { json, payload } = offlinePackJsonWithByteLength(1_048_576);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(json, {
+          status: 200,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      ),
+    );
+
+    await expect(getOfflineCollectionPack(testIds.collection)).resolves.toEqual(
+      payload,
+    );
+  });
+
+  it("stops and rejects a JSON response larger than 1 MiB", async () => {
+    const { json } = offlinePackJsonWithByteLength(1_048_577);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(json, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(getOfflineCollectionPack(testIds.collection)).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+  });
+
+  it.each([
+    ["a missing content type", undefined],
+    ["a non-JSON content type", "text/plain"],
+    ["a different JSON media type", "application/problem+json"],
+  ])("rejects a successful response with %s", async (_label, contentType) => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(offlineCollectionPackFixture()),
+    );
+    const headers = contentType === undefined ? undefined : { "content-type": contentType };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(bytes, {
+          status: 200,
+          headers,
+        }),
+      ),
+    );
+
+    await expect(getOfflineCollectionPack(testIds.collection)).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+  });
+
+  it("preserves a structured backend error before applying success-body checks", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "urn:openscholar:problem:offline-pack-too-large",
+            title: "Offline pack too large",
+            status: 422,
+            detail: "The collection exceeds the offline metadata limit.",
+            code: "OFFLINE_PACK_TOO_LARGE",
+          }),
+          {
+            status: 422,
+            headers: {
+              "content-type": "text/plain",
+              "retry-after": "30",
+            },
+          },
+        ),
+      ),
+    );
+
+    await expect(getOfflineCollectionPack(testIds.collection)).rejects.toMatchObject({
+      status: 422,
+      retryAfter: "30",
+      problem: expect.objectContaining({ code: "OFFLINE_PACK_TOO_LARGE" }),
+    });
   });
 });
 

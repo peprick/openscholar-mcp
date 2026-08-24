@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { responseErrorMessage } from "@/features/library/library-client";
 import { formatTagInput, parseTagInput } from "@/features/library/tag-input";
+import { loadOfflinePackRuntime } from "@/pwa/offline-pack-loader";
 import {
   collectionSummarySchema,
   readingStatuses,
@@ -172,8 +173,10 @@ function SavedPaperEditor({
 
 export function CollectionManager({
   collection: initialCollection,
+  offlineAccess,
 }: {
   collection: CollectionDetailsResponse;
+  offlineAccess?: React.ReactNode;
 }): React.JSX.Element {
   const router = useRouter();
   const [collection, setCollection] = useState(initialCollection);
@@ -226,6 +229,19 @@ export function CollectionManager({
     }
     setPending("delete");
     setMessage(null);
+    if (window.indexedDB !== undefined) {
+      try {
+        const runtime = await loadOfflinePackRuntime();
+        runtime.lock();
+        await runtime.purgeCollection(collection.collectionId);
+      } catch {
+        setMessage(
+          "The encrypted offline copy could not be cleared, so the collection was not deleted.",
+        );
+        setPending(null);
+        return;
+      }
+    }
     try {
       const response = await fetch(endpoint, { method: "DELETE" });
       if (!response.ok) {
@@ -323,6 +339,8 @@ export function CollectionManager({
           </p>
         </form>
       </section>
+
+      {offlineAccess}
 
       <section className="collectionPapers" aria-labelledby="collection-papers-heading">
         <div className="librarySectionHeader">

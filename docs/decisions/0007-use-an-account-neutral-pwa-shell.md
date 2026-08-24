@@ -24,10 +24,19 @@ an explicit browser-test mode). It may cache only:
 - queryless, same-origin, build-hashed `/_next/static/` assets requested by the
   browser, with at most 96 such runtime entries retained.
 
-Successful eligible navigations remain network-first and refresh the generic
-offline shell in the background. An eligible navigation whose network fetch
-rejects may receive that shell, but its successful HTML or RSC response is never
-stored.
+[ADR 0010](0010-store-one-encrypted-offline-metadata-pack.md) later extends this
+positive allowlist with an account-neutral static reader runtime. The fallback
+and runtime form one required, versioned cache pair: installation completes only
+after both are fetched and written, and the active worker serves their exact
+paths cache-only until a later worker version installs a complete replacement.
+This prevents an independent runtime or shell refresh from mixing reader
+versions. It does not permit an owned page, RSC response, API response, or user
+record in CacheStorage.
+
+Successful eligible navigations remain network-only. An eligible navigation
+whose network fetch rejects may receive the cached generic shell, but its
+successful HTML or RSC response is never stored and does not refresh the reader
+pair.
 Requests for APIs, authentication, MCP, OAuth metadata, exports, external
 origins, document extensions, authorization headers, byte ranges, or dynamic
 image/data routes are not intercepted. Responses marked `private`, `no-store`,
@@ -67,7 +76,9 @@ database remains authoritative, logout/account switching cannot reveal a cached
 owned page, an offline browser signal does not unnecessarily disable a reachable
 self-hosted stack, and a worker rollback does not require deleting user data.
 
-This is not browser-only metadata search, offline library mutation, background
-sync, or PDF reading. Explicit opt-in metadata packs, their encryption and
-quota policy, ownership/logout behavior, deletion, synchronization, and tests
-require a separate decision before any user record enters browser storage.
+This decision alone is not browser-only metadata search, offline library
+mutation, background sync, or PDF reading. ADR 0010 separately permits one
+explicit, encrypted, metadata-only collection pack in IndexedDB with manual full
+refresh, read-only access, owner-mismatch/deletion handling, and quota limits.
+CacheStorage remains account-neutral, PostgreSQL remains authoritative, and PDF
+storage remains excluded.

@@ -4,6 +4,7 @@ import { documentTypeSchema } from "@/shared/api/schemas";
 
 const instantSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
+const localDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const readingStatuses = ["UNREAD", "READING", "COMPLETED"] as const;
 export const readingStatusSchema = z.enum(readingStatuses);
@@ -129,6 +130,73 @@ export const collectionDetailsResponseSchema = collectionSummarySchema.extend({
   papers: savedLibraryResponseSchema,
 });
 
+const offlinePaperIdentifierSchema = z
+  .object({
+    type: z.enum([
+      "DOI",
+      "ARXIV",
+      "OPENALEX",
+      "PMID",
+      "PMCID",
+      "CORE",
+      "REPOSITORY",
+    ]),
+    namespace: z.string(),
+    value: z.string(),
+  })
+  .strict();
+
+const offlinePaperSchema = z
+  .object({
+    paperId: uuidSchema,
+    title: z.string().min(1),
+    authors: z.array(z.string()),
+    publicationDate: localDateSchema.nullable(),
+    publicationYear: z.number().int().nullable(),
+    documentType: documentTypeSchema,
+    language: z.string().nullable(),
+    venueName: z.string().nullable(),
+    identifiers: z.array(offlinePaperIdentifierSchema),
+    publisher: z.string().nullable(),
+    institution: z.string().nullable(),
+    volume: z.string().nullable(),
+    issue: z.string().nullable(),
+    pages: z.string().nullable(),
+    articleNumber: z.string().nullable(),
+    edition: z.string().nullable(),
+    isbn: z.array(z.string()),
+    issn: z.array(z.string()),
+    degree: z.string().nullable(),
+    readingStatus: readingStatusSchema,
+    tags: z
+      .array(z.string().min(1).max(40))
+      .max(10)
+      .refine((tags) => new Set(tags).size === tags.length, {
+        message: "Offline paper tags must be distinct.",
+      }),
+  })
+  .strict();
+
+/**
+ * The intentionally bounded, metadata-only contract used to create an
+ * encrypted browser offline pack. The backend also enforces an exact 1 MiB
+ * serialized UTF-8 limit before returning this response.
+ */
+export const offlineCollectionPackSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    generatedAt: instantSchema,
+    collection: z
+      .object({
+        collectionId: uuidSchema,
+        name: z.string().min(1).max(120),
+        description: z.string().max(1_000).nullable(),
+      })
+      .strict(),
+    papers: z.array(offlinePaperSchema).max(500),
+  })
+  .strict();
+
 export type ReadingStatus = z.infer<typeof readingStatusSchema>;
 export type CreateCollectionRequest = z.infer<
   typeof createCollectionRequestSchema
@@ -149,4 +217,7 @@ export type SavedPaper = z.infer<typeof savedPaperSchema>;
 export type SavedLibraryResponse = z.infer<typeof savedLibraryResponseSchema>;
 export type CollectionDetailsResponse = z.infer<
   typeof collectionDetailsResponseSchema
+>;
+export type OfflineCollectionPack = z.infer<
+  typeof offlineCollectionPackSchema
 >;

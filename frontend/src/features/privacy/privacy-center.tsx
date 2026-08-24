@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { loadOfflinePackRuntime } from "@/pwa/offline-pack-loader";
 import { apiProblemSchema } from "@/shared/api/schemas";
 
 const DELETE_CONFIRMATION = "DELETE_MY_DATA";
 const EXPORT_FILENAME = "openscholar-personal-data.json";
 const DELETE_UNCONFIRMED_MESSAGE =
-  "OpenScholar could not confirm whether deletion completed. Refresh this page to check your workspace before trying again.";
+  "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.";
+const OFFLINE_PURGE_FAILED_MESSAGE =
+  "OpenScholar could not remove this browser’s encrypted offline copy, so server deletion did not start. Close other OpenScholar tabs and try again.";
 
 type Feedback = {
   kind: "error" | "status";
@@ -103,9 +106,26 @@ export function PrivacyCenter(): React.JSX.Element {
     setDeletePending(true);
     setDeleteFeedback({
       kind: "status",
-      message: "Deleting your OpenScholar data…",
+      message: "Removing this browser’s encrypted offline copy…",
     });
     try {
+      if (typeof indexedDB !== "undefined") {
+        try {
+          const runtime = await loadOfflinePackRuntime();
+          runtime.lock();
+          await runtime.purge();
+        } catch {
+          setDeleteFeedback({
+            kind: "error",
+            message: OFFLINE_PURGE_FAILED_MESSAGE,
+          });
+          return;
+        }
+      }
+      setDeleteFeedback({
+        kind: "status",
+        message: "Deleting your OpenScholar data…",
+      });
       const response = await fetch("/api/privacy/account", {
         method: "DELETE",
         headers: { "content-type": "application/json" },
@@ -176,7 +196,9 @@ export function PrivacyCenter(): React.JSX.Element {
           <h2 id="delete-data-heading">Delete my OpenScholar data</h2>
           <p>
             This removes your saved searches, collections, saved-paper links,
-            reading statuses, and tags from this OpenScholar workspace.
+            reading statuses, and tags from this OpenScholar workspace. It also
+            removes this browser’s encrypted offline collection before server
+            deletion starts.
           </p>
           <div className="privacyBoundaryNote">
             <strong>What stays unchanged</strong>
@@ -184,6 +206,10 @@ export function PrivacyCenter(): React.JSX.Element {
               Shared paper metadata and checked access records remain. If you use
               hosted sign-in, this also does not delete your account with that
               sign-in provider. OpenScholar never stored source PDFs.
+            </p>
+            <p>
+              Remove offline copies separately on every other device or browser
+              profile where you saved one.
             </p>
           </div>
 

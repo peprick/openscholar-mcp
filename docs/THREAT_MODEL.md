@@ -9,7 +9,8 @@ Local mode remains a loopback, fixed-owner development profile with a separate M
 ## Assets
 
 - User identity, private search topics, saved papers, collections, reading status, and tags.
-- Account-neutral PWA shell assets in browser CacheStorage; no user record or document byte is intentionally cached there.
+- Account-neutral PWA shell and static reader assets in browser CacheStorage; no user record or document byte is intentionally cached there.
+- One optional passphrase-encrypted collection pack in browser IndexedDB, plus its transient derived key and plaintext while the reader is unlocked.
 - Canonical metadata, provenance, access-resolution evidence, cached provider responses, and job state.
 - Database/MCP/provider/OIDC credentials, signing keys, ACME account state, and backup decryption identities.
 - Application/container source, dependencies, images, SBOMs, release attestations, and CI credentials.
@@ -23,9 +24,10 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 2. Hosted browser login crosses to an external OIDC authorization server. Next.js validates the callback and ID token, then stores tokens in an encrypted HttpOnly cookie; the browser never receives provider/database credentials or a JavaScript-readable access token.
 3. Browser application and `/api/*` BFF routes go to Next.js. Next.js uses a server-only backend origin and attaches the user's access token. Direct `/api/v1/*` and `/mcp` callers reach Spring Boot through Caddy and must present their own scoped bearer token.
 4. Spring Boot validates the token, derives the current internal user from issuer+subject, reads/writes PostgreSQL, and makes bounded outbound calls to configured scholarly providers or provider-supplied access locations. Inbound tokens are not forwarded.
-5. A user-selected verified PDF URL is fetched directly by the isolated browser reader from the external document host.
-6. CI obtains source and dependencies, builds artifacts, generates an SBOM, and publishes scan findings. This boundary can affect every runtime asset.
-7. Operators and backup/monitoring systems cross a privileged administrative boundary not exposed through Caddy.
+5. An explicit offline-pack request returns one bounded, owner-scoped, provider-free metadata snapshot through a no-store BFF route. The browser encrypts it before one atomic IndexedDB replacement; the passphrase and derived key do not cross the network or persist intentionally.
+6. A user-selected verified PDF URL is fetched directly by the isolated browser reader from the external document host.
+7. CI obtains source and dependencies, builds artifacts, generates an SBOM, and publishes scan findings. This boundary can affect every runtime asset.
+8. Operators and backup/monitoring systems cross a privileged administrative boundary not exposed through Caddy.
 
 ## Threats, controls, and remaining work
 
@@ -33,7 +35,8 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 |---|---|---|
 | Credential theft or forwarding | Backend-only provider credentials, file-backed database/session/OIDC-client secrets, sealed HttpOnly browser session, log-redaction policy, inbound tokens never forwarded, read-only filesystems | Choose secret manager/workload identity, prove signing/client/session-key rotation and revocation, audit CI/host access |
 | Identity-provider or BFF compromise | JWT signature/expiry/issuer/audience checks; route scopes; authorization code + PKCE/state/nonce; bounded JWKS/token responses; ID-token signature/claim validation; exact-Origin checks on unsafe BFF calls | Register and test a real provider, restrict redirect/logout URIs and grants, define administrator policy, monitor provider/session compromise, retest on key rotation |
-| Service-worker cache leaks account or document data | Strict same-origin static-asset allowlist; network-first fixed install assets; 96-entry runtime-static cap; successful navigations remain network-only while refreshing the neutral fallback; API/auth/MCP/export/document/range/authorization exclusions; private/no-store/Vary-star rejection; exact-worker/app-prefixed cleanup only | Explicit offline metadata packs require a separate storage, encryption, ownership/logout, deletion, quota, and synchronization design |
+| Service-worker cache leaks account or document data | Strict same-origin neutral-shell/reader/static-asset allowlist; coherent versioned cache-only shell/runtime pair installed as one required unit; network-first manifest/icons; 96-entry runtime-static cap; successful navigations remain network-only; API/auth/MCP/export/document/range/authorization exclusions; private/no-store/Vary-star rejection; the worker never opens the offline-pack IndexedDB | A compromised static reader or worker update can affect later unlocks, and eviction of a required reader asset can make the fallback unavailable until a complete worker installation restores the pair; preserve supply-chain, CSP, and cache-policy regression tests |
+| Offline-pack disclosure, stale retention, or cross-account display | Explicit one-pack opt-in; current-owner, no-store, provider-free full snapshot; 500-paper/1 MiB bounds; PBKDF2-HMAC-SHA-256 at 600,000 iterations; fresh salt/IV; authenticated AES-256-GCM; non-extractable memory-only key; opaque owner mismatch check; a final transaction rejects runtime saves whose captured owner/lifecycle fence changed; local purge plus successful logout/account-deletion `Clear-Site-Data` | A save still in its owner/snapshot-fetch stage can start after pre-purge, capture the new epoch before the server mutation completes, and later restore a local pack; add workflow-wide cross-context exclusion or a durable deletion tombstone. Weak passphrases permit offline guessing; XSS, extensions, screen capture, and a compromised device can observe unlocked data; browser deletion is not forensic erasure; quota eviction, crashes, direct API use, suspended tabs, and other devices prevent a universal purge guarantee |
 | Cross-user data access / IDOR | Search snapshots and libraries use issuer+subject-derived ownership; local-catalog candidates require a paper to be visible through that owner's prior snapshot or saved collection; other-owner identifiers return not found; search-refresh visibility follows snapshot ownership; privacy export/delete are current-principal operations; negative authorization tests exist | Shared `PAPER_ACCESS` jobs are visible/retryable to every `openscholar.jobs` principal; shared canonical/access records remain by design; review every new owned resource and local ranking join |
 | MCP tool abuse or failure disclosure | Small typed tool surface, local bearer or hosted audience/scope-checked JWT, protected-resource metadata, exact-Origin checks, bounded request/results, per-address or hashed-principal rate limits, no arbitrary SQL/shell/URL tools, class-to-fixed versioned tool errors with no raw arguments/provider/exception details | In-memory limits are per instance with no aggregate budget; add edge/cluster abuse controls, trusted-proxy review, and disconnect/notification cancellation support |
 | SSRF / DNS rebinding | Provider-derived URL candidates only, HTTPS/default-port policy, DNS/address rejection, redirect revalidation, bounded no-credential probes | Maintain redirect/DNS regression tests and outbound network policy; review every new provider/fetch feature |
@@ -61,6 +64,7 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 - Forged forwarding headers, Origin variants, oversized/chunked MCP payloads, expensive-query bursts, and rate-limit identity churn.
 - Provider URLs resolving to private/link-local addresses initially or after redirect/DNS change.
 - Huge/malformed JSON, Atom, compressed responses, redirect chains, slow bodies, malicious metadata, and partial provider outages.
+- Oversized or cross-owner offline-pack requests; modified algorithms/work factors/salts/IVs/ciphertext; wrong passphrases; quota failure during replacement; owner mismatch; and response-lost deletion with an offline pack present.
 - PDF load/render bombs, embedded actions, CORS failure, stale access locations, and source substitution.
 - Backup corruption, wrong key, wrong host/project selection, active connections, partial restore, lost monitoring, and expired TLS.
 - Compromised dependency/action/image simulation, leaked test credential, revoked provider key, and vulnerable release rollback.
@@ -70,13 +74,15 @@ OpenScholar does not currently retain PDF files. A legal external link or succes
 - No application endpoint fetches an arbitrary user-supplied URL.
 - No inbound bearer token, cookie, or provider credential is forwarded to a document host.
 - No PDF/document byte is retained unless a later source-specific policy and schema explicitly permit it.
+- No offline-pack plaintext, passphrase, or derived key is intentionally persisted in browser storage or logs; IndexedDB holds authenticated ciphertext plus bounded envelope metadata and one non-secret owner/lifecycle control record.
+- No offline pack contains a source document, access/provider URL, background mutation queue, or authority over PostgreSQL.
 - No user-owned object is authorized solely because its UUID is difficult to guess.
 - No destructive administration operation is exposed as an MCP tool.
 - No public management, Prometheus, Alertmanager, PostgreSQL, backend, or frontend port bypasses the edge.
 - No release is considered recoverable until its backup has been restored and checked independently.
 
-Account deletion removes the current principal's searches, search-refresh jobs, collections, memberships/tags, and hosted internal user row. It does not delete shared canonical/provider/access records or global access-refresh jobs, and it does not revoke the account at the identity provider. A later valid token for the same issuer+subject provisions a new empty internal user.
+Account deletion removes the current principal's searches, search-refresh jobs, collections, memberships/tags, and hosted internal user row. The browser performing the operation attempts to purge its offline pack, and a successful response uses `Clear-Site-Data: "storage"` as defense in depth. Neither mechanism guarantees erasure from a disconnected or different browser profile/device. Deletion does not remove shared canonical/provider/access records or global access-refresh jobs, and it does not revoke the account at the identity provider. A later valid token for the same issuer+subject provisions a new empty internal user.
 
 ## Review triggers
 
-Revisit this model when changing the identity provider/authentication design, adding a provider, caching user metadata in the browser, changing the service-worker allowlist, adding document retention/upload, LLM summarization, a write-capable MCP tool, collaboration/tenancy, object storage, a new egress path, a worker service, public metrics, or a new deployment environment. Record the reviewer, date, changed boundaries, tests, accepted residual risks, and expiry of each temporary exception.
+Revisit this model when changing the identity provider/authentication design, adding a provider, changing the offline-pack payload/envelope/KDF, supporting multiple packs or offline writes, changing the service-worker allowlist, adding document retention/upload, LLM summarization, a write-capable MCP tool, collaboration/tenancy, object storage, a new egress path, a worker service, public metrics, or a new deployment environment. Record the reviewer, date, changed boundaries, tests, accepted residual risks, and expiry of each temporary exception.

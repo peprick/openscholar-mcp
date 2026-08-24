@@ -162,6 +162,54 @@ function privacyExport() {
   };
 }
 
+function offlineCollectionPack(collection) {
+  const papers = state.savedPapers
+    .filter((paper) => paper.collectionId === collection.collectionId)
+    .sort((left, right) => left.paperId.localeCompare(right.paperId))
+    .map((savedPaper) => {
+      const details = paperDetails(savedPaper.paperId);
+      return {
+        paperId: savedPaper.paperId,
+        title: details.title,
+        authors: details.authors
+          .toSorted((left, right) => left.position - right.position)
+          .map((item) => item.name),
+        publicationDate: details.publicationDate,
+        publicationYear: details.publicationYear,
+        documentType: details.documentType,
+        language: details.language,
+        venueName: details.venueName,
+        identifiers: details.identifiers.toSorted((left, right) =>
+          `${left.type}\u0000${left.namespace}\u0000${left.value}`.localeCompare(
+            `${right.type}\u0000${right.namespace}\u0000${right.value}`,
+          ),
+        ),
+        publisher: "OpenScholar Press",
+        institution: null,
+        volume: "12",
+        issue: "4",
+        pages: "101-119",
+        articleNumber: null,
+        edition: null,
+        isbn: [],
+        issn: ["2049-3630"],
+        degree: null,
+        readingStatus: savedPaper.readingStatus,
+        tags: savedPaper.tags.toSorted(),
+      };
+    });
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-08-20T12:30:00Z",
+    collection: {
+      collectionId: collection.collectionId,
+      name: collection.name,
+      description: collection.description,
+    },
+    papers,
+  };
+}
+
 function author(name, openAlexId) {
   return {
     name,
@@ -748,6 +796,27 @@ async function handle(request, response) {
     json(response, 201, collection, {
       location: `/api/v1/collections/${collection.collectionId}`,
     });
+    return;
+  }
+
+  const offlinePackMatch =
+    /^\/api\/v1\/collections\/([^/]+)\/offline-pack$/.exec(path);
+  if (offlinePackMatch !== null && request.method === "GET") {
+    const collectionId = decodeURIComponent(offlinePackMatch[1]);
+    const collection = state.collections.find(
+      (candidate) => candidate.collectionId === collectionId,
+    );
+    if (collection === undefined) {
+      json(response, 404, {
+        type: "urn:openscholar:problem:collection-not-found",
+        title: "Collection not found",
+        status: 404,
+        detail: `Collection not found: ${collectionId}`,
+        code: "COLLECTION_NOT_FOUND",
+      });
+      return;
+    }
+    json(response, 200, offlineCollectionPack(collection));
     return;
   }
 

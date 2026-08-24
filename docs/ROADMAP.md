@@ -1,11 +1,12 @@
 # Roadmap
 
-OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, and six-tool MCP flows are implemented. This roadmap lists future outcomes only; completed milestones are represented by the code, tests, architecture decisions, and quality evidence in this repository.
+OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, encrypted single-collection offline-pack, and six-tool MCP flows are implemented. This roadmap lists future outcomes only; completed milestones are represented by the code, tests, architecture decisions, and quality evidence in this repository.
 
 ## 1. Prove a hosted release
 
 - Build, scan, sign, attest, publish, and digest-pin the backend, frontend, Caddy, and blackbox-exporter images.
 - Register and test a real OIDC provider, including key rotation, logout, audience, scope, and recovery behavior.
+- Serialize offline-pack saves against collection/account deletion and hosted logout across tabs, or add a durable deletion tombstone, then prove the pre-purge/fresh-save/server-mutation interleaving cannot restore a local pack.
 - Select a production PostgreSQL, backup, point-in-time recovery, and high-availability strategy.
 - Configure off-host backups, alert routing, incident ownership, and restore drills.
 - Validate the target environment with load, accessibility/assistive-technology, penetration, and disaster-recovery exercises.
@@ -39,7 +40,6 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 - Notes and highlights with explicit ownership and deletion semantics.
 - Evidence-linked summaries and paper comparison with prompt-injection and citation safeguards.
 - Citation graphs, research maps, and collaborative collections.
-- Explicit opt-in offline metadata packs, with encryption, quota, ownership/logout, deletion, and synchronization rules; the implemented installable shell deliberately stores no user records and browser cache is not authoritative.
 - Connectivity-aware refresh deferral with reliable outage classification, capped backoff, and result linking; retryable provider errors are not automatically treated as an offline signal.
 - Additional offline embedding profiles for legally retained private content.
 - Mobile-reader and assistive-technology refinements.

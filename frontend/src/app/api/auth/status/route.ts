@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthConfig } from "@/shared/auth/config";
+import { offlineStorageScope } from "@/shared/auth/offline-storage-scope";
 import { authProblemResponse } from "@/shared/auth/responses";
 import { getRequestAuthSession } from "@/shared/auth/session";
 
@@ -18,6 +19,7 @@ export async function GET(): Promise<NextResponse> {
           config.mode === "oidc" &&
           session !== null &&
           session.accessExpiresAt > Math.floor(Date.now() / 1_000),
+        storageScope: offlineStorageScope(config, session),
       },
       { headers: { "cache-control": "no-store" } },
     );

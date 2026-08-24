@@ -8,6 +8,7 @@ import com.openscholar.access.AccessUnavailableException;
 import com.openscholar.access.AccessRefreshTooSoonException;
 import com.openscholar.citation.UnsupportedCitationFormatException;
 import com.openscholar.library.CollectionNotFoundException;
+import com.openscholar.library.OfflineCollectionPackTooLargeException;
 import com.openscholar.library.SavedPaperNotFoundException;
 import com.openscholar.jobs.ResearchRefreshJobNotFoundException;
 import com.openscholar.jobs.ResearchRefreshJobNotRetryableException;
@@ -141,12 +142,28 @@ public class ApiExceptionHandler {
 	}
 
 	@ExceptionHandler(CollectionNotFoundException.class)
-	ProblemDetail handleCollectionNotFound(CollectionNotFoundException exception) {
-		return problem(
+	ResponseEntity<ProblemDetail> handleCollectionNotFound(CollectionNotFoundException exception) {
+		ProblemDetail problem = problem(
 				HttpStatus.NOT_FOUND,
 				"COLLECTION_NOT_FOUND",
 				"Collection not found",
 				exception.getMessage());
+		return ResponseEntity.status(HttpStatus.NOT_FOUND)
+			.cacheControl(CacheControl.noStore())
+			.body(problem);
+	}
+
+	@ExceptionHandler(OfflineCollectionPackTooLargeException.class)
+	ResponseEntity<ProblemDetail> handleOfflineCollectionPackTooLarge(
+			OfflineCollectionPackTooLargeException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.UNPROCESSABLE_ENTITY,
+				"OFFLINE_PACK_TOO_LARGE",
+				"Offline metadata pack too large",
+				exception.getMessage());
+		return ResponseEntity.unprocessableEntity()
+			.cacheControl(CacheControl.noStore())
+			.body(problem);
 	}
 
 	@ExceptionHandler(SavedPaperNotFoundException.class)

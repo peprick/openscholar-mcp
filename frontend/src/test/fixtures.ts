@@ -9,6 +9,7 @@ import type {
   CollectionDetailsResponse,
   CollectionListResponse,
   CollectionSummary,
+  OfflineCollectionPack,
   SavedLibraryResponse,
   SavedPaper,
 } from "@/shared/api/library-schemas";
@@ -84,6 +85,52 @@ export function collectionDetailsFixture(): CollectionDetailsResponse {
   return {
     ...collectionSummaryFixture(),
     papers: savedLibraryFixture(),
+  };
+}
+
+export function offlineCollectionPackFixture(
+  overrides: Partial<OfflineCollectionPack> = {},
+): OfflineCollectionPack {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-08-24T10:30:00Z",
+    collection: {
+      collectionId: testIds.collection,
+      name: "Thesis foundations",
+      description: "Core papers for the literature review.",
+    },
+    papers: [
+      {
+        paperId: testIds.paper,
+        title: "Graph neural networks for molecular property prediction",
+        authors: ["Ada Researcher"],
+        publicationDate: "2025-06-12",
+        publicationYear: 2025,
+        documentType: "ARTICLE",
+        language: "en",
+        venueName: "Journal of Molecular Machine Learning",
+        identifiers: [
+          {
+            type: "DOI",
+            namespace: "doi",
+            value: "10.5555/openscholar.2025.42",
+          },
+        ],
+        publisher: "Open Research Press",
+        institution: null,
+        volume: "7",
+        issue: "2",
+        pages: "40-55",
+        articleNumber: null,
+        edition: null,
+        isbn: [],
+        issn: ["1234-5678"],
+        degree: null,
+        readingStatus: "READING",
+        tags: ["methods"],
+      },
+    ],
+    ...overrides,
   };
 }
 

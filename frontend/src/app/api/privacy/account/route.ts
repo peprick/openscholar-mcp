@@ -38,6 +38,7 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     const authMode = getAuthConfig().mode;
     await deletePersonalData(parsed.data);
     const response = noStore(new NextResponse(null, { status: 204 }));
+    response.headers.set("clear-site-data", '"storage"');
     if (authMode === "oidc") {
       response.cookies.set(
         AUTH_SESSION_COOKIE,

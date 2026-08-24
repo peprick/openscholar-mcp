@@ -169,6 +169,12 @@ class OidcSecurityIntegrationTests {
 				.andExpect(jsonPath("$.totalElements").value(0));
 		mockMvc.perform(get("/api/v1/collections/{collectionId}", collectionId).with(bob))
 				.andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", collectionId).with(bob))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("COLLECTION_NOT_FOUND"));
+		mockMvc.perform(get("/api/v1/collections/{collectionId}/offline-pack", collectionId).with(alice))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.collection.collectionId").value(collectionId.toString()));
 
 		UUID aliceId = userId("alice-subject");
 		UUID bobId = userId("bob-subject");

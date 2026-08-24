@@ -40,6 +40,7 @@ class OpenApiContractTests {
 			Map.entry("GET /api/v1/collections", "openscholar.library"),
 			Map.entry("POST /api/v1/collections", "openscholar.library"),
 			Map.entry("GET /api/v1/collections/{collectionId}", "openscholar.library"),
+			Map.entry("GET /api/v1/collections/{collectionId}/offline-pack", "openscholar.library"),
 			Map.entry("PATCH /api/v1/collections/{collectionId}", "openscholar.library"),
 			Map.entry("DELETE /api/v1/collections/{collectionId}", "openscholar.library"),
 			Map.entry("PUT /api/v1/collections/{collectionId}/papers/{paperId}", "openscholar.library"),
@@ -65,7 +66,7 @@ class OpenApiContractTests {
 		assertThat(operations.keySet())
 				.as("documented operations must match every current /api/v1 controller mapping")
 				.containsExactlyInAnyOrderElementsOf(controllerOperations(repository));
-		assertThat(operations).hasSize(26);
+		assertThat(operations).hasSize(27);
 
 		Set<String> operationIds = new HashSet<>();
 		operations.forEach((endpoint, operation) -> {

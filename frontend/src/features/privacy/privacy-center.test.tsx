@@ -1,8 +1,18 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PrivacyCenter } from "@/features/privacy/privacy-center";
+import { loadOfflinePackRuntime } from "@/pwa/offline-pack-loader";
+
+vi.mock("@/pwa/offline-pack-loader", () => ({
+  loadOfflinePackRuntime: vi.fn(),
+}));
+
+const offlineRuntime = {
+  lock: vi.fn(),
+  purge: vi.fn().mockResolvedValue(true),
+};
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -11,10 +21,18 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+beforeEach(() => {
+  vi.stubGlobal("indexedDB", {});
+  vi.mocked(loadOfflinePackRuntime).mockResolvedValue(offlineRuntime as never);
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(loadOfflinePackRuntime).mockReset();
+  offlineRuntime.lock.mockReset();
+  offlineRuntime.purge.mockReset().mockResolvedValue(true);
 });
 
 describe("PrivacyCenter", () => {
@@ -49,6 +67,8 @@ describe("PrivacyCenter", () => {
         body: JSON.stringify({ confirmation: "DELETE_MY_DATA" }),
       }),
     );
+    expect(offlineRuntime.lock).toHaveBeenCalledOnce();
+    expect(offlineRuntime.purge).toHaveBeenCalledOnce();
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Your OpenScholar data was deleted.",
     );
@@ -88,7 +108,7 @@ describe("PrivacyCenter", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "OpenScholar could not confirm whether deletion completed. Refresh this page to check your workspace before trying again.",
+      "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.",
     );
     expect(screen.getByRole("alert")).not.toHaveTextContent(
       "Nothing was deleted.",
@@ -117,9 +137,32 @@ describe("PrivacyCenter", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "OpenScholar could not confirm whether deletion completed. Refresh this page to check your workspace before trying again.",
+      "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.",
     );
     expect(input).toHaveValue("DELETE_MY_DATA");
+  });
+
+  it("does not start server deletion when the local encrypted copy cannot be removed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    offlineRuntime.purge.mockRejectedValue(new Error("storage blocked"));
+    render(<PrivacyCenter />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: "Type DELETE_MY_DATA to confirm",
+      }),
+      "DELETE_MY_DATA",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Delete my OpenScholar data" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "OpenScholar could not remove this browser’s encrypted offline copy, so server deletion did not start.",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("downloads the export with a fixed private-data filename", async () => {

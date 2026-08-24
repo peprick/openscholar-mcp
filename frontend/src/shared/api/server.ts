@@ -6,12 +6,14 @@ import {
   collectionDetailsResponseSchema,
   collectionListResponseSchema,
   collectionSummarySchema,
+  offlineCollectionPackSchema,
   savedLibraryResponseSchema,
   savedPaperSchema,
   type CollectionDetailsResponse,
   type CollectionListResponse,
   type CollectionSummary,
   type CreateCollectionRequest,
+  type OfflineCollectionPack,
   type SavedLibraryQuery,
   type SavedLibraryResponse,
   type SavedPaper,
@@ -40,6 +42,7 @@ import { getBackendAccessToken } from "@/shared/auth/session";
 
 const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
 const REQUEST_TIMEOUT_MS = 30_000;
+const OFFLINE_COLLECTION_PACK_MAX_BYTES = 1_048_576;
 
 export class BackendApiError extends Error {
   constructor(
@@ -189,6 +192,60 @@ function hasJsonContentType(response: Response): boolean {
   return (
     contentType?.split(";", 1)[0]?.trim().toLowerCase() === "application/json"
   );
+}
+
+async function readOfflineCollectionPackResponse(
+  response: Response,
+): Promise<OfflineCollectionPack> {
+  const resource = "offline collection pack";
+  if (!hasJsonContentType(response) || response.body === null) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new BackendContractError(resource);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > OFFLINE_COLLECTION_PACK_MAX_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new BackendContractError(resource);
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof BackendContractError) throw error;
+    await reader.cancel().catch(() => undefined);
+    throw new BackendContractError(resource);
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } catch {
+    throw new BackendContractError(resource);
+  }
+
+  const parsed = offlineCollectionPackSchema.safeParse(decoded);
+  if (!parsed.success) {
+    throw new BackendContractError(resource);
+  }
+  return parsed.data;
 }
 
 function paginationQuery(page: number, size: number): URLSearchParams {
@@ -351,6 +408,23 @@ export async function getCollection(
     collectionDetailsResponseSchema,
     "collection details",
   )).data;
+}
+
+export async function getOfflineCollectionPack(
+  collectionId: string,
+): Promise<OfflineCollectionPack> {
+  const response = await fetchBackend(
+    `/api/v1/collections/${encodeURIComponent(collectionId)}/offline-pack`,
+    { headers: { accept: "application/json" } },
+  );
+  if (!response.ok) {
+    throw new BackendApiError(
+      response.status,
+      await problemFrom(response),
+      response.headers.get("retry-after"),
+    );
+  }
+  return readOfflineCollectionPackResponse(response);
 }
 
 export async function updateCollection(

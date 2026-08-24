@@ -6,6 +6,7 @@ import {
   accessTokenIsCurrent,
   getRequestAuthSession,
 } from "@/shared/auth/session";
+import { LogoutForm } from "@/shared/ui/logout-form";
 
 export async function AuthNavigation(): Promise<React.JSX.Element | null> {
   let authenticated: boolean;
@@ -25,9 +26,5 @@ export async function AuthNavigation(): Promise<React.JSX.Element | null> {
       </Link>
     );
   }
-  return (
-    <form action="/api/auth/logout" className="authNavForm" method="post">
-      <button type="submit">Sign out</button>
-    </form>
-  );
+  return <LogoutForm />;
 }

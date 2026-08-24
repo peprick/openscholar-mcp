@@ -8,6 +8,7 @@ const publicShellPaths = new Set([
   "/icon-512.png",
   "/manifest.webmanifest",
   "/offline.html",
+  "/offline-pack.js",
 ]);
 
 test("installs an account-neutral shell and falls back safely when disconnected", async ({
@@ -66,7 +67,7 @@ test("installs an account-neutral shell and falls back safely when disconnected"
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "OpenScholar can’t be reached.",
+      name: "Read your saved research metadata.",
     }),
   ).toBeVisible();
   await expect(page.getByText("Research library", { exact: true })).toHaveCount(0);
@@ -83,7 +84,7 @@ test("installs an account-neutral shell and falls back safely when disconnected"
   ).toEqual([]);
 
   await context.setOffline(false);
-  await page.getByRole("link", { name: "Try again" }).click();
+  await page.getByRole("link", { name: "Return to OpenScholar" }).click();
   await expect(
     page.getByRole("heading", { level: 1, name: /Find the paper/ }),
   ).toBeVisible();

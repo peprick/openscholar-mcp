@@ -53,6 +53,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const response = NextResponse.redirect(destination, 303);
   response.headers.set("cache-control", "no-store");
+  response.headers.set("clear-site-data", '"storage"');
   response.headers.set("referrer-policy", "no-referrer");
   response.cookies.set(AUTH_SESSION_COOKIE, "", authCookieOptions(0));
   response.cookies.set(AUTH_TRANSACTION_COOKIE, "", authCookieOptions(0));

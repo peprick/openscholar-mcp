@@ -1,12 +1,15 @@
 "use strict";
 
 const CACHE_PREFIX = "openscholar-shell-";
+const OFFLINE_READER_REVISION = "2026-08-24-r2";
 // Bump this value whenever the offline shell or cache policy changes.
-const CACHE_NAME = `${CACHE_PREFIX}2026-08-24-v3`;
+const CACHE_NAME = `${CACHE_PREFIX}${OFFLINE_READER_REVISION}`;
 const MAX_STATIC_ENTRIES = 96;
 const OFFLINE_URL = "/offline.html";
+const OFFLINE_PACK_RUNTIME_URL = "/offline-pack.js";
+const REQUIRED_PRECACHE_URLS = [OFFLINE_URL, OFFLINE_PACK_RUNTIME_URL];
 const PRECACHE_URLS = [
-  OFFLINE_URL,
+  ...REQUIRED_PRECACHE_URLS,
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-192.png",
@@ -20,6 +23,7 @@ const STATIC_URLS = new Set([
   "/icon-192.png",
   "/icon-512.png",
   "/manifest.webmanifest",
+  OFFLINE_PACK_RUNTIME_URL,
 ]);
 const PRIVATE_PATH_PREFIXES = [
   "/api/",
@@ -53,6 +57,10 @@ function isStaticAsset(url) {
 
 function isInstallAsset(url) {
   return url.search === "" && STATIC_URLS.has(url.pathname);
+}
+
+function isRequiredReaderAsset(url) {
+  return url.search === "" && REQUIRED_PRECACHE_URLS.includes(url.pathname);
 }
 
 function responseCanBeStored(response) {
@@ -91,6 +99,48 @@ async function trimStaticAssets(cache) {
   );
 }
 
+async function hasExpectedReaderRevision(pathname, response) {
+  let finalUrl;
+  try {
+    finalUrl = new URL(response.url);
+  } catch {
+    return false;
+  }
+  if (
+    finalUrl.origin !== self.location.origin ||
+    finalUrl.pathname !== pathname ||
+    finalUrl.search !== ""
+  ) {
+    return false;
+  }
+  const contentType = (response.headers.get("content-type") ?? "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  const expectedType =
+    pathname === OFFLINE_URL
+      ? contentType === "text/html"
+      : [
+          "application/ecmascript",
+          "application/javascript",
+          "text/ecmascript",
+          "text/javascript",
+        ].includes(contentType);
+  if (!expectedType) return false;
+  try {
+    const source = await response.clone().text();
+    return pathname === OFFLINE_URL
+      ? source.includes(
+          `data-offline-reader-revision="${OFFLINE_READER_REVISION}"`,
+        )
+      : source.includes(
+          `const READER_REVISION = "${OFFLINE_READER_REVISION}"`,
+        );
+  } catch {
+    return false;
+  }
+}
+
 async function fetchForPrecache(pathname) {
   const request = new Request(new URL(pathname, self.location.origin), {
     cache: "reload",
@@ -98,27 +148,39 @@ async function fetchForPrecache(pathname) {
   });
   const response = await fetch(request);
   if (!responseCanBeStored(response)) return null;
+  if (
+    REQUIRED_PRECACHE_URLS.includes(pathname) &&
+    !(await hasExpectedReaderRevision(pathname, response))
+  ) {
+    return null;
+  }
   return response;
 }
 
 async function installShell() {
   const cache = await caches.open(CACHE_NAME);
-  const offlineResponse = await fetchForPrecache(OFFLINE_URL);
-  if (offlineResponse === null) {
-    throw new Error("The account-neutral offline shell could not be cached.");
+  const requiredResponses = await Promise.all(
+    REQUIRED_PRECACHE_URLS.map(fetchForPrecache),
+  );
+  if (requiredResponses.some((response) => response === null)) {
+    throw new Error("The encrypted offline reader could not be cached.");
   }
   // Keep the previous worker active if this required write fails. That avoids
   // replacing a working offline shell with an incomplete upgrade.
-  await cache.put(OFFLINE_URL, offlineResponse);
-  await Promise.allSettled(
-    PRECACHE_URLS.filter((pathname) => pathname !== OFFLINE_URL).map(
-      async (pathname) => {
-        const response = await fetchForPrecache(pathname);
-        if (response !== null) {
-          await store(cache, pathname, response);
-        }
-      }
+  await Promise.all(
+    REQUIRED_PRECACHE_URLS.map((pathname, index) =>
+      cache.put(pathname, requiredResponses[index]),
     ),
+  );
+  await Promise.allSettled(
+    PRECACHE_URLS.filter(
+      (pathname) => !REQUIRED_PRECACHE_URLS.includes(pathname),
+    ).map(async (pathname) => {
+      const response = await fetchForPrecache(pathname);
+      if (response !== null) {
+        await store(cache, pathname, response);
+      }
+    }),
   );
 }
 
@@ -147,30 +209,27 @@ async function networkFirstInstallAsset(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
     const response = await fetch(request);
-    await store(cache, request, response.clone());
-    return response;
+    if (responseCanBeStored(response)) {
+      await store(cache, request, response.clone());
+      return response;
+    }
+    const cached = await cache.match(request);
+    return cached ?? response;
   } catch {
     const cached = await cache.match(request);
     return cached ?? Response.error();
   }
 }
 
-async function refreshOfflineShell() {
-  try {
-    const response = await fetchForPrecache(OFFLINE_URL);
-    if (response === null) return;
-    const cache = await caches.open(CACHE_NAME);
-    await store(cache, OFFLINE_URL, response);
-  } catch {
-    // A successful page can still render if a background shell refresh fails.
-  }
+async function requiredReaderResponse(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  return cached ?? Response.error();
 }
 
-async function navigationResponse(request, event) {
+async function navigationResponse(request) {
   try {
-    const response = await fetch(request);
-    event.waitUntil(refreshOfflineShell());
-    return response;
+    return await fetch(request);
   } catch {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(OFFLINE_URL);
@@ -207,11 +266,17 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(navigationResponse(request, event));
+    event.respondWith(
+      isRequiredReaderAsset(url)
+        ? requiredReaderResponse(request)
+        : navigationResponse(request),
+    );
     return;
   }
 
-  if (isInstallAsset(url)) {
+  if (isRequiredReaderAsset(url)) {
+    event.respondWith(requiredReaderResponse(request));
+  } else if (isInstallAsset(url)) {
     event.respondWith(networkFirstInstallAsset(request));
   } else if (isStaticAsset(url)) {
     event.respondWith(cacheFirst(request));

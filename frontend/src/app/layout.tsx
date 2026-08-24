@@ -3,6 +3,7 @@ import type { Route } from "next";
 import Link from "next/link";
 
 import { ServiceWorkerRegistration } from "@/pwa/service-worker-registration";
+import { OfflinePackOwnerGuard } from "@/pwa/offline-pack-owner-guard";
 import { ConnectivityProvider } from "@/shared/connectivity/connectivity-context";
 import { Brand } from "@/shared/ui/brand";
 import { AuthNavigation } from "@/shared/ui/auth-navigation";
@@ -82,6 +83,7 @@ export default function RootLayout({
             process.env.OPENSCHOLAR_E2E_PWA === "true"
           }
         />
+        <OfflinePackOwnerGuard />
       </body>
     </html>
   );

@@ -1,13 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html data-offline-reader-revision="2026-08-24-r2" lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#155c47" />
     <meta name="color-scheme" content="light" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>OpenScholar unavailable</title>
+    <title>OpenScholar offline</title>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <script defer src="/offline-pack.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -20,18 +21,16 @@
       }
 
       body {
-        align-items: center;
         background: #f4f1e8;
         color: #17231d;
-        display: grid;
         margin: 0;
         min-height: 100vh;
         padding: 28px;
       }
 
       main {
-        margin: auto;
-        max-width: 680px;
+        margin: 48px auto;
+        max-width: 880px;
         width: 100%;
       }
 
@@ -70,12 +69,16 @@
         text-transform: uppercase;
       }
 
-      section {
+      .panel {
         background: #fffdf8;
         border: 1px solid #d9d6cc;
         border-radius: 24px;
         box-shadow: 0 16px 44px rgb(23 35 29 / 9%);
         padding: clamp(28px, 7vw, 56px);
+      }
+
+      .offlinePanel {
+        margin-top: 18px;
       }
 
       h1 {
@@ -93,19 +96,190 @@
         margin: 0 0 28px;
       }
 
-      a {
+      a,
+      button {
         background: #155c47;
+        border: 1px solid #155c47;
         border-radius: 10px;
         color: #fffdf8;
-        display: inline-block;
+        cursor: pointer;
+        display: inline-flex;
+        font: inherit;
         font-weight: 700;
+        justify-content: center;
         padding: 12px 18px;
         text-decoration: none;
       }
 
-      a:focus-visible {
+      button.secondary {
+        background: transparent;
+        border-color: #a9afa8;
+        color: #34443b;
+      }
+
+      button.danger {
+        background: transparent;
+        border-color: #b36a62;
+        color: #8d3029;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.56;
+      }
+
+      a:focus-visible,
+      button:focus-visible,
+      input:focus-visible,
+      [tabindex="-1"]:focus-visible {
         outline: 3px solid #b7da73;
         outline-offset: 3px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      .offlineIntro {
+        margin-bottom: 22px;
+      }
+
+      .offlineIntro h2,
+      #offline-pack-title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(1.9rem, 5vw, 3rem);
+        font-weight: 400;
+        letter-spacing: -0.035em;
+        line-height: 1.08;
+        margin: 8px 0 12px;
+      }
+
+      .offlineIntro p,
+      #offline-pack-description,
+      #offline-pack-generated {
+        font-size: 0.92rem;
+        margin-bottom: 12px;
+      }
+
+      .offlineStatus {
+        font-size: 0.82rem;
+        margin: 14px 0 0;
+        min-height: 1.35em;
+      }
+
+      .unlockForm {
+        align-items: end;
+        border-top: 1px solid #dedbd1;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: minmax(220px, 1fr) auto auto;
+        margin-top: 22px;
+        padding-top: 22px;
+      }
+
+      .field {
+        display: grid;
+        gap: 7px;
+      }
+
+      .field label {
+        color: #34443b;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .field input {
+        background: #fff;
+        border: 1px solid #a9afa8;
+        border-radius: 9px;
+        color: #17231d;
+        font: inherit;
+        padding: 11px 12px;
+        width: 100%;
+      }
+
+      .field small {
+        color: #667169;
+        font-size: 0.7rem;
+      }
+
+      .readerHeader {
+        border-bottom: 1px solid #dedbd1;
+        padding-bottom: 24px;
+      }
+
+      .readerActions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin-top: 20px;
+      }
+
+      .offlineFilter {
+        display: grid;
+        gap: 7px;
+        margin-top: 22px;
+      }
+
+      .offlineFilter label {
+        color: #34443b;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .offlineFilter input {
+        background: #fff;
+        border: 1px solid #a9afa8;
+        border-radius: 9px;
+        color: #17231d;
+        font: inherit;
+        padding: 11px 12px;
+        width: 100%;
+      }
+
+      .paperList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .offlinePaper {
+        border-bottom: 1px solid #dedbd1;
+        padding: 24px 0;
+      }
+
+      .offlinePaper__title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.4rem;
+        font-weight: 400;
+        line-height: 1.22;
+        margin: 0 0 8px;
+      }
+
+      .offlinePaper p {
+        font-size: 0.78rem;
+        line-height: 1.55;
+        margin: 4px 0 0;
+      }
+
+      .offlinePaper__status,
+      .offlinePaper__tags {
+        color: #155c47 !important;
+      }
+
+      @media (max-width: 680px) {
+        body {
+          padding: 18px;
+        }
+
+        main {
+          margin: 24px auto;
+        }
+
+        .unlockForm {
+          align-items: stretch;
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -118,14 +292,96 @@
           <small>Research, with sources</small>
         </span>
       </div>
-      <section>
-        <span class="eyebrow">Connection unavailable</span>
-        <h1>OpenScholar can’t be reached.</h1>
+      <section class="panel">
+        <span class="eyebrow">Offline research reader</span>
+        <h1>Read your saved research metadata.</h1>
         <p>
-          Check your connection, then try again to search research or update
-          your saved library. No paper documents are stored for offline reading.
+          Open an encrypted collection saved on this device, even when the
+          online app is unavailable. No paper documents are stored for offline
+          reading.
         </p>
-        <a href="/">Try again</a>
+        <a href="/">Return to OpenScholar</a>
+      </section>
+      <section class="panel offlinePanel" aria-labelledby="offline-heading">
+        <div class="offlineIntro">
+          <span class="eyebrow">Encrypted device copy</span>
+          <h2 id="offline-heading">Open an offline collection</h2>
+          <p>
+            If you previously saved a collection on this device, its research
+            metadata can be read here after you enter its passphrase. This is a
+            manual snapshot that may be out of date, and the browser may evict it.
+          </p>
+        </div>
+        <div class="readerActions">
+          <button disabled id="offline-pack-open" type="button">
+            Open encrypted offline collection
+          </button>
+          <button
+            class="danger"
+            id="offline-pack-remove-any"
+            type="button"
+          >
+            Remove encrypted offline data
+          </button>
+        </div>
+        <form class="unlockForm" hidden id="offline-pack-unlock-form">
+          <div class="field">
+            <label for="offline-pack-passphrase">Offline passphrase</label>
+            <input
+              autocomplete="off"
+              id="offline-pack-passphrase"
+              required
+              spellcheck="false"
+              type="password"
+            />
+            <small>
+              12–128 characters; separate from sign-in, never stored, and not
+              recoverable.
+            </small>
+          </div>
+          <button type="submit">Unlock</button>
+          <button
+            class="danger"
+            id="offline-pack-remove-locked"
+            type="button"
+          >
+            Remove copy
+          </button>
+        </form>
+        <p
+          aria-live="polite"
+          class="offlineStatus"
+          id="offline-pack-status"
+          role="status"
+        >
+          Offline copies stay encrypted until you choose to open them.
+        </p>
+        <div hidden id="offline-pack-reader">
+          <header class="readerHeader">
+            <span class="eyebrow">Read-only offline collection</span>
+            <h2 id="offline-pack-title" tabindex="-1"></h2>
+            <p id="offline-pack-description"></p>
+            <p id="offline-pack-generated"></p>
+            <div class="readerActions">
+              <button class="secondary" id="offline-pack-lock" type="button">
+                Lock collection
+              </button>
+              <button class="danger" id="offline-pack-purge" type="button">
+                Remove device copy
+              </button>
+            </div>
+            <div class="offlineFilter">
+              <label for="offline-pack-filter">Filter saved papers</label>
+              <input
+                autocomplete="off"
+                id="offline-pack-filter"
+                placeholder="Title, author, or tag"
+                type="search"
+              />
+            </div>
+          </header>
+          <ol class="paperList" id="offline-pack-papers" role="list"></ol>
+        </div>
       </section>
     </main>
   </body>
