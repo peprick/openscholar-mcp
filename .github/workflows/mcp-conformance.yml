@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   supported-scenarios:
-    name: Supported MCP scenarios
+    name: Supported MCP scenarios and SDK smoke
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -51,7 +51,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: tools/mcp-conformance/pnpm-lock.yaml
 
-      - name: Install locked conformance CLI
+      - name: Install locked MCP tooling
         working-directory: tools/mcp-conformance
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -93,6 +93,9 @@ jobs:
             --url http://127.0.0.1:6277/mcp \
             --scenario tools-list \
             --spec-version 2025-11-25
+
+      - name: Run official SDK client smoke
+        run: pnpm --dir tools/mcp-conformance run sdk-smoke
 
       - name: Show backend logs after failure
         if: failure()

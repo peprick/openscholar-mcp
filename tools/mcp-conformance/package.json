@@ -2,15 +2,17 @@
   "name": "@openscholar/mcp-conformance-tooling",
   "version": "0.0.0",
   "private": true,
-  "description": "Locked CLI dependency used by the OpenScholar MCP conformance workflow.",
+  "description": "Locked conformance and client dependencies used by OpenScholar MCP validation.",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "conformance": "conformance"
+    "conformance": "conformance",
+    "sdk-smoke": "node openscholar-client-smoke.mjs"
   },
   "devDependencies": {
-    "@modelcontextprotocol/conformance": "0.1.16"
+    "@modelcontextprotocol/conformance": "0.1.16",
+    "@modelcontextprotocol/sdk": "1.30.0"
   }
 }

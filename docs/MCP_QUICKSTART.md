@@ -245,4 +245,12 @@ Stop the proxy immediately afterward. The full fixture-oriented suite expects sy
 
 Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings. The `tools-list` contract discovers exactly the six documented tools; separate authenticated integration tests verify the three resource templates and database-only reads.
 
-The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, tooling-lock, and workflow changes. It installs the same frozen CLI with scripts disabled, starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.
+The same locked tooling directory also contains an official JavaScript MCP SDK `1.30.0` client smoke. With the local backend running and `MCP_LOCAL_API_KEY` exported, run:
+
+```bash
+pnpm --dir tools/mcp-conformance run sdk-smoke
+```
+
+The smoke is intentionally loopback-only. It performs a real Streamable HTTP initialize/initialized lifecycle and ping, verifies the exact six tools and three resource templates, confirms that the concrete resource list is empty, creates one disposable empty collection through the local REST API, reads that owner-scoped collection through MCP as bounded `application/json`, and deletes the collection before disconnecting. It does not call a research provider or require journal, OAuth, or hosted-service credentials.
+
+The `MCP Conformance` GitHub Actions workflow repeats this supported subset and SDK smoke for backend, Compose, proxy, tooling-lock, and workflow changes. It installs the same frozen dependencies with scripts disabled, starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy for the conformance CLI, runs both pinned scenarios plus the direct authenticated SDK client, and always removes the containers and volume afterward.
