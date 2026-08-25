@@ -14,7 +14,7 @@ describe("static offline shell", () => {
     expect(html).toContain("No paper documents are stored");
     expect(html.match(/<script\b/giu)).toHaveLength(1);
     expect(html).toMatch(/<script defer src="\/offline-pack\.js"><\/script>/iu);
-    expect(html).toContain('data-offline-reader-revision="2026-08-24-r2"');
+    expect(html).toContain('data-offline-reader-revision="2026-08-24-r3"');
     expect(html).not.toMatch(/api\/auth|cookie|localStorage|sessionStorage/iu);
     expect(html).not.toMatch(/\.pdf\b|\.docx?\b/iu);
     expect(html).toContain("Open encrypted offline collection");

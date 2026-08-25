@@ -136,6 +136,67 @@ function initialState() {
 
 let state = initialState();
 
+function mutationGate() {
+  let generation = 0;
+  let armed = false;
+  let reached = false;
+  let releaseWaiter = null;
+  let waiter = Promise.resolve("continue");
+
+  function snapshot() {
+    return { armed, generation, reached };
+  }
+
+  function settle(outcome) {
+    const resolve = releaseWaiter;
+    releaseWaiter = null;
+    resolve?.(outcome);
+  }
+
+  return Object.freeze({
+    arm() {
+      settle("cancel");
+      generation += 1;
+      armed = true;
+      reached = false;
+      waiter = new Promise((resolve) => {
+        releaseWaiter = resolve;
+      });
+      return snapshot();
+    },
+    release() {
+      const prior = snapshot();
+      armed = false;
+      settle("continue");
+      return { ...prior, armed: false, released: prior.armed };
+    },
+    reset() {
+      settle("cancel");
+      generation += 1;
+      armed = false;
+      reached = false;
+      waiter = Promise.resolve("continue");
+    },
+    snapshot,
+    async waitAtMutationBoundary() {
+      if (!armed) return true;
+      const waitingGeneration = generation;
+      reached = true;
+      const outcome = await waiter;
+      return outcome === "continue" && generation === waitingGeneration;
+    },
+  });
+}
+
+const mutationGates = Object.freeze({
+  "collection-delete": mutationGate(),
+});
+
+function resetFixtureState() {
+  for (const gate of Object.values(mutationGates)) gate.reset();
+  state = initialState();
+}
+
 function privacyExport() {
   return {
     userId: ids.user,
@@ -630,8 +691,34 @@ async function handle(request, response) {
     json(response, 200, { status: "ready" });
     return;
   }
+  const gateMatch = /^\/__fixture\/gates\/([^/]+)(?:\/(arm|release))?$/.exec(
+    path,
+  );
+  if (gateMatch !== null) {
+    const gateName = decodeURIComponent(gateMatch[1]);
+    const action = gateMatch[2];
+    const gate = mutationGates[gateName];
+    if (gate === undefined) {
+      problem(response, 404, `Unknown fixture mutation gate: ${gateName}.`);
+      return;
+    }
+    if (action === undefined && request.method === "GET") {
+      json(response, 200, gate.snapshot());
+      return;
+    }
+    if (action === "arm" && request.method === "POST") {
+      json(response, 200, gate.arm());
+      return;
+    }
+    if (action === "release" && request.method === "POST") {
+      json(response, 200, gate.release());
+      return;
+    }
+    problem(response, 405, `Unsupported fixture gate operation: ${request.method}.`);
+    return;
+  }
   if (path === "/__fixture/reset" && request.method === "POST") {
-    state = initialState();
+    resetFixtureState();
     empty(response);
     return;
   }
@@ -914,6 +1001,10 @@ async function handle(request, response) {
       return;
     }
     if (request.method === "DELETE") {
+      if (!(await mutationGates["collection-delete"].waitAtMutationBoundary())) {
+        problem(response, 409, "The held collection delete was reset.");
+        return;
+      }
       state.collections = state.collections.filter(
         (candidate) => candidate.collectionId !== collectionId,
       );
@@ -995,6 +1086,7 @@ server.listen(port, host, () => {
 });
 
 function close() {
+  for (const gate of Object.values(mutationGates)) gate.reset();
   server.close((error) => {
     process.exitCode = error === undefined ? 0 : 1;
   });

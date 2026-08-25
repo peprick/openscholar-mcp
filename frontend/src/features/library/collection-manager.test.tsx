@@ -118,11 +118,15 @@ describe("CollectionManager", () => {
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
-  it("locks and purges this collection's device copy before server deletion", async () => {
+  it("opens a durable collection-deletion fence and completes it after confirmed deletion", async () => {
     const user = userEvent.setup();
-    const lock = vi.fn();
-    const purgeCollection = vi.fn().mockResolvedValue(false);
-    loadRuntime.mockResolvedValue({ lock, purgeCollection });
+    const fence = {
+      collectionDigest: "opaque-collection-digest",
+      deletionId: "opaque-deletion-id",
+    };
+    const beginDeletion = vi.fn().mockResolvedValue(fence);
+    const completeDeletion = vi.fn().mockResolvedValue(true);
+    loadRuntime.mockResolvedValue({ beginDeletion, completeDeletion });
     vi.stubGlobal("indexedDB", {});
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -131,22 +135,25 @@ describe("CollectionManager", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete collection" }));
 
-    await waitFor(() => expect(purgeCollection).toHaveBeenCalledWith(testIds.collection));
-    expect(lock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(completeDeletion).toHaveBeenCalledWith(fence));
+    expect(beginDeletion).toHaveBeenCalledWith(testIds.collection);
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/collections/${testIds.collection}`,
       { method: "DELETE" },
     );
-    expect(purgeCollection.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(beginDeletion.mock.invocationCallOrder[0]).toBeLessThan(
       fetchMock.mock.invocationCallOrder[0]!,
+    );
+    expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
+      completeDeletion.mock.invocationCallOrder[0]!,
     );
   });
 
   it("does not delete the server collection when local cleanup fails", async () => {
     const user = userEvent.setup();
     loadRuntime.mockResolvedValue({
-      lock: vi.fn(),
-      purgeCollection: vi.fn().mockRejectedValue(new Error("storage blocked")),
+      beginDeletion: vi.fn().mockRejectedValue(new Error("storage blocked")),
+      completeDeletion: vi.fn(),
     });
     vi.stubGlobal("indexedDB", {});
     const fetchMock = vi.fn();
@@ -162,6 +169,132 @@ describe("CollectionManager", () => {
       ),
     ).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the deletion fence in place after a non-success server response", async () => {
+    const user = userEvent.setup();
+    const fence = {
+      collectionDigest: "opaque-collection-digest",
+      deletionId: "opaque-deletion-id",
+    };
+    const completeDeletion = vi.fn();
+    loadRuntime.mockResolvedValue({
+      beginDeletion: vi.fn().mockResolvedValue(fence),
+      completeDeletion,
+    });
+    vi.stubGlobal("indexedDB", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            title: "Request failed",
+            status: 503,
+            detail: "Deletion could not be confirmed.",
+            code: "BACKEND_UNREACHABLE",
+          },
+          503,
+        ),
+      ),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    expect(
+      await screen.findByText("Deletion could not be confirmed."),
+    ).toBeInTheDocument();
+    expect(completeDeletion).not.toHaveBeenCalled();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it("leaves the deletion fence in place when the server result is unknown", async () => {
+    const user = userEvent.setup();
+    const completeDeletion = vi.fn();
+    loadRuntime.mockResolvedValue({
+      beginDeletion: vi.fn().mockResolvedValue({
+        collectionDigest: "opaque-collection-digest",
+        deletionId: "opaque-deletion-id",
+      }),
+      completeDeletion,
+    });
+    vi.stubGlobal("indexedDB", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("response lost after send")),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    expect(
+      await screen.findByText("OpenScholar could not reach the library service."),
+    ).toBeInTheDocument();
+    expect(completeDeletion).not.toHaveBeenCalled();
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  it("continues after confirmed deletion when the browser fence was already cleared", async () => {
+    const user = userEvent.setup();
+    const completeDeletion = vi.fn().mockResolvedValue(false);
+    loadRuntime.mockResolvedValue({
+      beginDeletion: vi.fn().mockResolvedValue({
+        collectionDigest: "opaque-collection-digest",
+        deletionId: "opaque-deletion-id",
+      }),
+      completeDeletion,
+    });
+    vi.stubGlobal("indexedDB", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    await waitFor(() => expect(navigation.push).toHaveBeenCalledWith("/library"));
+    expect(completeDeletion).toHaveBeenCalledOnce();
+    expect(navigation.refresh).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByText(
+        "The collection was deleted, but browser cleanup could not be completed. Refresh before saving another offline copy.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reports local completion errors after confirmed server deletion", async () => {
+    const user = userEvent.setup();
+    const completeDeletion = vi
+      .fn()
+      .mockRejectedValue(new Error("browser storage unavailable"));
+    loadRuntime.mockResolvedValue({
+      beginDeletion: vi.fn().mockResolvedValue({
+        collectionDigest: "opaque-collection-digest",
+        deletionId: "opaque-deletion-id",
+      }),
+      completeDeletion,
+    });
+    vi.stubGlobal("indexedDB", {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<CollectionManager collection={collectionDetailsFixture()} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete collection" }));
+
+    expect(
+      await screen.findByText(
+        "The collection was deleted, but browser cleanup could not be completed. Refresh before saving another offline copy.",
+      ),
+    ).toBeInTheDocument();
+    expect(completeDeletion).toHaveBeenCalledOnce();
+    expect(navigation.push).not.toHaveBeenCalled();
   });
 
   it("returns to the preceding page after removing its final membership", async () => {

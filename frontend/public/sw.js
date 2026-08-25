@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_PREFIX = "openscholar-shell-";
-const OFFLINE_READER_REVISION = "2026-08-24-r2";
+const OFFLINE_READER_REVISION = "2026-08-24-r3";
 // Bump this value whenever the offline shell or cache policy changes.
 const CACHE_NAME = `${CACHE_PREFIX}${OFFLINE_READER_REVISION}`;
 const MAX_STATIC_ENTRIES = 96;

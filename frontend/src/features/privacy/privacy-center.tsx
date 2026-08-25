@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { loadOfflinePackRuntime } from "@/pwa/offline-pack-loader";
+import type {
+  OfflinePackDeletionFence,
+  OpenScholarOfflinePackRuntime,
+} from "@/pwa/offline-pack-runtime";
 import { apiProblemSchema } from "@/shared/api/schemas";
 
 const DELETE_CONFIRMATION = "DELETE_MY_DATA";
@@ -12,6 +16,8 @@ const DELETE_UNCONFIRMED_MESSAGE =
   "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.";
 const OFFLINE_PURGE_FAILED_MESSAGE =
   "OpenScholar could not remove this browser’s encrypted offline copy, so server deletion did not start. Close other OpenScholar tabs and try again.";
+const OFFLINE_COMPLETION_FAILED_MESSAGE =
+  "Your OpenScholar data was deleted, but browser cleanup could not be completed. Refresh before saving another offline copy.";
 
 type Feedback = {
   kind: "error" | "status";
@@ -108,12 +114,16 @@ export function PrivacyCenter(): React.JSX.Element {
       kind: "status",
       message: "Removing this browser’s encrypted offline copy…",
     });
+    let offlineDeletion: {
+      fence: OfflinePackDeletionFence;
+      runtime: OpenScholarOfflinePackRuntime;
+    } | null = null;
     try {
       if (typeof indexedDB !== "undefined") {
         try {
           const runtime = await loadOfflinePackRuntime();
-          runtime.lock();
-          await runtime.purge();
+          const fence = await runtime.beginDeletion();
+          offlineDeletion = { fence, runtime };
         } catch {
           setDeleteFeedback({
             kind: "error",
@@ -137,6 +147,24 @@ export function PrivacyCenter(): React.JSX.Element {
           message: DELETE_UNCONFIRMED_MESSAGE,
         });
         return;
+      }
+      if (offlineDeletion !== null) {
+        try {
+          await offlineDeletion.runtime.completeDeletion(
+            offlineDeletion.fence,
+          );
+          // The successful response can apply Clear-Site-Data before this
+          // continuation runs. In that case the exact fence is already gone
+          // and `false` is still a successful terminal state.
+        } catch {
+          // A confirmed server deletion must not clear or bypass an uncertain
+          // local fence, which therefore remains fail-closed.
+          setDeleteFeedback({
+            kind: "error",
+            message: OFFLINE_COMPLETION_FAILED_MESSAGE,
+          });
+          return;
+        }
       }
 
       setConfirmation("");

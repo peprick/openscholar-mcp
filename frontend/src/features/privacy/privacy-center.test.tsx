@@ -10,8 +10,12 @@ vi.mock("@/pwa/offline-pack-loader", () => ({
 }));
 
 const offlineRuntime = {
-  lock: vi.fn(),
-  purge: vi.fn().mockResolvedValue(true),
+  beginDeletion: vi.fn(),
+  completeDeletion: vi.fn().mockResolvedValue(true),
+};
+const deletionFence = {
+  collectionDigest: null,
+  deletionId: "opaque-account-deletion-id",
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -23,6 +27,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 beforeEach(() => {
   vi.stubGlobal("indexedDB", {});
+  offlineRuntime.beginDeletion.mockReset().mockResolvedValue(deletionFence);
+  offlineRuntime.completeDeletion.mockReset().mockResolvedValue(true);
   vi.mocked(loadOfflinePackRuntime).mockResolvedValue(offlineRuntime as never);
 });
 
@@ -31,8 +37,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.mocked(loadOfflinePackRuntime).mockReset();
-  offlineRuntime.lock.mockReset();
-  offlineRuntime.purge.mockReset().mockResolvedValue(true);
+  offlineRuntime.beginDeletion.mockReset();
+  offlineRuntime.completeDeletion.mockReset();
 });
 
 describe("PrivacyCenter", () => {
@@ -67,8 +73,14 @@ describe("PrivacyCenter", () => {
         body: JSON.stringify({ confirmation: "DELETE_MY_DATA" }),
       }),
     );
-    expect(offlineRuntime.lock).toHaveBeenCalledOnce();
-    expect(offlineRuntime.purge).toHaveBeenCalledOnce();
+    expect(offlineRuntime.beginDeletion).toHaveBeenCalledWith();
+    expect(offlineRuntime.completeDeletion).toHaveBeenCalledWith(deletionFence);
+    expect(offlineRuntime.beginDeletion.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[0]!,
+    );
+    expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
+      offlineRuntime.completeDeletion.mock.invocationCallOrder[0]!,
+    );
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Your OpenScholar data was deleted.",
     );
@@ -118,6 +130,7 @@ describe("PrivacyCenter", () => {
     expect(
       screen.getByRole("button", { name: "Delete my OpenScholar data" }),
     ).toBeEnabled();
+    expect(offlineRuntime.completeDeletion).not.toHaveBeenCalled();
   });
 
   it("treats a lost deletion response as an unknown completion state", async () => {
@@ -140,13 +153,14 @@ describe("PrivacyCenter", () => {
       "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.",
     );
     expect(input).toHaveValue("DELETE_MY_DATA");
+    expect(offlineRuntime.completeDeletion).not.toHaveBeenCalled();
   });
 
   it("does not start server deletion when the local encrypted copy cannot be removed", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    offlineRuntime.purge.mockRejectedValue(new Error("storage blocked"));
+    offlineRuntime.beginDeletion.mockRejectedValue(new Error("storage blocked"));
     render(<PrivacyCenter />);
 
     await user.type(
@@ -163,6 +177,62 @@ describe("PrivacyCenter", () => {
       "OpenScholar could not remove this browser’s encrypted offline copy, so server deletion did not start.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts an already-cleared browser fence after confirmed account deletion", async () => {
+    offlineRuntime.completeDeletion.mockResolvedValue(false);
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    render(<PrivacyCenter />);
+
+    const input = screen.getByRole("textbox", {
+      name: "Type DELETE_MY_DATA to confirm",
+    });
+    await user.type(input, "DELETE_MY_DATA");
+    await user.click(
+      screen.getByRole("button", { name: "Delete my OpenScholar data" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Your OpenScholar data was deleted.",
+    );
+    expect(offlineRuntime.completeDeletion).toHaveBeenCalledWith(deletionFence);
+    expect(input).not.toBeInTheDocument();
+    expect(
+      screen.getByText("You can start again with an empty research workspace."),
+    ).toBeInTheDocument();
+  });
+
+  it("reports local completion errors after confirmed account deletion", async () => {
+    offlineRuntime.completeDeletion.mockRejectedValue(
+      new Error("browser storage unavailable"),
+    );
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+    render(<PrivacyCenter />);
+
+    const input = screen.getByRole("textbox", {
+      name: "Type DELETE_MY_DATA to confirm",
+    });
+    await user.type(input, "DELETE_MY_DATA");
+    await user.click(
+      screen.getByRole("button", { name: "Delete my OpenScholar data" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your OpenScholar data was deleted, but browser cleanup could not be completed. Refresh before saving another offline copy.",
+    );
+    expect(offlineRuntime.completeDeletion).toHaveBeenCalledWith(deletionFence);
+    expect(input).toHaveValue("DELETE_MY_DATA");
+    expect(
+      screen.queryByText("You can start again with an empty research workspace."),
+    ).not.toBeInTheDocument();
   });
 
   it("downloads the export with a fixed private-data filename", async () => {

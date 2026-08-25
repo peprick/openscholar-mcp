@@ -1,9 +1,13 @@
+import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { OpenScholarOfflinePackRuntime } from "@/pwa/offline-pack-runtime";
+import type {
+  OfflinePackSaveFence,
+  OpenScholarOfflinePackRuntime,
+} from "@/pwa/offline-pack-runtime";
 import { offlineCollectionPackFixture } from "@/test/fixtures";
 
 function contractRuntime(): {
@@ -17,7 +21,19 @@ function contractRuntime(): {
     OpenScholarOfflinePack: undefined as OpenScholarOfflinePackRuntime | undefined,
     atob,
     btoa,
-    crypto: { subtle: {} },
+    crypto: {
+      getRandomValues: (bytes: Uint8Array) => {
+        bytes.fill(1);
+        return bytes;
+      },
+      subtle: {
+        deriveKey: vi.fn().mockResolvedValue({}),
+        digest: (_algorithm: string, value: BufferSource) =>
+          webcrypto.subtle.digest("SHA-256", value),
+        encrypt: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
+        importKey: vi.fn().mockResolvedValue({}),
+      },
+    },
     indexedDB: { open: openDatabase },
     location: { origin: "https://openscholar.test" },
   };
@@ -32,6 +48,20 @@ function contractRuntime(): {
   return { openDatabase, runtime: sandbox.OpenScholarOfflinePack };
 }
 
+async function saveFence(collectionId: string): Promise<OfflinePackSaveFence> {
+  const digest = new Uint8Array(
+    await webcrypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(collectionId.toLowerCase()),
+    ),
+  );
+  return {
+    collectionDigest: Buffer.from(digest).toString("base64url"),
+    lifecycleEpoch: "AAAAAAAAAAAAAAAAAAAAAA",
+    ownerScope: "local-v1",
+  };
+}
+
 describe("offline-pack public payload contract", () => {
   it("accepts the OpenAPI collection, title, and tag boundaries", async () => {
     const { openDatabase, runtime } = contractRuntime();
@@ -42,9 +72,10 @@ describe("offline-pack public payload contract", () => {
     payload.papers[0]!.tags = Array.from({ length: 10 }, (_, index) =>
       String(index).padEnd(40, "x"),
     );
+    const fence = await saveFence(payload.collection.collectionId);
 
     await expect(
-      runtime.save(payload, "a separate passphrase", "local-v1"),
+      runtime.save(payload, "a separate passphrase", fence),
     ).rejects.toThrow("validated payload reached storage");
     expect(openDatabase).toHaveBeenCalledOnce();
   });
@@ -80,10 +111,11 @@ describe("offline-pack public payload contract", () => {
   ])("rejects %s before opening private storage", async (_label, mutate) => {
     const { openDatabase, runtime } = contractRuntime();
     const payload = offlineCollectionPackFixture();
+    const fence = await saveFence(payload.collection.collectionId);
     mutate(payload);
 
     await expect(
-      runtime.save(payload, "a separate passphrase", "local-v1"),
+      runtime.save(payload, "a separate passphrase", fence),
     ).rejects.toMatchObject({ name: "OfflinePackDataError" });
     expect(openDatabase).not.toHaveBeenCalled();
   });

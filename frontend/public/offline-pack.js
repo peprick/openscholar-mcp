@@ -4,12 +4,13 @@
   if (global.OpenScholarOfflinePack !== undefined) return;
 
   const DATABASE_NAME = "openscholar-private-offline-v1";
-  const DATABASE_VERSION = 1;
+  const DATABASE_VERSION = 2;
   const STORE_NAME = "packs";
   const ACTIVE_KEY = "active";
   const CONTROL_KEY = "control";
+  const DELETION_KEY = "deletion";
   const CHANNEL_NAME = "openscholar-offline-pack-v1";
-  const READER_REVISION = "2026-08-24-r2";
+  const READER_REVISION = "2026-08-24-r3";
   const FORMAT_VERSION = 1;
   const CRYPTO_PROFILE = "pbkdf2-sha256-aes256gcm-v1";
   const WORK_FACTOR = 600000;
@@ -76,6 +77,18 @@
     "ownerScope",
     "lifecycleEpoch",
   ];
+  const DELETION_KEYS = [
+    "slot",
+    "formatVersion",
+    "deletionId",
+    "collectionDigest",
+  ];
+  const SAVE_FENCE_KEYS = [
+    "collectionDigest",
+    "lifecycleEpoch",
+    "ownerScope",
+  ];
+  const DELETION_FENCE_KEYS = ["collectionDigest", "deletionId"];
   const PAYLOAD_KEYS = [
     "schemaVersion",
     "generatedAt",
@@ -384,6 +397,67 @@
     return value;
   }
 
+  function validateDeletion(value) {
+    if (
+      !hasExactKeys(value, DELETION_KEYS) ||
+      value.slot !== DELETION_KEY ||
+      value.formatVersion !== FORMAT_VERSION ||
+      (value.collectionDigest !== null &&
+        typeof value.collectionDigest !== "string")
+    ) {
+      throw invalidPack();
+    }
+    const deletionId = decodeBase64Url(value.deletionId, 16, 16);
+    let digest = null;
+    try {
+      if (value.collectionDigest !== null) {
+        digest = decodeBase64Url(value.collectionDigest, 32, 32);
+      }
+    } finally {
+      deletionId.fill(0);
+      digest?.fill(0);
+    }
+    return value;
+  }
+
+  function validateSaveFence(value) {
+    if (!hasExactKeys(value, SAVE_FENCE_KEYS)) throw operationCancelled();
+    validateOwnerScope(value.ownerScope);
+    const digest = decodeBase64Url(value.collectionDigest, 32, 32);
+    const epoch = decodeBase64Url(value.lifecycleEpoch, 16, 16);
+    digest.fill(0);
+    epoch.fill(0);
+    return Object.freeze({
+      collectionDigest: value.collectionDigest,
+      lifecycleEpoch: value.lifecycleEpoch,
+      ownerScope: value.ownerScope,
+    });
+  }
+
+  function validateDeletionFence(value) {
+    if (
+      !hasExactKeys(value, DELETION_FENCE_KEYS) ||
+      (value.collectionDigest !== null &&
+        typeof value.collectionDigest !== "string")
+    ) {
+      throw invalidPack();
+    }
+    const deletionId = decodeBase64Url(value.deletionId, 16, 16);
+    let digest = null;
+    try {
+      if (value.collectionDigest !== null) {
+        digest = decodeBase64Url(value.collectionDigest, 32, 32);
+      }
+    } finally {
+      deletionId.fill(0);
+      digest?.fill(0);
+    }
+    return Object.freeze({
+      collectionDigest: value.collectionDigest,
+      deletionId: value.deletionId,
+    });
+  }
+
   function freshLifecycleEpoch() {
     const bytes = global.crypto.getRandomValues(new Uint8Array(16));
     try {
@@ -400,6 +474,30 @@
       ownerScope,
       lifecycleEpoch: freshLifecycleEpoch(),
     };
+  }
+
+  function deletionRecord(collectionDigest, deletionId = freshLifecycleEpoch()) {
+    return {
+      slot: DELETION_KEY,
+      formatVersion: FORMAT_VERSION,
+      deletionId,
+      collectionDigest,
+    };
+  }
+
+  function deletionFenceFromRecord(record) {
+    return Object.freeze({
+      collectionDigest: record.collectionDigest,
+      deletionId: record.deletionId,
+    });
+  }
+
+  function deletionBlocks(record, collectionDigest) {
+    return (
+      record !== undefined &&
+      (record.collectionDigest === null ||
+        record.collectionDigest === collectionDigest)
+    );
   }
 
   function normalizedOrigin() {
@@ -569,6 +667,13 @@
     );
   }
 
+  function deletionPending() {
+    return new OfflinePackError(
+      "An offline deletion is still pending on this device.",
+      "OfflinePackDeletionPendingError",
+    );
+  }
+
   function isQuotaError(error) {
     return (
       global.DOMException !== undefined &&
@@ -577,13 +682,19 @@
     );
   }
 
-  async function captureSaveFence(ownerScope) {
-    return storeTransaction("readwrite", async (store) => {
+  async function prepareSave(collectionId, ownerScope) {
+    ensureStorageAvailable();
+    const scope = validateOwnerScope(ownerScope);
+    const digest = await collectionDigest(collectionId);
+    const lifecycleEpoch = await storeTransaction("readwrite", async (store) => {
+      const deletion = await requestResult(store.get(DELETION_KEY));
+      if (deletion !== undefined) validateDeletion(deletion);
+      if (deletionBlocks(deletion, digest)) throw deletionPending();
       let control = await requestResult(store.get(CONTROL_KEY));
       const active = await requestResult(store.get(ACTIVE_KEY));
       if (active !== undefined) {
         validateEnvelope(active);
-        if (active.ownerScope !== ownerScope) {
+        if (active.ownerScope !== scope) {
           throw new OfflinePackError(
             "The offline storage owner could not be verified.",
             "OfflinePackOwnerError",
@@ -591,7 +702,7 @@
         }
       }
       if (control === undefined) {
-        control = lifecycleControl(ownerScope);
+        control = lifecycleControl(scope);
         await requestResult(store.put(control));
       } else {
         validateControl(control);
@@ -599,9 +710,9 @@
           // A full purge leaves a valid owner-neutral tombstone. The next save
           // may claim it with a fresh lifecycle epoch; an operation holding the
           // pre-purge epoch still cannot commit.
-          control = lifecycleControl(ownerScope);
+          control = lifecycleControl(scope);
           await requestResult(store.put(control));
-        } else if (control.ownerScope !== ownerScope) {
+        } else if (control.ownerScope !== scope) {
           throw new OfflinePackError(
             "The offline storage owner could not be verified.",
             "OfflinePackOwnerError",
@@ -610,19 +721,29 @@
       }
       return control.lifecycleEpoch;
     });
+    return Object.freeze({
+      collectionDigest: digest,
+      lifecycleEpoch,
+      ownerScope: scope,
+    });
   }
 
-  async function commitActive(envelope, lifecycleEpoch, expectedOperationEpoch) {
+  async function commitActive(envelope, fence, expectedOperationEpoch) {
     if (operationEpoch !== expectedOperationEpoch) throw operationCancelled();
     try {
       await storeTransaction("readwrite", async (store) => {
+        const deletion = await requestResult(store.get(DELETION_KEY));
+        if (deletion !== undefined) validateDeletion(deletion);
+        if (deletionBlocks(deletion, envelope.collectionDigest)) {
+          throw deletionPending();
+        }
         const control = await requestResult(store.get(CONTROL_KEY));
         if (control === undefined) throw operationCancelled();
         validateControl(control);
         if (
           operationEpoch !== expectedOperationEpoch ||
           control.ownerScope !== envelope.ownerScope ||
-          control.lifecycleEpoch !== lifecycleEpoch
+          control.lifecycleEpoch !== fence.lifecycleEpoch
         ) {
           throw operationCancelled();
         }
@@ -672,26 +793,16 @@
     });
   }
 
-  async function save(payload, passphrase, ownerScope) {
+  async function save(payload, passphrase, fence) {
     ensureStorageAvailable();
     const saveEpoch = operationEpoch;
-    const scope = validateOwnerScope(ownerScope);
+    const preparedFence = validateSaveFence(fence);
+    const scope = preparedFence.ownerScope;
     const plaintext = payloadBytes(payload);
     let committedEnvelope;
     try {
-      let lifecycleEpoch;
-      try {
-        lifecycleEpoch = await captureSaveFence(scope);
-      } catch (error) {
-        if (isQuotaError(error)) {
-          throw new OfflinePackError(
-            "This device does not have enough storage for the encrypted copy. The previous copy was kept.",
-            "OfflinePackQuotaError",
-          );
-        }
-        throw error;
-      }
       const digest = await collectionDigest(payload.collection.collectionId);
+      if (digest !== preparedFence.collectionDigest) throw operationCancelled();
       const salt = new Uint8Array(SALT_BYTES);
       const iv = new Uint8Array(IV_BYTES);
       let additionalData = null;
@@ -723,7 +834,7 @@
             ciphertext: encodeBase64Url(encrypted),
           };
           validateEnvelope(envelope);
-          await commitActive(envelope, lifecycleEpoch, saveEpoch);
+          await commitActive(envelope, preparedFence, saveEpoch);
           committedEnvelope = envelope;
         } finally {
           encrypted.fill(0);
@@ -851,19 +962,37 @@
     return outcome.removed;
   }
 
-  async function purgeCollection(collectionId) {
-    const digest = await collectionDigest(collectionId);
-    const removed = await storeTransaction("readwrite", async (store) => {
+  async function beginDeletion(collectionId) {
+    ensureStorageAvailable();
+    const digest =
+      collectionId === undefined ? null : await collectionDigest(collectionId);
+    const outcome = await storeTransaction("readwrite", async (store) => {
+      let deletion = await requestResult(store.get(DELETION_KEY));
       const control = await requestResult(store.get(CONTROL_KEY));
       const active = await requestResult(store.get(ACTIVE_KEY));
+      if (deletion !== undefined) validateDeletion(deletion);
       if (control !== undefined) validateControl(control);
       if (active !== undefined) validateEnvelope(active);
+      if (
+        deletion !== undefined &&
+        digest !== null &&
+        deletion.collectionDigest !== digest
+      ) {
+        throw deletionPending();
+      }
       if (
         control !== undefined &&
         active !== undefined &&
         control.ownerScope !== active.ownerScope
       ) {
         throw invalidPack();
+      }
+      if (
+        deletion === undefined ||
+        (digest === null && deletion.collectionDigest !== null)
+      ) {
+        deletion = deletionRecord(digest);
+        await requestResult(store.put(deletion));
       }
       await requestResult(
         store.put(
@@ -873,13 +1002,32 @@
         ),
       );
       const matches =
-        active !== undefined && active.collectionDigest === digest;
+        active !== undefined &&
+        (digest === null || active.collectionDigest === digest);
       if (matches) await requestResult(store.delete(ACTIVE_KEY));
-      return matches;
+      return { deletion, removed: matches };
     });
     operationEpoch += 1;
-    broadcast(removed ? "PURGE" : "LOCK");
-    return removed;
+    broadcast(outcome.removed ? "PURGE" : "LOCK");
+    return deletionFenceFromRecord(outcome.deletion);
+  }
+
+  async function completeDeletion(fence) {
+    ensureStorageAvailable();
+    const expected = validateDeletionFence(fence);
+    return storeTransaction("readwrite", async (store) => {
+      const deletion = await requestResult(store.get(DELETION_KEY));
+      if (deletion === undefined) return false;
+      validateDeletion(deletion);
+      if (
+        deletion.collectionDigest !== expected.collectionDigest ||
+        deletion.deletionId !== expected.deletionId
+      ) {
+        return false;
+      }
+      await requestResult(store.delete(DELETION_KEY));
+      return true;
+    });
   }
 
   function lock() {
@@ -897,12 +1045,14 @@
   }
 
   const runtime = Object.freeze({
+    prepareSave,
     save,
     inspect,
     unlock,
     purge,
     purgeMismatched,
-    purgeCollection,
+    beginDeletion,
+    completeDeletion,
     lock,
     subscribe,
     constants: Object.freeze({

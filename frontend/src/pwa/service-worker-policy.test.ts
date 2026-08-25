@@ -42,7 +42,7 @@ function response(
 
 function readerAssetResponse(
   input: { url: string },
-  revision = "2026-08-24-r2",
+  revision = "2026-08-24-r3",
 ) {
   const url = new URL(input.url);
   const shell = url.pathname === "/offline.html";
@@ -415,7 +415,7 @@ describe("OpenScholar service-worker cache policy", () => {
 
   it.each([
     ["old coherent pair", "2026-08-24-r0", "2026-08-24-r0"],
-    ["mixed runtime", "2026-08-24-r2", "2026-08-24-r0"],
+    ["mixed runtime", "2026-08-24-r3", "2026-08-24-r0"],
   ])(
     "rejects installation of an %s",
     async (_label, shellRevision, runtimeRevision) => {
@@ -481,7 +481,7 @@ describe("OpenScholar service-worker cache policy", () => {
     const runtime = loadWorker();
     runtime.cacheStorage.keys.mockResolvedValue([
       "openscholar-shell-old",
-      "openscholar-shell-2026-08-24-r2",
+      "openscholar-shell-2026-08-24-r3",
       "unrelated-cache",
     ]);
     let activationWork: Promise<unknown> | undefined;

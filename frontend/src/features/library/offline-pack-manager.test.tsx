@@ -18,6 +18,15 @@ const inspection = {
   ownerScope: "local-v1",
   collectionDigest: "opaque-digest",
 };
+const saveFence = {
+  collectionDigest: "opaque-digest",
+  lifecycleEpoch: "opaque-lifecycle-epoch",
+  ownerScope: "local-v1",
+};
+const deletionFence = {
+  collectionDigest: null,
+  deletionId: "opaque-deletion-id",
+};
 
 let runtime: OpenScholarOfflinePackRuntime;
 
@@ -33,7 +42,7 @@ beforeEach(() => {
   runtime = {
     constants: {
       formatVersion: 1,
-      readerRevision: "2026-08-24-r2",
+      readerRevision: "2026-08-24-r3",
       cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
       workFactor: 600000,
       maximumPapers: 500,
@@ -42,12 +51,14 @@ beforeEach(() => {
       maximumPassphraseCharacters: 128,
       maximumPassphraseBytes: 256,
     },
+    prepareSave: vi.fn().mockResolvedValue(saveFence),
     save: vi.fn().mockResolvedValue(inspection),
+    beginDeletion: vi.fn().mockResolvedValue(deletionFence),
+    completeDeletion: vi.fn().mockResolvedValue(true),
     inspect: vi.fn().mockResolvedValue(null),
     unlock: vi.fn(),
     purge: vi.fn().mockResolvedValue(false),
     purgeMismatched: vi.fn().mockResolvedValue(false),
-    purgeCollection: vi.fn().mockResolvedValue(false),
     lock: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   };
@@ -90,12 +101,24 @@ describe("OfflinePackManager", () => {
       expect(runtime.save).toHaveBeenCalledWith(
         payload,
         "exact phrase 🔐",
-        "local-v1",
+        saveFence,
       ),
+    );
+    expect(runtime.prepareSave).toHaveBeenCalledWith(
+      testIds.collection,
+      "local-v1",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/collections/${testIds.collection}/offline-pack`,
       { cache: "no-store", headers: { accept: "application/json" } },
+    );
+    const exportCall = fetchMock.mock.calls.findIndex(
+      ([input]) =>
+        input === `/api/collections/${testIds.collection}/offline-pack`,
+    );
+    expect(exportCall).toBeGreaterThanOrEqual(0);
+    expect(vi.mocked(runtime.prepareSave).mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[exportCall]!,
     );
     expect(
       await screen.findByText(/Encrypted offline copy saved/),
@@ -125,6 +148,39 @@ describe("OfflinePackManager", () => {
     expect(await screen.findByText("The passphrases must match exactly.")).toBeInTheDocument();
     expect(runtime.save).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fetch a snapshot when the durable save fence cannot be prepared", async () => {
+    vi.mocked(runtime.prepareSave).mockRejectedValue(
+      new Error("Another deletion is still being confirmed."),
+    );
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (input === "/api/auth/status") return authResponse();
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<OfflinePackManager collectionId={testIds.collection} />);
+
+    await waitFor(() => expect(runtime.inspect).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole("button", { name: "Prepare offline copy" }));
+    await user.type(screen.getByLabelText("Offline passphrase"), "correct horse");
+    await user.type(
+      screen.getByLabelText("Confirm offline passphrase"),
+      "correct horse",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Save encrypted offline copy" }),
+    );
+
+    expect(
+      await screen.findByText("Another deletion is still being confirmed."),
+    ).toBeInTheDocument();
+    expect(runtime.save).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      `/api/collections/${testIds.collection}/offline-pack`,
+      expect.anything(),
+    );
   });
 
   it("removes the active device copy after confirmation", async () => {

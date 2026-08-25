@@ -9,10 +9,21 @@ export type OfflinePackInspection = Readonly<{
 
 export type OfflinePackEvent = "LOCK" | "PURGE" | "REPLACED";
 
+export type OfflinePackSaveFence = Readonly<{
+  collectionDigest: string;
+  lifecycleEpoch: string;
+  ownerScope: string;
+}>;
+
+export type OfflinePackDeletionFence = Readonly<{
+  collectionDigest: string | null;
+  deletionId: string;
+}>;
+
 export interface OpenScholarOfflinePackRuntime {
   readonly constants: Readonly<{
     formatVersion: 1;
-    readerRevision: "2026-08-24-r2";
+    readerRevision: "2026-08-24-r3";
     cryptoProfile: "pbkdf2-sha256-aes256gcm-v1";
     workFactor: 600000;
     maximumPapers: 500;
@@ -21,11 +32,17 @@ export interface OpenScholarOfflinePackRuntime {
     maximumPassphraseCharacters: 128;
     maximumPassphraseBytes: 256;
   }>;
+  prepareSave(
+    collectionId: string,
+    ownerScope: string,
+  ): Promise<OfflinePackSaveFence>;
   save(
     payload: OfflineCollectionPack,
     passphrase: string,
-    ownerScope: string,
+    fence: OfflinePackSaveFence,
   ): Promise<OfflinePackInspection>;
+  beginDeletion(collectionId?: string): Promise<OfflinePackDeletionFence>;
+  completeDeletion(fence: OfflinePackDeletionFence): Promise<boolean>;
   inspect(): Promise<OfflinePackInspection | null>;
   unlock(
     passphrase: string,
@@ -33,7 +50,6 @@ export interface OpenScholarOfflinePackRuntime {
   ): Promise<OfflineCollectionPack>;
   purge(): Promise<boolean>;
   purgeMismatched(ownerScope: string): Promise<boolean>;
-  purgeCollection(collectionId: string): Promise<boolean>;
   lock(): void;
   subscribe(listener: (event: OfflinePackEvent) => void): () => void;
 }

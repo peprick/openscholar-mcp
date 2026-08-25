@@ -39,11 +39,11 @@ this no-store contract; neither server writes the pack into a browser cache.
 
 ### One explicit browser copy
 
-Version 1 supports one active collection pack per browser origin/profile. Saving
-a second collection explicitly replaces the first. A refresh is a manual,
-complete snapshot replacement: there is no background sync, delta, tombstone,
-offline mutation, conflict resolution, or promise that the copy is current.
-PostgreSQL remains authoritative.
+Payload/envelope format version 1 supports one active collection pack per browser
+origin/profile. Saving a second collection explicitly replaces the first. A
+refresh is a manual, complete snapshot replacement: there is no background sync,
+delta, tombstone, offline mutation, conflict resolution, or promise that the
+copy is current. PostgreSQL remains authoritative.
 
 The online collection page requires a user-entered passphrase of 12 to 128
 Unicode code points and at most 256 UTF-8 bytes, entered twice when saving without
@@ -56,8 +56,8 @@ logged, exported, or sent to OpenScholar. Temporary byte arrays are cleared wher
 JavaScript permits; garbage-collected strings cannot be guaranteed to be
 zeroized.
 
-IndexedDB database `openscholar-private-offline-v1`, object store `packs`, key
-`active`, contains only:
+IndexedDB database `openscholar-private-offline-v1`, schema version 2, object
+store `packs`, key `active`, contains only:
 
 - the exact envelope, payload, KDF, and cipher versions;
 - an opaque HMAC-derived owner scope and a SHA-256 collection-UUID digest;
@@ -68,6 +68,21 @@ The same store also contains one non-secret `control` record with the envelope
 version, opaque owner scope (or `null` after a full purge), and a fresh random
 lifecycle epoch. It contains no collection metadata, plaintext, passphrase, key,
 or bearer credential.
+
+While a collection, account, or hosted session deletion is unresolved, the store
+also contains one non-secret `deletion` record. It contains a fresh random intent
+identifier and either the target collection digest or `null` for an account-wide
+operation. It contains no collection UUID, account identifier, plaintext,
+passphrase, key, or authorization material. A same-target retry reuses the
+intent. A global account/logout operation may atomically supersede a targeted
+intent with a new identifier and a full purge; two different targeted operations
+fail closed instead of replacing one another.
+
+Schema version 2 preserves valid version-1 records during upgrade but prevents
+an already-loaded r2 runtime from becoming a fresh writer: the upgrade closes
+its cooperative open connections, and a later request to open database version
+1 fails with `VersionError`. This makes the deletion record mandatory for every
+supported writer after an r3 destructive workflow has opened storage.
 
 The opaque owner scope is a stable mismatch detector, not a bearer credential or
 authorization decision. In hosted mode it is a purpose-separated HMAC of the
@@ -82,17 +97,25 @@ before key derivation. Wrong passphrases, unsupported envelopes, and
 modified/corrupt ciphertext share one public error and never cause automatic
 deletion.
 
-Before encryption, the runtime save captures the current control epoch for the
-verified owner. Encryption and validation complete before the final read-write
-transaction opens.
-That transaction rereads and verifies the owner and epoch before `put(active)`
+Before the snapshot request, the runtime prepares a save fence bound to the
+verified owner, collection digest, and current control epoch. That preparation
+rejects a global or matching deletion intent. Encryption and validation complete
+before the final read-write transaction opens. That transaction rereads and
+verifies the owner, collection, epoch, and deletion state before `put(active)`
 atomically replaces the record. Purge and owner transitions rotate the control
-epoch in their deletion transaction; a delayed save that observes a different
-epoch is rejected. The old pack is never deleted first during ordinary
-replacement, so an abort or quota failure leaves it intact. A storage estimate
-may give an early warning, but the IndexedDB transaction is decisive. Version 1
-does not request persistent-storage permission: this is a reproducible best-effort
-copy, not a backup. The UI states that the browser may remove it.
+epoch. Beginning a destructive workflow atomically records its deletion intent,
+rotates that epoch, and removes the matching local pack (or every local pack for
+an account-wide operation). An account-wide workflow supersedes a pending
+targeted intent in that same transaction. A save prepared before deletion
+therefore fails its final epoch check, while a fresh save during deletion fails
+before its snapshot request. The deletion intent is removed only after the
+browser receives a confirmed successful server result; an ambiguous or failed
+outcome remains fail-closed and may be reused by a same-target retry. The old pack is never
+deleted first during ordinary replacement, so an abort or quota failure leaves
+it intact. A storage estimate may give an early warning, but the IndexedDB
+transaction is decisive. Version 1 does not request persistent-storage
+permission: this is a reproducible best-effort copy, not a backup. The UI states
+that the browser may remove it.
 
 ### Cold-offline reader and lifecycle
 
@@ -116,16 +139,23 @@ When that check is unreachable, the offline owner may unlock with the passphrase
 no account fact is inferred from a network failure. Cross-tab messages contain
 only `LOCK`, `PURGE`, or `REPLACED` events and cause visible plaintext to lock.
 
-The normal UI attempts targeted local purge before collection deletion, account
-deletion, and hosted logout. A failed server deletion may therefore require the
-researcher to recreate the offline copy, which is preferable to a committed or
-response-lost deletion leaving readable local data behind. Successful hosted
-logout and successful account deletion also return `Clear-Site-Data: "storage"`
-as defense in depth. That directive is browser-dependent and deliberately clears
-the neutral PWA registration/cache too; a later online visit reinstalls it. It is
-not used for ordinary collection deletion. Direct API use, browser crashes, and
-session expiry cannot synchronously erase a disconnected device, so ciphertext
-remains locked until a later owner check or explicit local deletion.
+The normal UI begins a durable deletion intent before collection deletion,
+account deletion, and hosted logout. The same transaction rotates the lifecycle
+epoch and performs the targeted or full local purge before the server mutation
+starts. Collection and account flows remove the intent only after a confirmed
+successful server response; response loss leaves it fail-closed so a fresh save
+cannot recreate the affected local pack while server outcome is unknown. Hosted
+logout leaves its account-wide intent for the successful response's
+`Clear-Site-Data: "storage"` cleanup. That directive is browser-dependent and
+deliberately clears the neutral PWA registration/cache too; a later online visit
+reinstalls it. It is not used for ordinary collection deletion. Direct API use,
+browser crashes, and session expiry cannot synchronously erase a disconnected
+device, so ciphertext remains locked until a later owner check or explicit local
+deletion. Collection/account deletion does not contact the server if the local
+fence cannot be established. Hosted logout still proceeds if browser storage is
+unavailable so the UI cannot trap an authenticated user; in that exceptional
+path it relies on the successful response's storage clearing and the later owner
+mismatch check.
 
 ## Consequences
 
@@ -140,13 +170,13 @@ remains locked until a later owner check or explicit local deletion.
   locked at-rest copy.
 - The pack can be stale, quota-limited, evicted, or cleared. It is not a backup and
   never overrides PostgreSQL.
-- The lifecycle fence begins only when the runtime save captures its epoch. It does
-  not yet serialize the earlier owner/snapshot fetch against collection/account
-  deletion or hosted logout in another tab. A workflow that passes pre-purge can
-  therefore capture the new epoch while the server mutation is pending and later
-  restore a local pack. Workflow-wide cross-context exclusion or a durable deletion
-  tombstone remains required; `Clear-Site-Data` is only browser-dependent defense
-  in depth for successful hosted logout/account deletion.
+- A deletion intent can remain after a crash, response loss, or rejected server
+  mutation. This is deliberately fail-closed: the same destructive action may
+  retry the intent, but OpenScholar does not expire or silently override an
+  unresolved privacy fence. Database version 2 rejects the supported r2 writer
+  after upgrade, but direct IndexedDB manipulation and direct server API use do
+  not participate in the browser protocol and cannot promise remote browser
+  erasure.
 - Supporting multiple packs, offline writes, PDFs, summaries, or automatic sync
   requires a new decision and conflict/legal/security review.
 
@@ -156,10 +186,13 @@ Tests must cover owner-indistinguishable not-found behavior, deterministic and
 metadata-only payloads, zero provider calls, exact byte/item bounds including
 multibyte UTF-8, no-store forwarding, fixed cryptographic parameters, round-trip,
 wrong-passphrase/tamper equivalence, untrusted-envelope bounds, atomic replacement
-and quota failure, owner mismatch, logout/deletion purge, cross-tab locking, and
-the absence of owned values in CacheStorage. A production-mode browser test must
-save online, start cold offline, unlock and read through the neutral fallback,
-pass an accessibility scan, then lock and remove the local copy.
+and quota failure, owner mismatch, logout/deletion purge, cross-tab locking,
+legacy-version writer rejection, the pre-save/deletion and deletion/pre-save
+interleavings, global-over-targeted deletion, durable ambiguous deletion state,
+and the absence of owned values in CacheStorage. A
+production-mode browser test must save online, start cold offline, unlock and
+read through the neutral fallback, pass an accessibility scan, then lock and
+remove the local copy.
 
 ## Guidance
 

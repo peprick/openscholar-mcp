@@ -8,6 +8,10 @@ import { useState } from "react";
 import { responseErrorMessage } from "@/features/library/library-client";
 import { formatTagInput, parseTagInput } from "@/features/library/tag-input";
 import { loadOfflinePackRuntime } from "@/pwa/offline-pack-loader";
+import type {
+  OfflinePackDeletionFence,
+  OpenScholarOfflinePackRuntime,
+} from "@/pwa/offline-pack-runtime";
 import {
   collectionSummarySchema,
   readingStatuses,
@@ -229,11 +233,15 @@ export function CollectionManager({
     }
     setPending("delete");
     setMessage(null);
+    let offlineDeletion: {
+      fence: OfflinePackDeletionFence;
+      runtime: OpenScholarOfflinePackRuntime;
+    } | null = null;
     if (window.indexedDB !== undefined) {
       try {
         const runtime = await loadOfflinePackRuntime();
-        runtime.lock();
-        await runtime.purgeCollection(collection.collectionId);
+        const fence = await runtime.beginDeletion(collection.collectionId);
+        offlineDeletion = { fence, runtime };
       } catch {
         setMessage(
           "The encrypted offline copy could not be cleared, so the collection was not deleted.",
@@ -249,6 +257,23 @@ export function CollectionManager({
           await responseErrorMessage(response, "The collection could not be deleted."),
         );
         return;
+      }
+      if (offlineDeletion !== null) {
+        try {
+          await offlineDeletion.runtime.completeDeletion(
+            offlineDeletion.fence,
+          );
+          // `false` means Clear-Site-Data or a newer lifecycle operation
+          // already removed/replaced this exact fence. The server deletion is
+          // confirmed, so that result is safe to accept.
+        } catch {
+          // The confirmed server deletion still leaves the durable browser
+          // fence fail-closed when local completion cannot be verified.
+          setMessage(
+            "The collection was deleted, but browser cleanup could not be completed. Refresh before saving another offline copy.",
+          );
+          return;
+        }
       }
       router.push("/library" as Route);
       router.refresh();

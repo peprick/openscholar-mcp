@@ -137,6 +137,7 @@ export function OfflinePackManager({
         return;
       }
       await runtime.purgeMismatched(scope);
+      const saveFence = await runtime.prepareSave(collectionId, scope);
 
       const response = await fetch(
         `/api/collections/${encodeURIComponent(collectionId)}/offline-pack`,
@@ -174,7 +175,7 @@ export function OfflinePackManager({
         confirmationRef.current?.focus();
         return;
       }
-      const saveOperation = runtime.save(parsed.data, passphrase, scope);
+      const saveOperation = runtime.save(parsed.data, passphrase, saveFence);
       passphrase = "";
       confirmation = "";
       formRef.current?.reset();

@@ -6,7 +6,7 @@ function runtimeFixture(): OpenScholarOfflinePackRuntime {
   return {
     constants: {
       formatVersion: 1,
-      readerRevision: "2026-08-24-r2",
+      readerRevision: "2026-08-24-r3",
       cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
       workFactor: 600000,
       maximumPapers: 500,
@@ -15,12 +15,14 @@ function runtimeFixture(): OpenScholarOfflinePackRuntime {
       maximumPassphraseCharacters: 128,
       maximumPassphraseBytes: 256,
     },
+    prepareSave: vi.fn(),
     save: vi.fn(),
+    beginDeletion: vi.fn(),
+    completeDeletion: vi.fn(),
     inspect: vi.fn(),
     unlock: vi.fn(),
     purge: vi.fn(),
     purgeMismatched: vi.fn(),
-    purgeCollection: vi.fn(),
     lock: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   };

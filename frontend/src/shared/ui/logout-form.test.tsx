@@ -9,12 +9,18 @@ vi.mock("@/pwa/offline-pack-loader", () => ({
 }));
 
 const runtime = {
-  lock: vi.fn(),
-  purge: vi.fn().mockResolvedValue(true),
+  beginDeletion: vi.fn(),
+  completeDeletion: vi.fn(),
+};
+const deletionFence = {
+  collectionDigest: null,
+  deletionId: "opaque-logout-deletion-id",
 };
 let requestSubmit: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  runtime.beginDeletion.mockReset().mockResolvedValue(deletionFence);
+  runtime.completeDeletion.mockReset();
   requestSubmit = vi
     .spyOn(HTMLFormElement.prototype, "requestSubmit")
     .mockImplementation(() => undefined);
@@ -24,21 +30,24 @@ afterEach(() => {
   cleanup();
   requestSubmit.mockRestore();
   vi.mocked(loadOfflinePackRuntime).mockReset();
-  runtime.lock.mockReset();
-  runtime.purge.mockReset().mockResolvedValue(true);
+  runtime.beginDeletion.mockReset();
+  runtime.completeDeletion.mockReset();
 });
 
 describe("logout form", () => {
-  it("locks and purges browser metadata before native logout", async () => {
+  it("opens a durable deletion fence before native logout and leaves it in place", async () => {
     vi.mocked(loadOfflinePackRuntime).mockResolvedValue(runtime as never);
     render(<LogoutForm />);
 
     fireEvent.submit(screen.getByRole("button", { name: "Sign out" }).closest("form")!);
 
     expect(screen.getByRole("button", { name: "Signing out…" })).toBeDisabled();
-    await waitFor(() => expect(runtime.purge).toHaveBeenCalledOnce());
-    expect(runtime.lock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(runtime.beginDeletion).toHaveBeenCalledWith());
     expect(requestSubmit).toHaveBeenCalledOnce();
+    expect(runtime.beginDeletion.mock.invocationCallOrder[0]).toBeLessThan(
+      requestSubmit.mock.invocationCallOrder[0]!,
+    );
+    expect(runtime.completeDeletion).not.toHaveBeenCalled();
   });
 
   it("still signs out when targeted browser cleanup is unavailable", async () => {
@@ -50,6 +59,7 @@ describe("logout form", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Sign out" }).closest("form")!);
 
     await waitFor(() => expect(requestSubmit).toHaveBeenCalledOnce());
-    expect(runtime.purge).not.toHaveBeenCalled();
+    expect(runtime.beginDeletion).not.toHaveBeenCalled();
+    expect(runtime.completeDeletion).not.toHaveBeenCalled();
   });
 });

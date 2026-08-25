@@ -85,13 +85,13 @@ function installExtractedReader(
     isRecord,
     hasExactKeys,
     vi.fn(),
-    "2026-08-24-r2",
+    "2026-08-24-r3",
   ) as () => void;
   install();
 }
 
 function readerMarkup(): void {
-  document.documentElement.dataset.offlineReaderRevision = "2026-08-24-r2";
+  document.documentElement.dataset.offlineReaderRevision = "2026-08-24-r3";
   document.body.innerHTML = `
     <button disabled id="offline-pack-open" type="button">Open</button>
     <button id="offline-pack-remove-any" type="button">Remove data</button>
@@ -128,7 +128,7 @@ describe("audited offline-pack runtime", () => {
     expect(sandbox.OpenScholarOfflinePack).toMatchObject({
       constants: {
         formatVersion: 1,
-        readerRevision: "2026-08-24-r2",
+        readerRevision: "2026-08-24-r3",
         cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
         workFactor: 600000,
         maximumPapers: 500,
@@ -145,9 +145,11 @@ describe("audited offline-pack runtime", () => {
     const source = runtimeSource();
 
     expect(source).toContain('const DATABASE_NAME = "openscholar-private-offline-v1"');
+    expect(source).toContain("const DATABASE_VERSION = 2");
     expect(source).toContain('const STORE_NAME = "packs"');
     expect(source).toContain('const ACTIVE_KEY = "active"');
     expect(source).toContain('const CONTROL_KEY = "control"');
+    expect(source).toContain('const DELETION_KEY = "deletion"');
     expect(source).toContain('iterations: WORK_FACTOR');
     expect(source).toContain('{ name: "AES-GCM", length: KEY_BITS }');
     expect(source).toContain("tagLength: TAG_BITS");
@@ -158,7 +160,10 @@ describe("audited offline-pack runtime", () => {
     expect(source).toContain("store.put(envelope)");
     expect(source).toContain("await Promise.all([");
     expect(source).toContain("await done.catch(() => undefined)");
-    expect(source).toContain("control.lifecycleEpoch !== lifecycleEpoch");
+    expect(source).toContain(
+      "control.lifecycleEpoch !== fence.lifecycleEpoch",
+    );
+    expect(source).toContain("deletionBlocks(deletion, envelope.collectionDigest)");
   });
 
   it("bounds and validates the clear envelope before starting its KDF", () => {
@@ -179,7 +184,7 @@ describe("audited offline-pack runtime", () => {
       source.indexOf("async function save"),
       source.indexOf("async function inspect"),
     );
-    expect(save.indexOf("captureSaveFence(scope)")).toBeLessThan(
+    expect(save.indexOf("digest !== preparedFence.collectionDigest")).toBeLessThan(
       save.indexOf("deriveKey(passphrase"),
     );
   });
@@ -340,7 +345,7 @@ describe("audited offline-pack runtime", () => {
         }),
     );
     const runtime = {
-      constants: { readerRevision: "2026-08-24-r2" },
+      constants: { readerRevision: "2026-08-24-r3" },
       inspect: vi.fn().mockResolvedValue({ collectionDigest: "opaque" }),
       lock: vi.fn(),
       purge: vi.fn().mockResolvedValue(false),
@@ -446,7 +451,7 @@ describe("audited offline-pack runtime", () => {
     readerMarkup();
     let onRuntimeEvent: (type: string) => void = () => undefined;
     const runtime = {
-      constants: { readerRevision: "2026-08-24-r2" },
+      constants: { readerRevision: "2026-08-24-r3" },
       inspect: vi.fn().mockResolvedValue({ collectionDigest: "opaque" }),
       lock: vi.fn(),
       purge: vi.fn().mockResolvedValue(false),

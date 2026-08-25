@@ -6,7 +6,6 @@ OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, encr
 
 - Build, scan, sign, attest, publish, and digest-pin the backend, frontend, Caddy, and blackbox-exporter images.
 - Register and test a real OIDC provider, including key rotation, logout, audience, scope, and recovery behavior.
-- Serialize offline-pack saves against collection/account deletion and hosted logout across tabs, or add a durable deletion tombstone, then prove the pre-purge/fresh-save/server-mutation interleaving cannot restore a local pack.
 - Select a production PostgreSQL, backup, point-in-time recovery, and high-availability strategy.
 - Configure off-host backups, alert routing, incident ownership, and restore drills.
 - Validate the target environment with load, accessibility/assistive-technology, penetration, and disaster-recovery exercises.

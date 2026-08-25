@@ -19,13 +19,15 @@ export function LogoutForm(): React.JSX.Element {
 
     try {
       const runtime = await loadOfflinePackRuntime();
-      runtime.lock();
-      await runtime.purge();
+      await runtime.beginDeletion();
     } catch {
-      // Logout still proceeds. The successful same-origin response also asks
+      // Logout still proceeds. A successful same-origin response asks
       // supporting browsers to clear origin storage as defense in depth.
     }
 
+    // The durable deletion fence is intentionally not completed here. A
+    // successful logout removes it with Clear-Site-Data; an uncertain result
+    // must remain fail-closed against a late save in another tab.
     allowNativeSubmit.current = true;
     form.requestSubmit();
   }
