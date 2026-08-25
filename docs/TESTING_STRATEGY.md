@@ -140,16 +140,28 @@ The list below is the target release gate. Unit/integration/frontend checks, con
 5. Network-isolated, true PWA-offline, and Compose-backed Playwright workflows with WCAG 2.2 axe checks.
 6. Raw-wire MCP tests plus the production-applicable conformance subset.
 7. Dependency, secret, CodeQL, Trivy, and source/runtime SBOM gates.
-8. Guarded backup/restore behavior tests and monitoring configuration/rule validation.
+8. Guarded backup/restore behavior tests and monitoring configuration/rule validation. These fail-closed script tests use mocks; a release still requires a real backup/restore drill.
 
 Conformance and performance suites may run on main/nightly when unsuitable for every pull request.
 
 ## Release verification
 
-- Build from clean clone.
-- Migrate a fresh database.
-- Start Compose and pass health checks.
-- Run fixed UI, REST, and MCP queries.
-- Test restricted access and provider outage.
-- Confirm no secrets/unlicensed PDFs in repo or images.
-- Generate and scan SBOM/images.
+Run the checked-in aggregate verifier from a clean committed checkout:
+
+```bash
+scripts/verify-clean-clone.sh
+```
+
+The script fails closed on a dirty source tree so it cannot silently test an older commit. It creates a detached clone of committed `HEAD`, runs host tools with an allowlisted environment and temporary home/configuration, and then composes—not reimplements—the documentation, supply-chain, operations-policy, PostgreSQL/production guard, backend, frontend, standalone PWA/offline Playwright, isolated full-stack Compose Playwright, official MCP SDK, and supported conformance checks. A final Git status check rejects changes to the detached checkout.
+
+Each run generates local credentials and a unique Compose project. Configurable loopback ports, child-specific proxy readiness, failure logs, and trap-backed cleanup constrain removal to that project's disposable containers, network, and PostgreSQL volume. Bootstrap may contact Maven, npm, Playwright, and Docker registries. Runtime search traffic is routed to the checked-in OpenAlex fixture, optional providers are disabled, and the REST/MCP smokes are database-only; this is controlled application behavior, not live-provider evidence.
+
+The script accepts no skip flags. Chromium is installed when absent, but Linux still needs Playwright's operating-system libraries installed by the host or CI image. Port overrides are listed by `scripts/verify-clean-clone.sh --help` for safe parallel use. The source checkout and host configuration are isolated, but this is not a cold or reproducible build: the Docker daemon may reuse pulled images and build layers.
+
+A successful run is bounded local evidence for that committed revision only. Run the verifier only on trusted commits: Maven/Testcontainers receives privileged Docker-socket access, so an untrusted pull request requires a disposable runner. The following remain separate release gates and are not claimed by the script:
+
+- GitHub-native dependency review, CodeQL, Trivy, secret/misconfiguration scanning, and source/runtime SBOM workflows.
+- Publication, registry-digest rescanning, signing, attestation, and deployment pinning of all project-owned images.
+- A real backup followed by restoration and data verification in an isolated target-like environment; the local guard tests do not perform that drill.
+- A real OIDC client/issuer lifecycle, alert delivery/on-call ownership, and target-environment load, accessibility/assistive-technology, penetration, and disaster-recovery exercises.
+- Provider, privacy, licence, and jurisdiction-specific legal approval.

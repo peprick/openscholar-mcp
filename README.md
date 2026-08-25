@@ -150,6 +150,18 @@ pnpm check
 
 `pnpm check` runs the container-entrypoint check, ESLint, strict TypeScript, Vitest, and a production Next.js build. See the [development guide](docs/DEVELOPMENT.md) for component and browser-test workflows.
 
+### Full clean-source verification
+
+From a clean committed checkout with JDK 21+, Node.js 24+, pnpm `11.19.0`, Docker Compose, `jq`, and the standard Unix tooling installed:
+
+```bash
+scripts/verify-clean-clone.sh
+```
+
+The verifier checks out committed `HEAD` into a detached temporary clone, gives host build tools a minimal environment and temporary home, and composes the repository's backend, frontend, browser, Compose, MCP, policy, and operations checks. Dependency, browser, and container bootstrap may use the network; application searches use the checked-in provider fixture. A unique disposable Compose project is removed without touching a development stack.
+
+Run it only for trusted committed revisions: the backend suite receives access to the privileged Docker socket. Use a disposable runner for untrusted pull requests. This is source-clean local evidence, not a cold build, and Docker caches may be reused. GitHub security/SBOM gates, published-image evidence, and a real backup/restore drill remain separate; see the [testing strategy](docs/TESTING_STRATEGY.md#release-verification).
+
 ## Repository layout
 
 ```text

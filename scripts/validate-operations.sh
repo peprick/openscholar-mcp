@@ -12,11 +12,21 @@ caddy_image='openscholar-caddy:operations-validation'
 prometheus_image="${PROMETHEUS_VALIDATION_IMAGE:-prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0}"
 alertmanager_image="${ALERTMANAGER_VALIDATION_IMAGE:-prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d}"
 blackbox_image='openscholar-blackbox-exporter:operations-validation'
+operations_validation_tag_suffix="${OPENSCHOLAR_OPERATIONS_VALIDATION_TAG_SUFFIX:-}"
 
 fail() {
   printf 'operations-validation: %s\n' "$*" >&2
   exit 1
 }
+
+if [[ -n "${operations_validation_tag_suffix}" ]]; then
+  if [[ "${#operations_validation_tag_suffix}" -gt 41 ]] \
+    || ! [[ "${operations_validation_tag_suffix}" =~ ^[a-z0-9][a-z0-9_.-]*$ ]]; then
+    fail "OPENSCHOLAR_OPERATIONS_VALIDATION_TAG_SUFFIX must match [a-z0-9][a-z0-9_.-]{0,40}"
+  fi
+  caddy_image="${caddy_image}-${operations_validation_tag_suffix}"
+  blackbox_image="${blackbox_image}-${operations_validation_tag_suffix}"
+fi
 
 prometheus_validation_directory=""
 cleanup() {

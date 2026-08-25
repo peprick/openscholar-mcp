@@ -7,7 +7,7 @@ OpenScholar's local web, REST, PostgreSQL, legal-access, library, citation, encr
 - Build, scan, sign, attest, publish, and digest-pin the backend, frontend, Caddy, and blackbox-exporter images.
 - Register and test a real OIDC provider, including key rotation, logout, audience, scope, and recovery behavior.
 - Select a production PostgreSQL, backup, point-in-time recovery, and high-availability strategy.
-- Configure off-host backups, alert routing, incident ownership, and restore drills.
+- Configure off-host backups, alert routing, and incident ownership; complete and record a real backup/restore drill in an isolated target-like environment.
 - Validate the target environment with load, accessibility/assistive-technology, penetration, and disaster-recovery exercises.
 - Complete provider, privacy, and legal review for the intended audience and jurisdiction.
 
@@ -45,4 +45,4 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 
 ## Release policy
 
-The first tagged release should include a clean-clone verification, current screenshots, green CI/security workflows, an explicit licence decision, and honest known limitations. Public-production claims require deployment-specific evidence; passing local or synthetic tests is not a substitute.
+The first tagged release should include a successful `scripts/verify-clean-clone.sh` run for the tagged commit, current screenshots, green GitHub CI/security/SBOM workflows, a recorded real backup/restore drill, an explicit licence decision, and honest known limitations. The verifier uses a detached clean-source clone, controlled provider fixtures, temporary host configuration, and uniquely scoped Docker cleanup, but it may reuse Docker caches and is not a cold-build or deployment proof. Run it only for trusted commits because Docker-socket access is privileged; evaluate untrusted pull requests in a disposable runner. Public-production claims require deployment-specific evidence, live identity/provider validation, and legal approval.
