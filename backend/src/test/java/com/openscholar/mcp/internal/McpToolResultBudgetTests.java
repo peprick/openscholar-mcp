@@ -30,7 +30,7 @@ class McpToolResultBudgetTests {
 	private static McpToolResultBudget budget(long maximumBytes) {
 		return new McpToolResultBudget(
 				JsonMapper.builder().build(),
-				new McpPayloadProperties(1_024L, maximumBytes));
+				new McpPayloadProperties(1_024L, maximumBytes, null));
 	}
 
 	private record ToolResult(String content) {

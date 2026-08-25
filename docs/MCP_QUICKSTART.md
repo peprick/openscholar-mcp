@@ -1,6 +1,6 @@
 # MCP quickstart
 
-OpenScholar exposes six read-oriented tools at `http://127.0.0.1:8080/mcp` over stateless Streamable HTTP. The MCP adapter and REST controllers call the same Spring application use cases; the adapter does not expose database entities, arbitrary URL fetching, filesystem access, or collection mutations.
+OpenScholar exposes six read-oriented tools and three read-only JSON resource templates at `http://127.0.0.1:8080/mcp` over stateless Streamable HTTP. The MCP adapter and REST controllers call the same Spring application use cases; the adapter does not expose database entities, arbitrary URL fetching, filesystem access, or collection mutations.
 
 ## 1. Configure the local key
 
@@ -12,7 +12,10 @@ openssl rand -hex 32
 
 ```dotenv
 MCP_LOCAL_API_KEY=replace-with-the-generated-value
+MCP_MAX_RESOURCE_RESULT_BYTES=1048576
 ```
+
+`MCP_MAX_RESOURCE_RESULT_BYTES` caps the serialized JSON text returned by one resource read. It defaults to 1 MiB and accepts values from 1 KiB through 16 MiB; keep a finite bound in every environment.
 
 Compose reads that value from `.env`. For the `curl` and Inspector commands below,
 export the same value into the current shell as well:
@@ -83,6 +86,18 @@ Version `2.2.0` is the Inspector release used for the documented smoke test; upg
 MCP-specific result and citation batches are capped at 25 items. Citation inputs must be distinct canonical UUIDs. `resolve_paper_identifier` is catalog-only: it does not import an unseen reference, and a paper must already be visible through the current owner's searches or collections.
 
 Search can update internal metadata/search caches, but none of the advertised tools mutates the user's collections or reading state. Write tools are deferred and are not currently advertised or implemented.
+
+### Resource templates
+
+The server advertises exactly three read-only JSON resource templates:
+
+| Template | Read | Safety boundary |
+|---|---|---|
+| `openscholar://papers/{paperId}` | One stored canonical paper | Strict canonical UUID; database-only; no PDF or source-document bytes |
+| `openscholar://collections/{collectionId}` | One collection and a bounded page of memberships | Current owner only; missing and other-owner IDs are indistinguishable |
+| `openscholar://searches/{searchId}` | One immutable saved search and a bounded page of results | Current owner only; missing and other-owner IDs are indistinguishable |
+
+A client uses `resources/templates/list` to discover exactly these templates and `resources/read` to obtain one bounded `application/json` text resource. Reads with malformed or non-canonical UUIDs, unknown templates, extra path segments, query strings, fragments, or encoded URI variants are rejected before application dispatch. A matched OpenScholar template returns fixed errors without echoing an identifier; the SDK's standard unmatched-resource error may include the caller-supplied URI in error data, so never put secrets in a resource URI. `resources/list` returns an empty concrete list, so the server cannot be used to enumerate the catalog. It does not offer subscriptions, resource-change notifications, provider calls, arbitrary URL dereferencing, filesystem reads, or PDF delivery through this surface.
 
 When an agent already has a scholarly reference, it can skip a topic search and call:
 
@@ -195,7 +210,7 @@ A search call uses the same endpoint:
 
 ## Compatibility and safety
 
-The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration. The production template exposes the Prometheus registry on the backend's un-published private `9091` management listener; Prometheus reaches it over the monitoring network and Caddy does not route it publicly. Docker bridge membership is not a per-port firewall, so deployments that require monitoring-only reachability need the additional boundary described in the deployment guide.
+The current Spring AI/MCP Java SDK stack negotiates supported revisions through a maximum tested revision of `2025-11-25`; it does not advertise experimental Tasks or MCP Apps support. Its resource capability advertises template discovery and reads without `subscribe` or `listChanged`. Every protected response carries `X-OpenScholar-Mcp-Request-Id`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Micrometer records total MCP requests, pre-dispatch rejection reasons, and filter duration. The production template exposes the Prometheus registry on the backend's un-published private `9091` management listener; Prometheus reaches it over the monitoring network and Caddy does not route it publicly. Docker bridge membership is not a per-port firewall, so deployments that require monitoring-only reachability need the additional boundary described in the deployment guide.
 
 The local shared-key/fixed-user mode is for loopback development, and its address-based limiter intentionally ignores forwarding headers. Hosted JWT authorization and owner propagation are implemented, but a target deployment still needs trusted-edge review and aggregate controls. In both modes, provider deadlines and the 18-second search application deadline bound their own layers; client disconnects and MCP `notifications/cancelled` do not currently cancel the tool worker. Durable REST refresh jobs are not MCP Tasks or MCP job handles.
 
@@ -226,8 +241,8 @@ pnpm --dir tools/mcp-conformance exec conformance server \
   --verbose
 ```
 
-Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, resources, prompts, sampling, and elicitation that this six-tool domain server intentionally does not advertise; failing those fixture scenarios would not indicate a production contract failure. Do not use the `server-stateless` scenario, which targets a later protocol revision.
+Stop the proxy immediately afterward. The full fixture-oriented suite expects synthetic tools, globally listed resources, prompts, sampling, elicitation, and other fixture behavior outside OpenScholar's production contract; failing those scenarios would not indicate a production contract failure. Project-owned raw-wire tests cover the implemented template discovery/read contract because OpenScholar returns no concrete global resource list and omits subscriptions and notifications. Do not use the `server-stateless` scenario, which targets a later protocol revision.
 
-Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings. The current `tools-list` contract discovers exactly the six documented tools.
+Both commands were verified against the Compose image with the lockfile-resolved conformance `0.1.16`: each passed `1/1` with no warnings. The `tools-list` contract discovers exactly the six documented tools; separate authenticated integration tests verify the three resource templates and database-only reads.
 
 The `MCP Conformance` GitHub Actions workflow repeats this supported subset for backend, Compose, proxy, tooling-lock, and workflow changes. It installs the same frozen CLI with scripts disabled, starts an isolated PostgreSQL/backend stack, waits for the readiness probe, injects an ephemeral local key through the loopback proxy, runs both pinned scenarios, and always removes the containers and volume afterward.

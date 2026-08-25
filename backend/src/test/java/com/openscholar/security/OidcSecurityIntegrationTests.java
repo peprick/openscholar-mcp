@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 
 import com.openscholar.TestcontainersConfiguration;
@@ -34,7 +35,9 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @AutoConfigureMockMvc
@@ -194,6 +197,48 @@ class OidcSecurityIntegrationTests {
 	}
 
 	@Test
+	void propagatesHostedOwnerThroughImmediateMcpCollectionResourceReads() throws Exception {
+		String collectionName = "Alice MCP resource " + UUID.randomUUID();
+		String created = mockMvc.perform(post("/api/v1/collections")
+						.with(user("alice-mcp-resource", "Alice", "openscholar.library"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(objectMapper.writeValueAsString(Map.of(
+								"name", collectionName,
+								"description", "Hosted owner propagation test"))))
+				.andExpect(status().isCreated())
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		UUID collectionId = UUID.fromString(objectMapper.readTree(created).required("collectionId").asString());
+		UUID missingCollectionId = UUID.randomUUID();
+		String collectionUri = "openscholar://collections/" + collectionId;
+
+		JsonNode owned = readMcpResource(201, collectionUri,
+				user("alice-mcp-resource", "Alice via MCP", "openscholar.mcp"));
+		assertThat(owned.has("error")).isFalse();
+		JsonNode contents = owned.required("result").required("contents");
+		assertThat(contents).hasSize(1);
+		JsonNode ownedContent = contents.required(0);
+		assertThat(ownedContent.required("uri").asString()).isEqualTo(collectionUri);
+		assertThat(ownedContent.required("mimeType").asString()).isEqualTo(MediaType.APPLICATION_JSON_VALUE);
+		JsonNode ownedPayload = objectMapper.readTree(ownedContent.required("text").asString());
+		assertThat(ownedPayload.toString()).contains(collectionId.toString(), collectionName);
+
+		RequestPostProcessor bob = user("bob-mcp-resource", "Bob", "openscholar.mcp");
+		JsonNode forbidden = readMcpResource(202, collectionUri, bob);
+		JsonNode missing = readMcpResource(203,
+				"openscholar://collections/" + missingCollectionId, bob);
+
+		assertThat(forbidden.has("result")).isFalse();
+		assertThat(missing.has("result")).isFalse();
+		assertThat(forbidden.required("error")).isEqualTo(missing.required("error"));
+		assertThat(forbidden.required("error").required("code").asInt()).isEqualTo(-32002);
+		assertThat(forbidden.required("error").required("message").asString()).isEqualTo("Resource not found");
+		assertThat(forbidden.toString()).doesNotContain(collectionId.toString(), collectionName);
+		assertThat(missing.toString()).doesNotContain(missingCollectionId.toString(), collectionName);
+	}
+
+	@Test
 	void localCatalogSearchCannotRevealAnotherOwnersKnownPapers() throws Exception {
 		RequestPostProcessor alice = user("alice-local", "Alice", "openscholar.search");
 		RequestPostProcessor bob = user("bob-local", "Bob", "openscholar.search");
@@ -342,6 +387,26 @@ class OidcSecurityIntegrationTests {
 						.issuedAt(Instant.now().minusSeconds(5))
 						.expiresAt(Instant.now().plusSeconds(300)))
 				.authorities(new SimpleGrantedAuthority("SCOPE_" + scope));
+	}
+
+	private JsonNode readMcpResource(int id, String uri, RequestPostProcessor principal) throws Exception {
+		String request = objectMapper.writeValueAsString(Map.of(
+				"jsonrpc", "2.0",
+				"id", id,
+				"method", "resources/read",
+				"params", Map.of("uri", uri)));
+		MvcResult result = mockMvc.perform(post("/mcp")
+						.with(principal)
+						.header("MCP-Protocol-Version", "2025-11-25")
+						.contentType(MediaType.APPLICATION_JSON)
+						.accept(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM)
+						.content(request))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+		assertThat(response.required("jsonrpc").asString()).isEqualTo("2.0");
+		assertThat(response.required("id").asInt()).isEqualTo(id);
+		return response;
 	}
 
 	private UUID userId(String subject) {

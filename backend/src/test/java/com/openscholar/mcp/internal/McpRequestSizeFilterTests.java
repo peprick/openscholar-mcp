@@ -93,7 +93,7 @@ class McpRequestSizeFilterTests {
 
 	private static McpRequestSizeFilter filter() {
 		return new McpRequestSizeFilter(
-				new McpPayloadProperties((long) MAXIMUM_BYTES, 2_048L),
+				new McpPayloadProperties((long) MAXIMUM_BYTES, 2_048L, null),
 				new SimpleMeterRegistry());
 	}
 

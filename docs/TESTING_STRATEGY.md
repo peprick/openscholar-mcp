@@ -80,6 +80,17 @@ The separately frozen HNSW gate uses a deterministic 10,000-vector, 1024-dimensi
 - Hosted follow-up: live authorization-server/client interoperability, signing-key rotation, token refresh/revocation, and public-edge behavior. Audience/scope/principal ownership is covered synthetically in the application suite.
 - Track the canonical frozen `2025-11-25` requirements set as the official runner advances beyond its current fixture-oriented release.
 
+Implemented resource-template coverage includes project-owned unit, integration, and raw JSON-RPC tests that prove:
+
+- initialization advertises a resource capability without `subscribe` or `listChanged`, and `resources/templates/list` returns exactly `openscholar://papers/{paperId}`, `openscholar://collections/{collectionId}`, and `openscholar://searches/{searchId}` with stable JSON metadata;
+- `resources/read` returns one bounded `application/json` text resource for each template, with resource-owned deterministic JSON shapes, a 25-item collection page ceiling, and a serialized-size failure path that does not leak discarded content;
+- only canonical UUIDs and exact template URIs reach an application use case; malformed or non-canonical IDs, alternate schemes, cross-template paths, extra segments, query strings, fragments, and encoded URI variants fail before dispatch, with raw-wire tests distinguishing fixed matched-template errors from the SDK's standard unmatched-URI error data;
+- collection and search handlers map absent and other-owner domain results to indistinguishable safe protocol errors, while hosted OIDC integration coverage proves that the authenticated issuer+subject owner propagates through immediate MCP collection reads;
+- paper, collection, and search reads are database-only, verified with zero unintended use-case/provider interactions and with no arbitrary URL dereference, filesystem read, PDF bytes, or source-document fetch;
+- `resources/list` returns an empty concrete list, while resource subscriptions and change notifications are neither advertised nor implemented.
+
+The official fixture-oriented conformance suite is not sufficient evidence for this narrower production contract because it expects global resource and subscription behavior that OpenScholar intentionally omits. The production-applicable official subset remains initialization plus tool discovery; project-owned raw-wire tests provide current evidence for resource-template discovery and reads.
+
 If STDIO is added, logs use `stderr`; `stdout` remains protocol-only.
 
 ## End-to-end tests

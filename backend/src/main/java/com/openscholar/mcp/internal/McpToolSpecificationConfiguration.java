@@ -72,6 +72,12 @@ class McpToolSpecificationConfiguration {
 		return List.copyOf(specifications.values());
 	}
 
+	@Bean("openScholarMcpResourceTemplateSpecifications")
+	List<McpStatelessServerFeatures.SyncResourceTemplateSpecification>
+			openScholarMcpResourceTemplateSpecifications(OpenScholarMcpResources resources) {
+		return List.copyOf(resources.resourceTemplateSpecifications());
+	}
+
 	private static McpSchema.Tool withClosedInputSchema(McpSchema.Tool tool) {
 		Map<String, Object> inputSchema = new LinkedHashMap<>(tool.inputSchema());
 		inputSchema.put("additionalProperties", false);
@@ -84,6 +90,8 @@ class McpToolSpecificationConfiguration {
 			McpServerProperties properties,
 			@Qualifier("openScholarMcpToolSpecifications")
 			List<McpStatelessServerFeatures.SyncToolSpecification> toolSpecifications,
+			@Qualifier("openScholarMcpResourceTemplateSpecifications")
+			List<McpStatelessServerFeatures.SyncResourceTemplateSpecification> resourceTemplateSpecifications,
 			@Qualifier("openScholarMcpSchemaValidator") JsonSchemaValidator schemaValidator,
 			Environment environment) {
 		McpSchema.ServerCapabilities.Builder capabilities = McpSchema.ServerCapabilities.builder();
@@ -91,7 +99,7 @@ class McpToolSpecificationConfiguration {
 			capabilities.tools(false);
 		}
 		if (properties.getCapabilities().isResource()) {
-			capabilities.resources(false, false);
+			capabilities.resources(null, null);
 		}
 		if (properties.getCapabilities().isPrompt()) {
 			capabilities.prompts(false);
@@ -109,6 +117,9 @@ class McpToolSpecificationConfiguration {
 			.validateToolInputs(false);
 		if (properties.getCapabilities().isTool()) {
 			server.tools(toolSpecifications);
+		}
+		if (properties.getCapabilities().isResource()) {
+			server.resourceTemplates(resourceTemplateSpecifications);
 		}
 		if (environment instanceof StandardServletEnvironment) {
 			server.immediateExecution(true);

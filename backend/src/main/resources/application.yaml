@@ -17,7 +17,7 @@ spring:
         request-timeout: 20s
         capabilities:
           tool: true
-          resource: false
+          resource: true
           prompt: false
           completion: false
         tool-change-notification: false
@@ -106,6 +106,7 @@ openscholar:
     payload:
       max-request-bytes: ${MCP_MAX_REQUEST_BYTES:1048576}
       max-tool-result-bytes: ${MCP_MAX_TOOL_RESULT_BYTES:1048576}
+      max-resource-result-bytes: ${MCP_MAX_RESOURCE_RESULT_BYTES:1048576}
   access:
     cache-ttl: 24h
     force-refresh-cooldown: 5m

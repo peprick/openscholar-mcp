@@ -498,7 +498,7 @@ class OpenScholarMcpToolsTests {
 
 	private OpenScholarMcpTools toolsWithResultBudget(long maximumBytes) {
 		McpToolResultBudget budget = new McpToolResultBudget(JsonMapper.builder().build(),
-				new McpPayloadProperties(null, maximumBytes));
+				new McpPayloadProperties(null, maximumBytes, null));
 		return new OpenScholarMcpTools(search, paperDetails, paperIdentifierLookup, paperAccess, library, citations,
 				budget);
 	}

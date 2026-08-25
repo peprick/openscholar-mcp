@@ -180,7 +180,7 @@ The outer search execution deadline defaults to 18 seconds and applies to `searc
 
 ## MCP transport
 
-The implemented transport is stateless Streamable HTTP through `spring-ai-starter-mcp-server-webmvc` at `/mcp`. It is synchronous, advertises tools only, and does not expose legacy SSE, resources, prompts, completions, sampling, elicitation, or STDIO.
+The implemented transport is stateless Streamable HTTP through `spring-ai-starter-mcp-server-webmvc` at `/mcp`. It is synchronous, advertises six tools and the three narrowly bounded resource templates specified below, and does not expose legacy SSE, prompts, completions, sampling, elicitation, or STDIO.
 
 Spring AI 2.0 and MCP Java SDK 2.0 negotiate their supported revisions through a maximum tested revision of `2025-11-25`. The server does not claim newer Tasks or MCP Apps capabilities. Local mode requires the configured MCP bearer key. OIDC mode delegates bearer validation to the JWT resource server and requires `openscholar.mcp`; present `Origin` headers must still exactly match the configured allow-list.
 
@@ -303,13 +303,23 @@ Owned job handles and their retention/authorization policy remain planned; no jo
 
 Collection and note mutation tools are deferred until authentication and host-confirmation behavior are verified. They will be separately advertised so clients can disable writes while retaining discovery.
 
-## Potential MCP resources
+## Read-only MCP resource templates
 
-- `openscholar://papers/{id}` for canonical metadata.
-- `openscholar://collections/{id}` for an authorized reading list.
-- `openscholar://searches/{id}` for a saved snapshot.
+`resources/templates/list` advertises exactly these three templates:
 
-Resources expose metadata or user-authorized content, never arbitrary URLs or unrestricted filesystem paths.
+| Template | JSON representation | Authorization and bounds |
+|---|---|---|
+| `openscholar://papers/{paperId}` | One stored canonical paper and its bounded metadata | `paperId` is one canonical UUID; the read is database-only and returns no source document bytes |
+| `openscholar://collections/{collectionId}` | One collection plus a bounded page of its stored memberships | `collectionId` is one canonical UUID; only the current owner's collection is visible |
+| `openscholar://searches/{searchId}` | One immutable saved search snapshot plus a bounded page of stored results | `searchId` is one canonical UUID; only the current owner's search is visible |
+
+Every successful read returns one `application/json` text resource with a versioned, resource-owned JSON shape. Collection membership output has a 25-item page ceiling, and every representation has a configurable serialized-size ceiling; an oversized representation fails safely instead of silently truncating. Collection and search reads derive the owner from the authenticated MCP principal. A missing object and an object owned by another principal produce the same safe not-found behavior without echoing the identifier.
+
+Template matching is strict. A read accepts only the advertised scheme, path, and one canonical UUID placeholder. The SDK router and OpenScholar parser reject unknown templates, malformed or non-canonical identifiers, extra path segments, query strings, fragments, and encoded URI variants before any application use case runs. Errors produced by a matched OpenScholar template never echo a submitted identifier; the SDK's standard error for an unmatched URI may include that caller-supplied URI in its JSON-RPC error data, so clients must not place secrets in resource URIs.
+
+There is no global resource enumeration: `resources/list` returns an empty concrete resource list. The server does not provide resource subscriptions, `resources/subscribe`, `resources/unsubscribe`, `notifications/resources/updated`, or `notifications/resources/list_changed`, and initialization does not advertise `subscribe` or `listChanged`. Resource reads are database-only: they do not call discovery or access providers, dereference arbitrary URLs, read filesystem paths, return stored or proxied PDFs, or otherwise fetch source-document bytes.
+
+Broader resource types, concrete resource listing, and change-notification semantics remain deferred. The implemented capability is limited to template discovery and explicit reads under the ownership and output boundaries above.
 
 ## Tool safety
 

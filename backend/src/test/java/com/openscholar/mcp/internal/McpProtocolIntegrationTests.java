@@ -23,6 +23,8 @@ import com.openscholar.TestcontainersConfiguration;
 import com.openscholar.access.AccessDisposition;
 import com.openscholar.access.AccessStatus;
 import com.openscholar.access.internal.persistence.PaperAccessStore;
+import com.openscholar.library.LibraryUseCase;
+import com.openscholar.library.ReadingStatus;
 import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderAuthor;
 import com.openscholar.provider.ProviderId;
@@ -76,6 +78,9 @@ class McpProtocolIntegrationTests {
 	private PaperAccessStore paperAccessStore;
 
 	@Autowired
+	private LibraryUseCase libraryUseCase;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
@@ -94,11 +99,36 @@ class McpProtocolIntegrationTests {
 		assertThat(result.required("serverInfo").required("name").asString()).isEqualTo("openscholar-mcp");
 		assertThat(result.required("serverInfo").required("version").asString()).isEqualTo("0.0.1");
 		assertThat(result.required("capabilities").required("tools").isObject()).isTrue();
-		assertThat(result.required("capabilities").hasNonNull("resources")).isFalse();
+		JsonNode resourceCapabilities = result.required("capabilities").required("resources");
+		assertThat(resourceCapabilities.isObject()).isTrue();
+		assertThat(resourceCapabilities.has("subscribe")).isFalse();
+		assertThat(resourceCapabilities.has("listChanged")).isFalse();
 		assertThat(result.required("capabilities").hasNonNull("prompts")).isFalse();
 
 		postNotification("notifications/initialized", Map.of()).andExpect(status().isAccepted())
 			.andExpect(content().string(""));
+	}
+
+	@Test
+	void publishesOnlyTheThreeBoundedResourceTemplatesAndNoConcreteResourceList() throws Exception {
+		JsonNode response = postRequest(32, "resources/templates/list", Map.of());
+		JsonNode publishedTemplates = response.required("result").required("resourceTemplates");
+		assertThat(publishedTemplates).hasSize(3);
+
+		Map<String, JsonNode> templates = resourceTemplatesByUri(publishedTemplates);
+		assertThat(templates.keySet()).containsExactlyInAnyOrder(
+				"openscholar://papers/{paperId}",
+				"openscholar://collections/{collectionId}",
+				"openscholar://searches/{searchId}");
+		for (JsonNode template : templates.values()) {
+			assertThat(template.required("name").asString()).startsWith("openscholar-");
+			assertThat(template.required("title").asString()).isNotBlank();
+			assertThat(template.required("description").asString()).isNotBlank();
+			assertThat(template.required("mimeType").asString()).isEqualTo(MediaType.APPLICATION_JSON_VALUE);
+		}
+
+		JsonNode resources = postRequest(33, "resources/list", Map.of());
+		assertThat(resources.required("result").required("resources")).isEmpty();
 	}
 
 	@Test
@@ -250,6 +280,7 @@ class McpProtocolIntegrationTests {
 		JsonNode search = callTool(10, "search_research", Map.of("topic", topic, "limit", 1));
 		JsonNode searchContent = successfulStructuredContent(search);
 		String paperId = searchContent.required("results").required(0).required("paperId").asString();
+		String searchId = searchContent.required("searchId").asString();
 		assertThat(researchProvider.calls()).isOne();
 
 		JsonNode resolution = successfulStructuredContent(callTool(11, "resolve_paper_identifier",
@@ -292,6 +323,65 @@ class McpProtocolIntegrationTests {
 		assertThat(citations.required("format").asString()).isEqualTo("bibtex");
 		assertThat(citations.required("paperCount").asInt()).isEqualTo(1);
 		assertThat(citations.required("content").asString()).contains("Deterministic MCP paper");
+
+		UUID collectionId = libraryUseCase.createCollection("MCP wire resources", "Database-only resource test")
+			.collectionId();
+		try {
+			libraryUseCase.addPaper(collectionId, UUID.fromString(paperId), ReadingStatus.READING,
+					List.of("mcp-wire"));
+
+			JsonNode paperResource = readResource(34, "openscholar://papers/" + paperId);
+			JsonNode paperPayload = resourcePayload(paperResource);
+			assertThat(paperPayload.required("paper").required("paperId").asString()).isEqualTo(paperId);
+			assertThat(paperPayload.required("paper").required("title").asString())
+				.isEqualTo("Deterministic MCP paper");
+
+			JsonNode searchResource = readResource(35, "openscholar://searches/" + searchId);
+			JsonNode searchPayload = resourcePayload(searchResource);
+			assertThat(searchPayload.required("searchId").asString()).isEqualTo(searchId);
+			assertThat(searchPayload.required("query").asString()).isEqualTo(topic);
+			assertThat(searchPayload.required("results")).hasSize(1);
+
+			JsonNode collectionResource = readResource(36, "openscholar://collections/" + collectionId);
+			JsonNode collectionPayload = resourcePayload(collectionResource);
+			assertThat(collectionPayload.required("collectionId").asString()).isEqualTo(collectionId.toString());
+			assertThat(collectionPayload.required("papers").required("items")).hasSize(1);
+			assertThat(collectionPayload.required("papers").required("items").required(0)
+					.required("paperId").asString()).isEqualTo(paperId);
+			assertThat(researchProvider.calls()).isOne();
+		}
+		finally {
+			libraryUseCase.deleteCollection(collectionId);
+		}
+	}
+
+	@Test
+	void distinguishesSafeTemplateErrorsFromStandardUnmatchedResourceErrors() throws Exception {
+		String invalidIdentifier = "private-invalid-resource-" + UUID.randomUUID();
+		JsonNode invalid = readResource(37, "openscholar://papers/" + invalidIdentifier);
+		assertResourceError(invalid, -32602, "Invalid OpenScholar resource URI");
+		assertThat(invalid.toString()).doesNotContain(invalidIdentifier, "Exception", "jdbc:");
+
+		UUID missingId = UUID.randomUUID();
+		JsonNode missingCollection = readResource(38, "openscholar://collections/" + missingId);
+		assertResourceError(missingCollection, -32002, "Resource not found");
+		assertThat(missingCollection.toString()).doesNotContain(missingId.toString(), "Exception", "jdbc:");
+
+		String queriedUri = "openscholar://papers/" + UUID.randomUUID() + "?download=true";
+		JsonNode queried = readResource(39, queriedUri);
+		assertResourceError(queried, -32602, "Invalid OpenScholar resource URI");
+		assertThat(queried.toString()).doesNotContain(queriedUri, "download=true", "Exception", "jdbc:");
+
+		for (String unmatchedUri : List.of(
+				"https://papers.example/" + UUID.randomUUID(),
+				"openscholar://papers/" + UUID.randomUUID() + "/extra")) {
+			JsonNode unmatched = readResource(40, unmatchedUri);
+			assertResourceError(unmatched, -32002, "Resource not found");
+			assertThat(unmatched.required("error").required("data").required("uri").asString())
+				.isEqualTo(unmatchedUri);
+			assertThat(unmatched.toString()).doesNotContain("Exception", "jdbc:");
+		}
+		assertThat(researchProvider.calls()).isZero();
 	}
 
 	@Test
@@ -497,6 +587,28 @@ class McpProtocolIntegrationTests {
 		return response;
 	}
 
+	private JsonNode readResource(int id, String uri) throws Exception {
+		JsonNode response = postRequest(id, "resources/read", Map.of("uri", uri));
+		assertThat(response.required("id").asInt()).isEqualTo(id);
+		return response;
+	}
+
+	private JsonNode resourcePayload(JsonNode response) throws Exception {
+		assertThat(response.has("error")).isFalse();
+		JsonNode contents = response.required("result").required("contents");
+		assertThat(contents).hasSize(1);
+		JsonNode contentNode = contents.required(0);
+		assertThat(contentNode.required("mimeType").asString()).isEqualTo(MediaType.APPLICATION_JSON_VALUE);
+		return objectMapper.readTree(contentNode.required("text").asString());
+	}
+
+	private static void assertResourceError(JsonNode response, int code, String message) {
+		assertThat(response.has("result")).isFalse();
+		JsonNode error = response.required("error");
+		assertThat(error.required("code").asInt()).isEqualTo(code);
+		assertThat(error.required("message").asString()).isEqualTo(message);
+	}
+
 	private static JsonNode successfulStructuredContent(JsonNode response) {
 		JsonNode result = response.required("result");
 		assertThat(result.path("isError").asBoolean(false)).isFalse();
@@ -586,6 +698,15 @@ class McpProtocolIntegrationTests {
 			tools.put(tool.required("name").asString(), tool);
 		});
 		return tools;
+	}
+
+	private static Map<String, JsonNode> resourceTemplatesByUri(JsonNode templatesNode) {
+		Map<String, JsonNode> templates = new LinkedHashMap<>();
+		IntStream.range(0, templatesNode.size()).forEach(index -> {
+			JsonNode template = templatesNode.required(index);
+			templates.put(template.required("uriTemplate").asString(), template);
+		});
+		return templates;
 	}
 
 	private static void assertToolContract(JsonNode tool, Set<String> properties, Set<String> required,

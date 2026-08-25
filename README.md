@@ -23,7 +23,7 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 - Provides collections, reading status, tags, saved-library search, and BibTeX or CSL-JSON exports.
 - Gives readers a plain-language privacy center for downloading their OpenScholar data or deleting their owned searches and library state.
 - Opens fresh, verified, HTTPS, CORS-compatible PDFs in a browser PDF.js reader and falls back to the source site when embedded reading is not supported.
-- Exposes six bounded research tools to agents over stateless Streamable HTTP MCP.
+- Exposes six bounded research tools and three read-only JSON resource templates to agents over stateless Streamable HTTP MCP.
 - Returns versioned, non-disclosing MCP tool errors with stable codes, actions, and optional retry guidance.
 
 ## Architecture
@@ -109,6 +109,8 @@ The server advertises:
 - `search_saved_library`
 - `export_citations`
 
+The server also advertises three read-only, database-backed JSON resource templates for one paper, one owner-visible collection, or one owner-visible saved search. This surface provides no global resource enumeration, subscriptions, provider fetching, arbitrary URL access, filesystem access, or PDF bytes.
+
 See the [MCP quickstart](docs/MCP_QUICKSTART.md) for Inspector commands, raw protocol examples, security behavior, and the supported conformance subset.
 
 `search_research` accepts `AUTO`, `ONLINE`, and database-only `LOCAL` modes and reports the actual execution source independently from caller intent.
@@ -177,6 +179,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 | Installable PWA and encrypted offline collection | Implemented; one opt-in metadata pack, no stored PDFs or offline mutations |
 | Personal-data export and confirmed deletion in the web app | Implemented |
 | Six-tool MCP server | Implemented |
+| Three read-only MCP JSON resource templates | Implemented |
 | Optional hosted OIDC mode | Implemented; synthetically tested |
 | Single-host deployment and monitoring templates | Implemented and locally validated |
 | Public hosted deployment | Not published |
