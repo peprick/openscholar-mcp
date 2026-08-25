@@ -42,7 +42,7 @@ beforeEach(() => {
   runtime = {
     constants: {
       formatVersion: 1,
-      readerRevision: "2026-08-24-r3",
+      readerRevision: "2026-08-24-r4",
       cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
       workFactor: 600000,
       maximumPapers: 500,

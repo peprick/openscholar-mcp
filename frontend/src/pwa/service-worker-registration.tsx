@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 
-const SERVICE_WORKER_URL = "/sw.js";
+import { EXPECTED_OFFLINE_READER_REVISION } from "@/pwa/offline-pack-loader";
+
+const SERVICE_WORKER_PATH = "/sw.js";
+const SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?reader=${encodeURIComponent(EXPECTED_OFFLINE_READER_REVISION)}`;
 const CACHE_PREFIX = "openscholar-shell-";
 
 function belongsToOpenScholar(
@@ -12,7 +15,7 @@ function belongsToOpenScholar(
     .filter((worker): worker is ServiceWorker => worker !== null)
     .some((worker) => {
       const url = new URL(worker.scriptURL);
-      return url.origin === window.location.origin && url.pathname === SERVICE_WORKER_URL;
+      return url.origin === window.location.origin && url.pathname === SERVICE_WORKER_PATH;
     });
 }
 

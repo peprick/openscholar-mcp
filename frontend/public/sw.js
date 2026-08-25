@@ -1,12 +1,13 @@
 "use strict";
 
 const CACHE_PREFIX = "openscholar-shell-";
-const OFFLINE_READER_REVISION = "2026-08-24-r3";
+const OFFLINE_READER_REVISION = "2026-08-24-r4";
 // Bump this value whenever the offline shell or cache policy changes.
 const CACHE_NAME = `${CACHE_PREFIX}${OFFLINE_READER_REVISION}`;
 const MAX_STATIC_ENTRIES = 96;
 const OFFLINE_URL = "/offline.html";
 const OFFLINE_PACK_RUNTIME_URL = "/offline-pack.js";
+const VERSIONED_OFFLINE_PACK_RUNTIME_URL = `${OFFLINE_PACK_RUNTIME_URL}?reader=${encodeURIComponent(OFFLINE_READER_REVISION)}`;
 const REQUIRED_PRECACHE_URLS = [OFFLINE_URL, OFFLINE_PACK_RUNTIME_URL];
 const PRECACHE_URLS = [
   ...REQUIRED_PRECACHE_URLS,
@@ -63,18 +64,61 @@ function isRequiredReaderAsset(url) {
   return url.search === "" && REQUIRED_PRECACHE_URLS.includes(url.pathname);
 }
 
-function responseCanBeStored(response) {
-  if (!response.ok || response.type === "opaque") return false;
+function isVersionedReaderRuntime(url) {
+  return (
+    url.origin === self.location.origin &&
+    `${url.pathname}${url.search}` === VERSIONED_OFFLINE_PACK_RUNTIME_URL
+  );
+}
+
+function readerRevisionFromWorkerUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.origin !== self.location.origin || url.pathname !== "/sw.js") {
+      return null;
+    }
+    const values = url.searchParams.getAll("reader");
+    if (values.length !== 1 || url.searchParams.size !== 1) return null;
+    if (url.search !== `?reader=${encodeURIComponent(values[0])}`) return null;
+    return values[0];
+  } catch {
+    return null;
+  }
+}
+
+function activeReaderRevision() {
+  const active = self.registration.active;
+  return active === null ? null : readerRevisionFromWorkerUrl(active.scriptURL);
+}
+
+function responseCanBeStored(response, request) {
+  if (!response.ok || response.type === "opaque" || response.redirected) {
+    return false;
+  }
+  let responseUrl;
+  let requestUrl;
+  try {
+    responseUrl = new URL(response.url);
+    requestUrl = new URL(
+      typeof request === "string" ? request : request.url,
+      self.location.origin,
+    );
+  } catch {
+    return false;
+  }
+  if (responseUrl.href !== requestUrl.href) return false;
   const cacheControl = response.headers.get("cache-control") ?? "";
   const vary = response.headers.get("vary") ?? "";
   return (
     !/(?:^|,)\s*(?:no-store|private)(?:=|\s|,|$)/iu.test(cacheControl) &&
-    !vary.split(",").some((value) => value.trim() === "*")
+    !vary
+      .split(",")
+      .some((value) => ["*", "cookie"].includes(value.trim().toLowerCase()))
   );
 }
 
 async function store(cache, request, response) {
-  if (!responseCanBeStored(response)) return;
+  if (!responseCanBeStored(response, request)) return;
   try {
     await cache.put(request, response);
   } catch {
@@ -147,7 +191,7 @@ async function fetchForPrecache(pathname) {
     credentials: "omit",
   });
   const response = await fetch(request);
-  if (!responseCanBeStored(response)) return null;
+  if (!responseCanBeStored(response, request)) return null;
   if (
     REQUIRED_PRECACHE_URLS.includes(pathname) &&
     !(await hasExpectedReaderRevision(pathname, response))
@@ -158,30 +202,57 @@ async function fetchForPrecache(pathname) {
 }
 
 async function installShell() {
-  const cache = await caches.open(CACHE_NAME);
-  const requiredResponses = await Promise.all(
-    REQUIRED_PRECACHE_URLS.map(fetchForPrecache),
-  );
-  if (requiredResponses.some((response) => response === null)) {
-    throw new Error("The encrypted offline reader could not be cached.");
+  if (
+    readerRevisionFromWorkerUrl(self.location.href) !==
+    OFFLINE_READER_REVISION
+  ) {
+    throw new Error("The worker URL does not match the offline reader revision.");
   }
-  // Keep the previous worker active if this required write fails. That avoids
-  // replacing a working offline shell with an incomplete upgrade.
-  await Promise.all(
-    REQUIRED_PRECACHE_URLS.map((pathname, index) =>
-      cache.put(pathname, requiredResponses[index]),
-    ),
-  );
-  await Promise.allSettled(
-    PRECACHE_URLS.filter(
-      (pathname) => !REQUIRED_PRECACHE_URLS.includes(pathname),
-    ).map(async (pathname) => {
-      const response = await fetchForPrecache(pathname);
-      if (response !== null) {
-        await store(cache, pathname, response);
-      }
-    }),
-  );
+  const existingNames = await caches.keys();
+  const cacheExists = existingNames.includes(CACHE_NAME);
+  const incumbentRevision = activeReaderRevision();
+  if (
+    self.registration.active !== null &&
+    (incumbentRevision === OFFLINE_READER_REVISION ||
+      (cacheExists && incumbentRevision === null))
+  ) {
+    throw new Error(
+      "The offline reader revision must change before updating the worker.",
+    );
+  }
+  if (cacheExists) await caches.delete(CACHE_NAME);
+
+  try {
+    const requiredResponses = await Promise.all(
+      REQUIRED_PRECACHE_URLS.map(fetchForPrecache),
+    );
+    if (requiredResponses.some((response) => response === null)) {
+      throw new Error("The encrypted offline reader could not be cached.");
+    }
+
+    const cache = await caches.open(CACHE_NAME);
+    // Complete each required write before starting the next one. If either
+    // fails, cleanup below removes the complete candidate cache.
+    for (let index = 0; index < REQUIRED_PRECACHE_URLS.length; index += 1) {
+      await cache.put(
+        REQUIRED_PRECACHE_URLS[index],
+        requiredResponses[index],
+      );
+    }
+    await Promise.allSettled(
+      PRECACHE_URLS.filter(
+        (pathname) => !REQUIRED_PRECACHE_URLS.includes(pathname),
+      ).map(async (pathname) => {
+        const response = await fetchForPrecache(pathname);
+        if (response !== null) {
+          await store(cache, pathname, response);
+        }
+      }),
+    );
+  } catch (error) {
+    await caches.delete(CACHE_NAME);
+    throw error;
+  }
 }
 
 async function removeOldCaches() {
@@ -199,7 +270,8 @@ async function cacheFirst(request) {
   const cached = await cache.match(request);
   if (cached !== undefined) return cached;
 
-  const response = await fetch(request);
+  const publicRequest = new Request(request, { credentials: "omit" });
+  const response = await fetch(publicRequest);
   await store(cache, request, response.clone());
   await trimStaticAssets(cache);
   return response;
@@ -208,8 +280,9 @@ async function cacheFirst(request) {
 async function networkFirstInstallAsset(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const response = await fetch(request);
-    if (responseCanBeStored(response)) {
+    const publicRequest = new Request(request, { credentials: "omit" });
+    const response = await fetch(publicRequest);
+    if (responseCanBeStored(response, request)) {
       await store(cache, request, response.clone());
       return response;
     }
@@ -276,6 +349,8 @@ self.addEventListener("fetch", (event) => {
 
   if (isRequiredReaderAsset(url)) {
     event.respondWith(requiredReaderResponse(request));
+  } else if (isVersionedReaderRuntime(url)) {
+    event.respondWith(requiredReaderResponse(OFFLINE_PACK_RUNTIME_URL));
   } else if (isInstallAsset(url)) {
     event.respondWith(networkFirstInstallAsset(request));
   } else if (isStaticAsset(url)) {

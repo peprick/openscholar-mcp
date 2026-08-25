@@ -85,13 +85,13 @@ function installExtractedReader(
     isRecord,
     hasExactKeys,
     vi.fn(),
-    "2026-08-24-r3",
+    "2026-08-24-r4",
   ) as () => void;
   install();
 }
 
 function readerMarkup(): void {
-  document.documentElement.dataset.offlineReaderRevision = "2026-08-24-r3";
+  document.documentElement.dataset.offlineReaderRevision = "2026-08-24-r4";
   document.body.innerHTML = `
     <button disabled id="offline-pack-open" type="button">Open</button>
     <button id="offline-pack-remove-any" type="button">Remove data</button>
@@ -128,7 +128,7 @@ describe("audited offline-pack runtime", () => {
     expect(sandbox.OpenScholarOfflinePack).toMatchObject({
       constants: {
         formatVersion: 1,
-        readerRevision: "2026-08-24-r3",
+        readerRevision: "2026-08-24-r4",
         cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
         workFactor: 600000,
         maximumPapers: 500,
@@ -345,7 +345,7 @@ describe("audited offline-pack runtime", () => {
         }),
     );
     const runtime = {
-      constants: { readerRevision: "2026-08-24-r3" },
+      constants: { readerRevision: "2026-08-24-r4" },
       inspect: vi.fn().mockResolvedValue({ collectionDigest: "opaque" }),
       lock: vi.fn(),
       purge: vi.fn().mockResolvedValue(false),
@@ -451,7 +451,7 @@ describe("audited offline-pack runtime", () => {
     readerMarkup();
     let onRuntimeEvent: (type: string) => void = () => undefined;
     const runtime = {
-      constants: { readerRevision: "2026-08-24-r3" },
+      constants: { readerRevision: "2026-08-24-r4" },
       inspect: vi.fn().mockResolvedValue({ collectionDigest: "opaque" }),
       lock: vi.fn(),
       purge: vi.fn().mockResolvedValue(false),

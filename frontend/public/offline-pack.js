@@ -10,7 +10,7 @@
   const CONTROL_KEY = "control";
   const DELETION_KEY = "deletion";
   const CHANNEL_NAME = "openscholar-offline-pack-v1";
-  const READER_REVISION = "2026-08-24-r3";
+  const READER_REVISION = "2026-08-24-r4";
   const FORMAT_VERSION = 1;
   const CRYPTO_PROFILE = "pbkdf2-sha256-aes256gcm-v1";
   const WORK_FACTOR = 600000;

@@ -1,8 +1,8 @@
 import type { OpenScholarOfflinePackRuntime } from "@/pwa/offline-pack-runtime";
 
-const RUNTIME_SOURCE = "/offline-pack.js";
+export const EXPECTED_OFFLINE_READER_REVISION = "2026-08-24-r4";
+const RUNTIME_SOURCE = `/offline-pack.js?reader=${encodeURIComponent(EXPECTED_OFFLINE_READER_REVISION)}`;
 const RUNTIME_MARKER = "script[data-openscholar-offline-pack]";
-export const EXPECTED_OFFLINE_READER_REVISION = "2026-08-24-r3";
 
 let pendingRuntime: Promise<OpenScholarOfflinePackRuntime> | null = null;
 

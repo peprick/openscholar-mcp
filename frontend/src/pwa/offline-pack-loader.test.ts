@@ -6,7 +6,7 @@ function runtimeFixture(): OpenScholarOfflinePackRuntime {
   return {
     constants: {
       formatVersion: 1,
-      readerRevision: "2026-08-24-r3",
+      readerRevision: "2026-08-24-r4",
       cryptoProfile: "pbkdf2-sha256-aes256gcm-v1",
       workFactor: 600000,
       maximumPapers: 500,
@@ -82,7 +82,9 @@ describe("offline-pack runtime loader", () => {
       "script[data-openscholar-offline-pack]",
     );
 
-    expect(script?.getAttribute("src")).toBe("/offline-pack.js");
+    expect(script?.getAttribute("src")).toBe(
+      "/offline-pack.js?reader=2026-08-24-r4",
+    );
     expect(first).toBe(second);
     const runtime = runtimeFixture();
     globalThis.OpenScholarOfflinePack = runtime;

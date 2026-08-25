@@ -11,8 +11,13 @@ function loopbackPort(name: string, fallback: number): number {
 const host = "127.0.0.1";
 const appPort = loopbackPort("PLAYWRIGHT_APP_PORT", 3_100);
 const fixturePort = loopbackPort("PLAYWRIGHT_FIXTURE_PORT", 4_100);
+const pwaReleasePort = loopbackPort("PLAYWRIGHT_PWA_RELEASE_PORT", 5_100);
+if (new Set([appPort, fixturePort, pwaReleasePort]).size !== 3) {
+  throw new Error("Playwright loopback ports must be distinct.");
+}
 const appOrigin = `http://${host}:${appPort}`;
 const fixtureOrigin = `http://${host}:${fixturePort}`;
+const pwaReleaseOrigin = `http://${host}:${pwaReleasePort}`;
 const nodeCommand = JSON.stringify(process.execPath);
 const appCommand = process.env.CI
   ? `${nodeCommand} e2e/support/standalone-server.mjs`
@@ -51,6 +56,18 @@ export default defineConfig({
     },
   ],
   webServer: [
+    {
+      command: `${nodeCommand} e2e/support/pwa-release-server.mjs`,
+      env: {
+        ...process.env,
+        PLAYWRIGHT_PWA_RELEASE_PORT: String(pwaReleasePort),
+      },
+      reuseExistingServer: false,
+      stderr: "pipe",
+      stdout: "pipe",
+      timeout: 30_000,
+      url: `${pwaReleaseOrigin}/__pwa/health`,
+    },
     {
       command: `${nodeCommand} e2e/support/fixture-server.mjs`,
       env: {

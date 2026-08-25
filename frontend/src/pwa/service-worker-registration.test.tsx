@@ -38,7 +38,7 @@ describe("service-worker registration", () => {
 
     const cleanup = installServiceWorkerRegistration("production");
 
-    expect(register).toHaveBeenCalledWith("/sw.js", {
+    expect(register).toHaveBeenCalledWith("/sw.js?reader=2026-08-24-r4", {
       scope: "/",
       updateViaCache: "none",
     });
@@ -62,7 +62,10 @@ describe("service-worker registration", () => {
     const unrelatedUnregister = vi.fn().mockResolvedValue(true);
     const ownWorker = {
       active: {
-        scriptURL: new URL("/sw.js", window.location.origin).toString(),
+        scriptURL: new URL(
+          "/sw.js?reader=2026-08-24-r4",
+          window.location.origin,
+        ).toString(),
       },
       installing: null,
       unregister,

@@ -42,7 +42,11 @@ After installing Chromium once with `pnpm exec playwright install chromium`, run
 pnpm test:e2e
 ```
 
-That suite blocks unexpected external traffic and covers search/cache/provenance, provider warnings, verified and restricted access, PDF.js reader keyboard/text behavior, collections, tags/status, and citation downloads with WCAG 2.2 axe checks. The separate `pnpm test:e2e:compose` lane requires the disposable Spring Boot/PostgreSQL/OpenAlex-fixture stack; use the complete commands in the [portfolio evidence guide](../docs/PORTFOLIO_DEMO.md#reproduce).
+That suite blocks unexpected external traffic and covers search/cache/provenance, provider warnings, verified and restricted access, PDF.js reader keyboard/text behavior, collections, tags/status, and citation downloads with WCAG 2.2 axe checks. Its controlled-profile Chromium lane also exercises an incoherent failed update, incumbent/waiting-worker behavior, a coherent upgrade, and a uniquely forward-versioned schema-compatible rollback. Candidates activate only after the controlled client closes; the reopened client must receive the new coherent reader while owned superseded caches are removed, an unrelated cache and the encrypted IndexedDB records remain byte-for-byte unchanged, and the original passphrase still unlocks the pack offline. Public-cache decoys cover redirect, credentials, response directives, query, authorization/range, private paths, and document exclusions.
+
+The release harness synthesizes its revisions from the checked-in implementation. It is compatibility evidence, not proof that a historical production artifact can roll back. Whenever the worker, offline shell, reader runtime, or cache policy changes, bump `OFFLINE_READER_REVISION`, the HTML revision attribute, `READER_REVISION`, `EXPECTED_OFFLINE_READER_REVISION`, and the `OpenScholarOfflinePackRuntime` reader-revision literal together; changed behavior under an active revision fails installation by design.
+
+The separate `pnpm test:e2e:compose` lane requires the disposable Spring Boot/PostgreSQL/OpenAlex-fixture stack; use the complete commands in the [portfolio evidence guide](../docs/PORTFOLIO_DEMO.md#reproduce).
 
 ## Current flow
 

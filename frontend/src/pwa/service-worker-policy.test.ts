@@ -22,6 +22,7 @@ function response(
   options: {
     body?: string;
     contentType?: string;
+    redirected?: boolean;
     url?: string;
   } = {},
 ) {
@@ -31,6 +32,7 @@ function response(
       "content-type": options.contentType ?? "application/octet-stream",
     }),
     ok,
+    redirected: options.redirected ?? false,
     type: "basic",
     url: options.url ?? "https://openscholar.test/asset",
     clone: vi.fn(),
@@ -42,7 +44,7 @@ function response(
 
 function readerAssetResponse(
   input: { url: string },
-  revision = "2026-08-24-r3",
+  revision = "2026-08-24-r4",
 ) {
   const url = new URL(input.url);
   const shell = url.pathname === "/offline.html";
@@ -74,17 +76,33 @@ function loadWorker(fetchMock = vi.fn()) {
       handlers.set(name, handler);
     }),
     clients: { claim: vi.fn().mockResolvedValue(undefined) },
-    location: { origin: "https://openscholar.test" },
+    location: {
+      href: "https://openscholar.test/sw.js?reader=2026-08-24-r4",
+      origin: "https://openscholar.test",
+    },
+    registration: { active: null as { scriptURL: string } | null },
     skipWaiting: vi.fn().mockResolvedValue(undefined),
   };
   class WorkerRequest {
-    readonly headers = new Headers();
-    readonly method = "GET";
-    readonly mode = "cors";
+    readonly cache: string;
+    readonly credentials: string;
+    readonly headers: Headers;
+    readonly method: string;
+    readonly mode: string;
     readonly url: string;
 
-    constructor(input: URL | string) {
-      this.url = input.toString();
+    constructor(
+      input: URL | string | WorkerEvent["request"],
+      init: { cache?: string; credentials?: string } = {},
+    ) {
+      const source =
+        typeof input === "string" || input instanceof URL ? undefined : input;
+      this.url = source === undefined ? input.toString() : source.url;
+      this.headers = new Headers(source?.headers);
+      this.method = source?.method ?? "GET";
+      this.mode = source?.mode ?? "cors";
+      this.cache = init.cache ?? "default";
+      this.credentials = init.credentials ?? "same-origin";
     }
   }
   const workerResponse = { error: vi.fn(() => ({ ok: false })) };
@@ -158,17 +176,23 @@ describe("OpenScholar service-worker cache policy", () => {
   });
 
   it("caches only same-origin immutable Next.js assets", async () => {
-    const networkResponse = response();
+    const assetUrl =
+      "https://openscholar.test/_next/static/chunks/app-a1b2c3.js";
+    const networkResponse = response("public, max-age=31536000", true, {
+      url: assetUrl,
+    });
     const fetchMock = vi.fn().mockResolvedValue(networkResponse);
     const runtime = loadWorker(fetchMock);
-    const asset = request(
-      "https://openscholar.test/_next/static/chunks/app-a1b2c3.js",
-    );
+    const asset = request(assetUrl);
 
     const result = await dispatchFetch(runtime.handlers.get("fetch")!, asset);
 
     expect(result).toMatchObject({ handled: true, response: networkResponse });
     expect(runtime.cache.put).toHaveBeenCalledWith(asset, networkResponse);
+    expect(fetchMock.mock.calls[0]?.[0]).toMatchObject({
+      credentials: "omit",
+      url: assetUrl,
+    });
 
     const dynamicImage = await dispatchFetch(
       runtime.handlers.get("fetch")!,
@@ -184,14 +208,15 @@ describe("OpenScholar service-worker cache policy", () => {
   });
 
   it("refreshes same-URL install assets before using a cached copy", async () => {
+    const manifestUrl = "https://openscholar.test/manifest.webmanifest";
     const cachedResponse = response("public, max-age=31536000");
-    const freshResponse = response("public, max-age=60");
+    const freshResponse = response("public, max-age=60", true, {
+      url: manifestUrl,
+    });
     const fetchMock = vi.fn().mockResolvedValue(freshResponse);
     const runtime = loadWorker(fetchMock);
     runtime.cache.match.mockResolvedValue(cachedResponse);
-    const manifestRequest = request(
-      "https://openscholar.test/manifest.webmanifest",
-    );
+    const manifestRequest = request(manifestUrl);
 
     const result = await dispatchFetch(
       runtime.handlers.get("fetch")!,
@@ -199,7 +224,10 @@ describe("OpenScholar service-worker cache policy", () => {
     );
 
     expect(result).toEqual({ handled: true, response: freshResponse });
-    expect(fetchMock).toHaveBeenCalledWith(manifestRequest);
+    expect(fetchMock.mock.calls[0]?.[0]).toMatchObject({
+      credentials: "omit",
+      url: manifestUrl,
+    });
     expect(runtime.cache.put).toHaveBeenCalledWith(
       manifestRequest,
       freshResponse,
@@ -213,17 +241,44 @@ describe("OpenScholar service-worker cache policy", () => {
   ])(
     "keeps a cached install asset after a resolved %s",
     async (_label, cacheControl, ok) => {
+      const manifestUrl = "https://openscholar.test/manifest.webmanifest";
       const cachedResponse = response();
-      const unsafeResponse = response(cacheControl, ok);
+      const unsafeResponse = response(cacheControl, ok, { url: manifestUrl });
       const runtime = loadWorker(vi.fn().mockResolvedValue(unsafeResponse));
       runtime.cache.match.mockResolvedValue(cachedResponse);
-      const manifestRequest = request(
-        "https://openscholar.test/manifest.webmanifest",
-      );
+      const manifestRequest = request(manifestUrl);
 
       const result = await dispatchFetch(
         runtime.handlers.get("fetch")!,
         manifestRequest,
+      );
+
+      expect(result).toEqual({ handled: true, response: cachedResponse });
+      expect(runtime.cache.put).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["redirected", { redirected: true, vary: "" }],
+    ["cookie-varying", { redirected: false, vary: "Cookie" }],
+  ])(
+    "keeps the cached install asset after a %s public response",
+    async (_label, policy) => {
+      const manifestUrl = "https://openscholar.test/manifest.webmanifest";
+      const cachedResponse = response();
+      const unsafeResponse = response("public, max-age=60", true, {
+        redirected: policy.redirected,
+        url: policy.redirected
+          ? "https://openscholar.test/account/manifest.webmanifest"
+          : manifestUrl,
+      });
+      if (policy.vary !== "") unsafeResponse.headers.set("vary", policy.vary);
+      const runtime = loadWorker(vi.fn().mockResolvedValue(unsafeResponse));
+      runtime.cache.match.mockResolvedValue(cachedResponse);
+
+      const result = await dispatchFetch(
+        runtime.handlers.get("fetch")!,
+        request(manifestUrl),
       );
 
       expect(result).toEqual({ handled: true, response: cachedResponse });
@@ -250,6 +305,30 @@ describe("OpenScholar service-worker cache policy", () => {
     expect(runtime.cache.match).not.toHaveBeenCalled();
   });
 
+  it("maps only its exact revision-qualified runtime URL to the coherent cache", async () => {
+    const cachedResponse = response();
+    const runtime = loadWorker(vi.fn());
+    runtime.cache.match.mockResolvedValue(cachedResponse);
+
+    const current = await dispatchFetch(
+      runtime.handlers.get("fetch")!,
+      request(
+        "https://openscholar.test/offline-pack.js?reader=2026-08-24-r4",
+      ),
+    );
+    const future = await dispatchFetch(
+      runtime.handlers.get("fetch")!,
+      request(
+        "https://openscholar.test/offline-pack.js?reader=2026-08-24-r5",
+      ),
+    );
+
+    expect(current).toEqual({ handled: true, response: cachedResponse });
+    expect(runtime.cache.match).toHaveBeenCalledWith("/offline-pack.js");
+    expect(future.handled).toBe(false);
+    expect(runtime.fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["runtime", "https://openscholar.test/offline-pack.js", "cors"],
     ["shell", "https://openscholar.test/offline.html", "navigate"],
@@ -274,7 +353,13 @@ describe("OpenScholar service-worker cache policy", () => {
   );
 
   it("bounds obsolete build-hashed static assets", async () => {
-    const runtime = loadWorker(vi.fn().mockResolvedValue(response()));
+    const newAssetUrl =
+      "https://openscholar.test/_next/static/chunks/new.js";
+    const runtime = loadWorker(
+      vi.fn().mockResolvedValue(
+        response("public, max-age=31536000", true, { url: newAssetUrl }),
+      ),
+    );
     const oldAssets = Array.from({ length: 98 }, (_, index) =>
       request(
         `https://openscholar.test/_next/static/chunks/old-${index}.js`,
@@ -284,7 +369,7 @@ describe("OpenScholar service-worker cache policy", () => {
 
     await dispatchFetch(
       runtime.handlers.get("fetch")!,
-      request("https://openscholar.test/_next/static/chunks/new.js"),
+      request(newAssetUrl),
     );
 
     expect(runtime.cache.delete).toHaveBeenCalledTimes(2);
@@ -293,28 +378,62 @@ describe("OpenScholar service-worker cache policy", () => {
   });
 
   it("honours response no-store and private directives", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(response("private, no-store"));
+    const assetUrl = "https://openscholar.test/_next/static/chunks/app.js";
+    const fetchMock = vi.fn().mockResolvedValue(
+      response("private, no-store", true, { url: assetUrl }),
+    );
     const runtime = loadWorker(fetchMock);
 
     await dispatchFetch(
       runtime.handlers.get("fetch")!,
-      request("https://openscholar.test/_next/static/chunks/app.js"),
+      request(assetUrl),
     );
 
     expect(runtime.cache.put).not.toHaveBeenCalled();
   });
 
   it("does not store responses whose representation varies on every request", async () => {
-    const unsafeResponse = response();
+    const assetUrl = "https://openscholar.test/_next/static/chunks/app.js";
+    const unsafeResponse = response("public, max-age=31536000", true, {
+      url: assetUrl,
+    });
     unsafeResponse.headers.set("vary", "Accept-Encoding, *");
     const fetchMock = vi.fn().mockResolvedValue(unsafeResponse);
     const runtime = loadWorker(fetchMock);
 
     await dispatchFetch(
       runtime.handlers.get("fetch")!,
-      request("https://openscholar.test/_next/static/chunks/app.js"),
+      request(assetUrl),
     );
 
+    expect(runtime.cache.put).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a redirect", { redirected: true, sameUrl: false, vary: "" }],
+    ["a final-URL mismatch", { redirected: false, sameUrl: false, vary: "" }],
+    [
+      "a cookie-varying response",
+      { redirected: false, sameUrl: true, vary: "Cookie" },
+    ],
+  ])("does not store %s under an allowlisted static key", async (_label, policy) => {
+    const assetUrl =
+      "https://openscholar.test/_next/static/chunks/public-shell.js";
+    const unsafeResponse = response("public, max-age=31536000", true, {
+      redirected: policy.redirected,
+      url: policy.sameUrl
+        ? assetUrl
+        : "https://openscholar.test/account/personalized.js",
+    });
+    if (policy.vary !== "") unsafeResponse.headers.set("vary", policy.vary);
+    const runtime = loadWorker(vi.fn().mockResolvedValue(unsafeResponse));
+
+    const result = await dispatchFetch(
+      runtime.handlers.get("fetch")!,
+      request(assetUrl),
+    );
+
+    expect(result).toEqual({ handled: true, response: unsafeResponse });
     expect(runtime.cache.put).not.toHaveBeenCalled();
   });
 
@@ -354,7 +473,9 @@ describe("OpenScholar service-worker cache policy", () => {
         const pathname = new URL(workerRequest.url).pathname;
         return pathname === "/offline.html" || pathname === "/offline-pack.js"
           ? readerAssetResponse(workerRequest)
-          : response();
+          : response("public, max-age=31536000", true, {
+              url: workerRequest.url,
+            });
       }),
     );
     let installWork: Promise<unknown> | undefined;
@@ -386,12 +507,14 @@ describe("OpenScholar service-worker cache policy", () => {
     async (failedPath) => {
       const fetchMock = vi.fn(async (workerRequest: { url: string }) =>
         new URL(workerRequest.url).pathname === failedPath
-          ? response("no-store")
+          ? response("no-store", true, { url: workerRequest.url })
           : ["/offline.html", "/offline-pack.js"].includes(
                 new URL(workerRequest.url).pathname,
               )
             ? readerAssetResponse(workerRequest)
-            : response(),
+            : response("public, max-age=31536000", true, {
+                url: workerRequest.url,
+              }),
       );
       const runtime = loadWorker(fetchMock);
       let installWork: Promise<unknown> | undefined;
@@ -408,6 +531,9 @@ describe("OpenScholar service-worker cache policy", () => {
       await expect(installWork!).rejects.toThrow(
         "The encrypted offline reader could not be cached.",
       );
+      expect(runtime.cacheStorage.delete).toHaveBeenCalledWith(
+        "openscholar-shell-2026-08-24-r4",
+      );
       expect(runtime.cache.put).not.toHaveBeenCalled();
       expect(runtime.worker.skipWaiting).not.toHaveBeenCalled();
     },
@@ -415,35 +541,40 @@ describe("OpenScholar service-worker cache policy", () => {
 
   it.each([
     ["old coherent pair", "2026-08-24-r0", "2026-08-24-r0"],
-    ["mixed runtime", "2026-08-24-r3", "2026-08-24-r0"],
+    ["mixed runtime", "2026-08-24-r4", "2026-08-24-r0"],
   ])(
     "rejects installation of an %s",
     async (_label, shellRevision, runtimeRevision) => {
-    const fetchMock = vi.fn(async (workerRequest: { url: string }) => {
-      const pathname = new URL(workerRequest.url).pathname;
-      if (pathname === "/offline.html" || pathname === "/offline-pack.js") {
-        return readerAssetResponse(
-          workerRequest,
-          pathname === "/offline.html" ? shellRevision : runtimeRevision,
-        );
-      }
-      return response();
-    });
-    const runtime = loadWorker(fetchMock);
-    let installWork: Promise<unknown> | undefined;
+      const fetchMock = vi.fn(async (workerRequest: { url: string }) => {
+        const pathname = new URL(workerRequest.url).pathname;
+        if (pathname === "/offline.html" || pathname === "/offline-pack.js") {
+          return readerAssetResponse(
+            workerRequest,
+            pathname === "/offline.html" ? shellRevision : runtimeRevision,
+          );
+        }
+        return response("public, max-age=31536000", true, {
+          url: workerRequest.url,
+        });
+      });
+      const runtime = loadWorker(fetchMock);
+      let installWork: Promise<unknown> | undefined;
 
-    runtime.handlers.get("install")!({
-      request: request("https://openscholar.test/sw.js"),
-      respondWith: vi.fn(),
-      waitUntil: (work) => {
-        installWork = work;
-      },
-    });
+      runtime.handlers.get("install")!({
+        request: request("https://openscholar.test/sw.js"),
+        respondWith: vi.fn(),
+        waitUntil: (work) => {
+          installWork = work;
+        },
+      });
 
-    await expect(installWork!).rejects.toThrow(
-      "The encrypted offline reader could not be cached.",
-    );
-    expect(runtime.cache.put).not.toHaveBeenCalled();
+      await expect(installWork!).rejects.toThrow(
+        "The encrypted offline reader could not be cached.",
+      );
+      expect(runtime.cacheStorage.delete).toHaveBeenCalledWith(
+        "openscholar-shell-2026-08-24-r4",
+      );
+      expect(runtime.cache.put).not.toHaveBeenCalled();
     },
   );
 
@@ -453,7 +584,9 @@ describe("OpenScholar service-worker cache policy", () => {
         const pathname = new URL(workerRequest.url).pathname;
         return pathname === "/offline.html" || pathname === "/offline-pack.js"
           ? readerAssetResponse(workerRequest)
-          : response();
+          : response("public, max-age=31536000", true, {
+              url: workerRequest.url,
+            });
       }),
     );
     runtime.cache.put.mockImplementation(async (key: string) => {
@@ -474,14 +607,105 @@ describe("OpenScholar service-worker cache policy", () => {
     await expect(installWork!).rejects.toMatchObject({
       name: "QuotaExceededError",
     });
+    expect(runtime.cacheStorage.delete).toHaveBeenCalledWith(
+      "openscholar-shell-2026-08-24-r4",
+    );
     expect(runtime.worker.skipWaiting).not.toHaveBeenCalled();
+  });
+
+  it("rejects a worker whose script URL claims a different revision", async () => {
+    const runtime = loadWorker(vi.fn());
+    runtime.worker.location.href =
+      "https://openscholar.test/sw.js?reader=2026-08-24-r0";
+    let installWork: Promise<unknown> | undefined;
+
+    runtime.handlers.get("install")!({
+      request: request("https://openscholar.test/sw.js"),
+      respondWith: vi.fn(),
+      waitUntil: (work) => {
+        installWork = work;
+      },
+    });
+
+    await expect(installWork!).rejects.toThrow(
+      "The worker URL does not match the offline reader revision.",
+    );
+    expect(runtime.cacheStorage.keys).not.toHaveBeenCalled();
+    expect(runtime.fetchMock).not.toHaveBeenCalled();
+    expect(runtime.cacheStorage.open).not.toHaveBeenCalled();
+  });
+
+  it("rejects a worker update that reuses the incumbent revision", async () => {
+    const runtime = loadWorker(vi.fn());
+    runtime.worker.registration.active = {
+      scriptURL: "https://openscholar.test/sw.js?reader=2026-08-24-r4",
+    };
+    let installWork: Promise<unknown> | undefined;
+
+    runtime.handlers.get("install")!({
+      request: request("https://openscholar.test/sw.js"),
+      respondWith: vi.fn(),
+      waitUntil: (work) => {
+        installWork = work;
+      },
+    });
+
+    await expect(installWork!).rejects.toThrow(
+      "The offline reader revision must change before updating the worker.",
+    );
+    expect(runtime.fetchMock).not.toHaveBeenCalled();
+    expect(runtime.cacheStorage.open).not.toHaveBeenCalled();
+    expect(runtime.cacheStorage.delete).not.toHaveBeenCalled();
+    expect(runtime.cache.put).not.toHaveBeenCalled();
+  });
+
+  it("removes a stranded candidate cache owned by an older revision", async () => {
+    const runtime = loadWorker(
+      vi.fn(async (workerRequest: { url: string }) => {
+        const pathname = new URL(workerRequest.url).pathname;
+        return pathname === "/offline.html" || pathname === "/offline-pack.js"
+          ? readerAssetResponse(workerRequest)
+          : response("public, max-age=31536000", true, {
+              url: workerRequest.url,
+            });
+      }),
+    );
+    runtime.worker.registration.active = {
+      scriptURL: "https://openscholar.test/sw.js?reader=2026-08-24-r3",
+    };
+    runtime.cacheStorage.keys.mockResolvedValue([
+      "openscholar-shell-2026-08-24-r3",
+      "openscholar-shell-2026-08-24-r4",
+    ]);
+    let installWork: Promise<unknown> | undefined;
+
+    runtime.handlers.get("install")!({
+      request: request("https://openscholar.test/sw.js"),
+      respondWith: vi.fn(),
+      waitUntil: (work) => {
+        installWork = work;
+      },
+    });
+    await installWork;
+
+    expect(runtime.cacheStorage.delete).toHaveBeenCalledOnce();
+    expect(runtime.cacheStorage.delete).toHaveBeenCalledWith(
+      "openscholar-shell-2026-08-24-r4",
+    );
+    expect(runtime.cacheStorage.open).toHaveBeenCalledWith(
+      "openscholar-shell-2026-08-24-r4",
+    );
+    expect(runtime.cache.put).toHaveBeenCalledWith(
+      "/offline-pack.js",
+      expect.anything(),
+    );
   });
 
   it("deletes only superseded OpenScholar shell caches during activation", async () => {
     const runtime = loadWorker();
     runtime.cacheStorage.keys.mockResolvedValue([
       "openscholar-shell-old",
-      "openscholar-shell-2026-08-24-r3",
+      "openscholar-shell-2026-08-24-r4",
       "unrelated-cache",
     ]);
     let activationWork: Promise<unknown> | undefined;

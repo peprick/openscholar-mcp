@@ -13,6 +13,7 @@ verify_backend_port="${OPENSCHOLAR_VERIFY_BACKEND_PORT:-8180}"
 verify_frontend_port="${OPENSCHOLAR_VERIFY_FRONTEND_PORT:-3300}"
 verify_playwright_app_port="${OPENSCHOLAR_VERIFY_PLAYWRIGHT_APP_PORT:-3100}"
 verify_playwright_fixture_port="${OPENSCHOLAR_VERIFY_PLAYWRIGHT_FIXTURE_PORT:-4100}"
+verify_playwright_pwa_release_port="${OPENSCHOLAR_VERIFY_PLAYWRIGHT_PWA_RELEASE_PORT:-5100}"
 verify_mcp_proxy_port="${OPENSCHOLAR_VERIFY_MCP_PROXY_PORT:-6277}"
 
 original_home="${HOME:-}"
@@ -64,6 +65,7 @@ Optional loopback-port overrides:
   OPENSCHOLAR_VERIFY_FRONTEND_PORT
   OPENSCHOLAR_VERIFY_PLAYWRIGHT_APP_PORT
   OPENSCHOLAR_VERIFY_PLAYWRIGHT_FIXTURE_PORT
+  OPENSCHOLAR_VERIFY_PLAYWRIGHT_PWA_RELEASE_PORT
   OPENSCHOLAR_VERIFY_MCP_PROXY_PORT
 
 This command intentionally does not replace CI-native security/SBOM gates,
@@ -114,6 +116,7 @@ assert_distinct_ports() {
     "${verify_frontend_port}"
     "${verify_playwright_app_port}"
     "${verify_playwright_fixture_port}"
+    "${verify_playwright_pwa_release_port}"
     "${verify_mcp_proxy_port}"
   )
   local left
@@ -519,6 +522,8 @@ validate_port OPENSCHOLAR_VERIFY_BACKEND_PORT "${verify_backend_port}"
 validate_port OPENSCHOLAR_VERIFY_FRONTEND_PORT "${verify_frontend_port}"
 validate_port OPENSCHOLAR_VERIFY_PLAYWRIGHT_APP_PORT "${verify_playwright_app_port}"
 validate_port OPENSCHOLAR_VERIFY_PLAYWRIGHT_FIXTURE_PORT "${verify_playwright_fixture_port}"
+validate_port OPENSCHOLAR_VERIFY_PLAYWRIGHT_PWA_RELEASE_PORT \
+  "${verify_playwright_pwa_release_port}"
 validate_port OPENSCHOLAR_VERIFY_MCP_PROXY_PORT "${verify_mcp_proxy_port}"
 assert_distinct_ports
 assert_ports_available \
@@ -527,6 +532,7 @@ assert_ports_available \
   "${verify_frontend_port}" \
   "${verify_playwright_app_port}" \
   "${verify_playwright_fixture_port}" \
+  "${verify_playwright_pwa_release_port}" \
   "${verify_mcp_proxy_port}"
 
 run_nonce="$(random_hex 8)"
@@ -607,11 +613,14 @@ run_stage "Verify and build the frontend" \
 run_stage "Install the pinned Playwright Chromium runtime" \
   "${host_env[@]}" pnpm --dir frontend exec playwright install chromium
 assert_ports_available \
-  "${verify_playwright_app_port}" "${verify_playwright_fixture_port}"
+  "${verify_playwright_app_port}" \
+  "${verify_playwright_fixture_port}" \
+  "${verify_playwright_pwa_release_port}"
 run_stage "Run standalone PWA and offline browser workflows" \
   "${host_env[@]}" \
     "PLAYWRIGHT_APP_PORT=${verify_playwright_app_port}" \
     "PLAYWRIGHT_FIXTURE_PORT=${verify_playwright_fixture_port}" \
+    "PLAYWRIGHT_PWA_RELEASE_PORT=${verify_playwright_pwa_release_port}" \
     pnpm --dir frontend test:e2e
 
 run_stage "Install locked MCP validation tooling" \
