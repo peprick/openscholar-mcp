@@ -14,6 +14,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -194,6 +195,38 @@ class OidcSecurityIntegrationTests {
 				.andExpect(status().isNotFound());
 		assertThat(jdbcTemplate.queryForObject("SELECT display_name FROM app_user WHERE id = ?", String.class, aliceId))
 				.isEqualTo("Alice Updated");
+	}
+
+	@Test
+	void exportsOnlyTheHostedPrincipalsOwnedDataOnTheRequestThread() throws Exception {
+		mockMvc.perform(get("/api/v1/collections")
+						.with(user("alice-export", "Alice Export", "openscholar.library")))
+				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/collections")
+						.with(user("bob-export", "Bob Export", "openscholar.library")))
+				.andExpect(status().isOk());
+		UUID aliceId = userId("alice-export");
+		UUID bobId = userId("bob-export");
+		insertSearch(aliceId, "alice export marker", "1".repeat(64));
+		insertSearch(bobId, "bob export secret marker", "2".repeat(64));
+
+		MvcResult result = mockMvc.perform(get("/api/v1/privacy/export")
+						.with(user("alice-export", "Alice Export Updated", "openscholar.privacy")))
+				.andExpect(status().isOk())
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store, no-transform"))
+				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+				.andReturn();
+
+		byte[] body = result.getResponse().getContentAsByteArray();
+		assertThat(result.getResponse().getContentLengthLong()).isEqualTo(body.length);
+		JsonNode export = objectMapper.readTree(body);
+		assertThat(export.required("userId").asString()).isEqualTo(aliceId.toString());
+		assertThat(export.required("displayName").asString()).isEqualTo("Alice Export Updated");
+		assertThat(export.required("searches")).hasSize(1);
+		String payload = new String(body, StandardCharsets.UTF_8);
+		assertThat(payload)
+				.contains("alice export marker")
+				.doesNotContain("bob export secret marker", "alice-export", "bob-export", ISSUER);
 	}
 
 	@Test

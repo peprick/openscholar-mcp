@@ -4,10 +4,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.openscholar.library.ReadingStatus;
 import com.openscholar.search.SearchExecutionSource;
 import com.openscholar.search.SearchMode;
 
+@JsonInclude(JsonInclude.Include.ALWAYS)
+@JsonPropertyOrder({
+	"userId", "displayName", "accountCreatedAt", "generatedAt",
+	"searches", "collections", "savedPapers"
+})
 public record PrivacyExport(
 		UUID userId,
 		String displayName,
@@ -23,6 +30,11 @@ public record PrivacyExport(
 		savedPapers = savedPapers == null ? List.of() : List.copyOf(savedPapers);
 	}
 
+	@JsonInclude(JsonInclude.Include.ALWAYS)
+	@JsonPropertyOrder({
+		"searchId", "query", "requestedMode", "executionSource", "filters",
+		"searchedAt", "freshUntil", "resultCount", "warnings"
+	})
 	public record PrivacySearch(
 			UUID searchId,
 			String query,
@@ -39,6 +51,11 @@ public record PrivacyExport(
 		}
 	}
 
+	@JsonInclude(JsonInclude.Include.ALWAYS)
+	@JsonPropertyOrder({
+		"yearFrom", "yearTo", "documentTypes", "openAccessOnly",
+		"minimumCitations", "languages", "pageSize"
+	})
 	public record PrivacySearchFilters(
 			Integer yearFrom,
 			Integer yearTo,
@@ -54,6 +71,8 @@ public record PrivacyExport(
 		}
 	}
 
+	@JsonInclude(JsonInclude.Include.ALWAYS)
+	@JsonPropertyOrder({"collectionId", "name", "description", "createdAt", "updatedAt"})
 	public record PrivacyCollection(
 			UUID collectionId,
 			String name,
@@ -62,6 +81,10 @@ public record PrivacyExport(
 			Instant updatedAt) {
 	}
 
+	@JsonInclude(JsonInclude.Include.ALWAYS)
+	@JsonPropertyOrder({
+		"collectionId", "paperId", "title", "readingStatus", "tags", "savedAt", "updatedAt"
+	})
 	public record PrivacySavedPaper(
 			UUID collectionId,
 			UUID paperId,

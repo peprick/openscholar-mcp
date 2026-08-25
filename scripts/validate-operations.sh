@@ -28,9 +28,13 @@ if [[ -n "${operations_validation_tag_suffix}" ]]; then
   blackbox_image="${blackbox_image}-${operations_validation_tag_suffix}"
 fi
 
+caddy_adapted_config=""
 prometheus_validation_directory=""
 cleanup() {
   local status=$?
+  if [[ -n "${caddy_adapted_config}" ]]; then
+    rm -f -- "${caddy_adapted_config}" || true
+  fi
   if [[ -n "${prometheus_validation_directory}" ]]; then
     rm -rf -- "${prometheus_validation_directory}" || true
   fi
@@ -133,6 +137,60 @@ docker run --rm \
   --volume "${repository_directory}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
   "${caddy_image}" \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+caddy_adapted_config="$(mktemp)"
+docker run --rm \
+  --network none \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:size=16m,mode=1777 \
+  --env PUBLIC_HOST=research.example.com \
+  --env ACME_EMAIL=operator@example.com \
+  --env XDG_CONFIG_HOME=/tmp/caddy-config \
+  --env XDG_DATA_HOME=/tmp/caddy-data \
+  --volume "${repository_directory}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  "${caddy_image}" \
+  caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+  >"${caddy_adapted_config}"
+
+jq -e '
+  def route_for($routes; $path):
+    [$routes[] | select(any(.match[]?; (.path? // []) == [$path]))];
+  [.apps.http.servers[] | select(any(.listen[]; . == ":443"))] as $servers
+  | ($servers | length) == 1
+  and $servers[0].write_timeout == 340000000000
+  and (
+    [$servers[0].routes[]?.handle[]?
+     | select(.handler == "subroute")
+     | .routes[]?] as $routes
+    | [$routes[] | select(any(.handle[]?; .handler == "encode"))] as $encoders
+    | route_for($routes; "/api/v1/privacy/export") as $backend_privacy
+    | route_for($routes; "/api/v1/*") as $backend_rest
+    | route_for($routes; "/api/privacy/export") as $frontend_privacy
+    | [$routes[] | select(.group? == "group6" and (has("match") | not))] as $frontend_default
+    | ($encoders | length) == 1
+    and (
+      ($encoders[0].match[0].not[0].path | sort)
+      == (["/api/v1/privacy/export", "/api/privacy/export"] | sort)
+    )
+    and ($backend_privacy | length) == 1
+    and $backend_privacy[0].handle[0].routes[0].handle[0].upstreams[0].dial == "backend:8080"
+    and $backend_privacy[0].handle[0].routes[0].handle[0].transport.dial_timeout == 5000000000
+    and $backend_privacy[0].handle[0].routes[0].handle[0].transport.response_header_timeout == 150000000000
+    and ($backend_rest | length) == 1
+    and $backend_rest[0].handle[0].routes[0].handle[0].transport.response_header_timeout == 30000000000
+    and ($frontend_privacy | length) == 1
+    and $frontend_privacy[0].handle[0].routes[0].handle[0].upstreams[0].dial == "frontend:3000"
+    and $frontend_privacy[0].handle[0].routes[0].handle[0].transport.dial_timeout == 5000000000
+    and $frontend_privacy[0].handle[0].routes[0].handle[0].transport.response_header_timeout == 150000000000
+    and ($frontend_default | length) == 1
+    and $frontend_default[0].handle[0].routes[0].handle[0].transport.response_header_timeout == 30000000000
+    and (($routes | index($backend_privacy[0])) < ($routes | index($backend_rest[0])))
+    and (($routes | index($frontend_privacy[0])) < ($routes | index($frontend_default[0])))
+  )
+' "${caddy_adapted_config}" >/dev/null \
+  || fail "adapted Caddy privacy timeout/compression policy is invalid"
 
 printf 'Validating Prometheus configuration and alert rules...\n'
 prometheus_validation_directory="$(mktemp -d)"

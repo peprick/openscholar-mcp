@@ -42,7 +42,10 @@ import { getBackendAccessToken } from "@/shared/auth/session";
 
 const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
 const REQUEST_TIMEOUT_MS = 30_000;
+const PRIVACY_EXPORT_RESPONSE_HEADER_TIMEOUT_MS = 140_000;
+const PRIVACY_EXPORT_ERROR_BODY_TIMEOUT_MS = 30_000;
 const MEBIBYTE = 1_048_576;
+const PRIVACY_EXPORT_MAX_BYTES = 128 * MEBIBYTE;
 const DEFAULT_SUCCESS_JSON_MAX_BYTES = MEBIBYTE;
 // Search pages support 50 abstract-bearing results. Eight MiB matches the
 // backend's default per-provider response ceiling while retaining a finite BFF
@@ -232,6 +235,23 @@ function responseMediaType(response: Response): string | null {
 
 function hasJsonContentType(response: Response): boolean {
   return responseMediaType(response) === "application/json";
+}
+
+function hasValidPrivacyExportContentLength(response: Response): boolean {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === null || !/^[1-9]\d*$/.test(contentLength)) {
+    return false;
+  }
+
+  const maximum = String(PRIVACY_EXPORT_MAX_BYTES);
+  return (
+    contentLength.length < maximum.length ||
+    (contentLength.length === maximum.length && contentLength <= maximum)
+  );
+}
+
+function isUnencodedPrivacyExport(response: Response): boolean {
+  return response.headers.get("content-encoding") === null;
 }
 
 async function cancelResponseBody(response: Response): Promise<void> {
@@ -607,13 +627,43 @@ export async function searchSavedLibrary(
 }
 
 export async function exportPersonalData(): Promise<Response> {
-  const response = await fetchBackend("/api/v1/privacy/export", {
-    method: "GET",
-    headers: { accept: "application/json" },
-  });
+  const controller = new AbortController();
+  const responseHeaderTimer = setTimeout(
+    () => controller.abort(),
+    PRIVACY_EXPORT_RESPONSE_HEADER_TIMEOUT_MS,
+  );
+  let response: Response;
+  try {
+    response = await fetchBackend("/api/v1/privacy/export", {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "accept-encoding": "identity",
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(responseHeaderTimer);
+  }
+  if (!response.ok) {
+    const errorBodyTimer = setTimeout(
+      () => controller.abort(),
+      PRIVACY_EXPORT_ERROR_BODY_TIMEOUT_MS,
+    );
+    try {
+      await requireExpectedSuccess(response, 200, "personal data export");
+    } finally {
+      clearTimeout(errorBodyTimer);
+    }
+  }
   await requireExpectedSuccess(response, 200, "personal data export");
-  if (!hasJsonContentType(response) || response.body === null) {
-    await response.body?.cancel().catch(() => undefined);
+  if (
+    !hasJsonContentType(response) ||
+    response.body === null ||
+    !hasValidPrivacyExportContentLength(response) ||
+    !isUnencodedPrivacyExport(response)
+  ) {
+    await cancelResponseBody(response);
     throw new BackendContractError("personal data export");
   }
   return response;

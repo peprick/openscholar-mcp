@@ -88,6 +88,7 @@ Safe local defaults live in `src/main/resources/application.yaml`. Use environme
 |---|---|
 | Database/server | `SPRING_DATASOURCE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SPRING_DOCKER_COMPOSE_ENABLED`, `SERVER_ADDRESS` |
 | Search limits | `SEARCH_COORDINATION_WAIT_TIMEOUT`, `SEARCH_EXECUTION_TIMEOUT` |
+| Privacy export | `PRIVACY_EXPORT_GLOBAL_PERMITS`, `PRIVACY_EXPORT_PER_PRINCIPAL_PERMITS`, `PRIVACY_EXPORT_RETRY_AFTER` |
 | Legal access | `UNPAYWALL_EMAIL`, `UNPAYWALL_BASE_URL`, `ARXIV_BASE_URL` |
 | Local MCP | `MCP_LOCAL_API_KEY`, `MCP_ALLOWED_ORIGINS`, `MCP_RATE_LIMIT_*`, `MCP_MAX_*_BYTES` |
 | Hosted auth | `OIDC_SECURITY_ENABLED`, `OIDC_ISSUER_URI`, `OIDC_JWK_SET_URI`, `OIDC_AUDIENCE`, `OIDC_MCP_RESOURCE_URI` |
@@ -95,6 +96,8 @@ Safe local defaults live in `src/main/resources/application.yaml`. Use environme
 | Related papers | `RELATED_PAPERS_HYBRID_ENABLED`, `RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE` |
 
 The [backend environment example](.env.example) lists direct-development variables. The [root environment example](../.env.example) is authoritative for the full Docker Compose stack.
+
+Privacy-export admission is fail-fast and local to each backend JVM/replica. Defaults allow four exports in total and one per authenticated principal, with a 10-second retry hint. Keep the global permit count below Hikari's `maximum-pool-size` with spare connections for normal traffic; multiple replicas multiply the effective cluster capacity.
 
 ### Research providers
 

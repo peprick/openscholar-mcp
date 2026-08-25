@@ -817,17 +817,28 @@ paths:
       description: |
         Returns owner-scoped account display data, search snapshots, collections, and
         saved memberships. It intentionally omits issuer/subject, shared canonical records,
-        access records, and operational job history.
+        access records, and operational job history. Searches, collections, and saved-paper
+        memberships first pass through fail-fast global and per-principal admission gates.
+        Saturation is rejected before a database export transaction starts. Accepted exports
+        are read through one repeatable-read snapshot. The server first verifies
+        that their combined row count does not exceed 100,000 and that the exact serialized
+        UTF-8 JSON does not exceed 134,217,728 bytes. It never truncates an export merely to
+        fit either preflight boundary; an export outside either boundary fails before the
+        attachment response starts.
       security:
         - HostedOidc: [openscholar.privacy]
       responses:
         "200":
-          description: No-store personal-data JSON attachment.
+          description: No-store, no-transform personal-data JSON attachment.
           headers:
             Cache-Control:
-              $ref: "#/components/headers/NoStore"
+              $ref: "#/components/headers/PrivacyExportCacheControl"
             Content-Disposition:
               $ref: "#/components/headers/ContentDisposition"
+            Content-Length:
+              $ref: "#/components/headers/PrivacyExportContentLength"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
           content:
             application/json:
               schema:
@@ -836,6 +847,26 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          description: The personal-data export exceeds the combined-row or exact serialized-byte boundary (`PRIVACY_EXPORT_TOO_LARGE`).
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Export capacity is temporarily full (`PRIVACY_EXPORT_BUSY`); no export transaction or attachment was started.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/NoStore"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /api/v1/privacy/account:
     delete:
@@ -1016,6 +1047,18 @@ components:
       schema:
         type: string
         const: no-store
+    PrivacyExportContentLength:
+      description: Exact UTF-8 byte length of the bounded personal-data JSON attachment.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+        maximum: 134217728
+    PrivacyExportCacheControl:
+      description: Prevents storage or transformation of the exact-length export representation.
+      schema:
+        type: string
+        const: no-store, no-transform
     RetryAfter:
       description: Minimum whole seconds before a retry, when known.
       schema:
@@ -1253,6 +1296,8 @@ components:
             - PAPER_IDENTIFIER_NOT_FOUND
             - COLLECTION_NOT_FOUND
             - OFFLINE_PACK_TOO_LARGE
+            - PRIVACY_EXPORT_TOO_LARGE
+            - PRIVACY_EXPORT_BUSY
             - SAVED_PAPER_NOT_FOUND
             - REFRESH_JOB_NOT_FOUND
             - REFRESH_JOB_NOT_RETRYABLE

@@ -1,5 +1,8 @@
 import { routeErrorResponse } from "@/shared/api/route-errors";
-import { exportPersonalData } from "@/shared/api/server";
+import {
+  BackendContractError,
+  exportPersonalData,
+} from "@/shared/api/server";
 
 const EXPORT_CONTENT_TYPE = "application/json";
 const EXPORT_CONTENT_DISPOSITION =
@@ -13,10 +16,16 @@ function noStore(response: Response): Response {
 export async function GET(): Promise<Response> {
   try {
     const backendResponse = await exportPersonalData();
+    const contentLength = backendResponse.headers.get("content-length");
+    if (contentLength === null) {
+      await backendResponse.body?.cancel().catch(() => undefined);
+      throw new BackendContractError("personal data export");
+    }
     return new Response(backendResponse.body, {
       status: 200,
       headers: {
-        "cache-control": "no-store",
+        "cache-control": "no-store, no-transform",
+        "content-length": contentLength,
         "content-disposition": EXPORT_CONTENT_DISPOSITION,
         "content-type": EXPORT_CONTENT_TYPE,
         "x-content-type-options": "nosniff",

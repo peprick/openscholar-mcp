@@ -73,6 +73,8 @@ test("privacy export downloads only the current owner's deterministic data", asy
   ]);
   expect(exportResponse.status()).toBe(200);
   expect(exportResponse.headers()["cache-control"]).toContain("no-store");
+  expect(exportResponse.headers()["cache-control"]).toContain("no-transform");
+  expect(exportResponse.headers()["content-encoding"]).toBeUndefined();
   expect(exportResponse.headers()["content-type"]).toContain("application/json");
   expect(download.suggestedFilename()).toBe("openscholar-personal-data.json");
   expect(await download.failure()).toBeNull();
@@ -84,7 +86,11 @@ test("privacy export downloads only the current owner's deterministic data", asy
 
   const downloadPath = await download.path();
   if (downloadPath === null) throw new Error("Privacy export did not create a file.");
-  const exported = JSON.parse(await readFile(downloadPath, "utf8"));
+  const downloadedBytes = await readFile(downloadPath);
+  expect(exportResponse.headers()["content-length"]).toBe(
+    String(downloadedBytes.byteLength),
+  );
+  const exported = JSON.parse(downloadedBytes.toString("utf8"));
   expect(exported).toMatchObject({
     userId: ids.user,
     displayName: "Offline Researcher",

@@ -92,6 +92,9 @@ DATACITE_REQUEST_TIMEOUT
 DATACITE_MAX_RESPONSE_BYTES
 SEARCH_COORDINATION_WAIT_TIMEOUT
 SEARCH_EXECUTION_TIMEOUT
+PRIVACY_EXPORT_GLOBAL_PERMITS
+PRIVACY_EXPORT_PER_PRINCIPAL_PERMITS
+PRIVACY_EXPORT_RETRY_AFTER
 RELATED_PAPERS_HYBRID_ENABLED
 RELATED_PAPERS_HYBRID_CANDIDATE_POOL_SIZE
 UNPAYWALL_EMAIL
@@ -147,6 +150,8 @@ OPENSCHOLAR_OIDC_ID_TOKEN_ALGS
 `SEARCH_COORDINATION_WAIT_TIMEOUT` defaults to `12s` and bounds only acquisition of the JVM-local striped search-coordination lock. It does not bound cache reads, provider work after acquisition, persistence, response serialization, or the complete REST/MCP request, and a caller that stops waiting does not cancel the leader already holding the stripe.
 
 `SEARCH_EXECUTION_TIMEOUT` defaults to `18s`, accepts values of at least one millisecond, and bounds each `SearchResearchUseCase` `search`, `next`, or `get` execution shared by REST and MCP. A dedicated virtual-thread worker and cooperative checkpoints cover application dispatch through `SearchView` construction. Parsing/schema validation, transport DTO/framework serialization, socket lifetime, client disconnects, and MCP cancellation notifications are outside this setting.
+
+Privacy-export admission defaults to four global permits and one permit per authenticated principal for each backend JVM/replica, with a `10s` retry hint. Global permits must be between 1 and 16, per-principal permits between 1 and 4 and no greater than the global value, and the retry hint between one second and five minutes. Keep the instance-global value below Hikari's `maximum-pool-size` with spare connections for normal traffic; backend replicas multiply the effective cluster capacity.
 
 The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. Local auth mode is the default. To exercise hosted mode, backend OIDC and frontend BFF settings must describe the same issuer/audience/client and use explicit loopback or HTTPS endpoints; never expose these values through `NEXT_PUBLIC_*`. Optional discovery providers and durable workers/scheduling remain default-off. Object storage does not exist, and monitoring-specific variables live under `deploy/`. `.env.example` contains placeholders; `.env` is ignored.
 

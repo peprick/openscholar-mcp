@@ -57,6 +57,11 @@ spring:
       fail-on-unknown-properties: true
 
 openscholar:
+  privacy:
+    export:
+      global-permits: ${PRIVACY_EXPORT_GLOBAL_PERMITS:4}
+      per-principal-permits: ${PRIVACY_EXPORT_PER_PRINCIPAL_PERMITS:1}
+      retry-after: ${PRIVACY_EXPORT_RETRY_AFTER:10s}
   security:
     oidc:
       enabled: ${OIDC_SECURITY_ENABLED:false}

@@ -99,6 +99,8 @@ function streamedResponse(
 
 afterEach(() => {
   requestCookie.value = undefined;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -684,32 +686,89 @@ describe("getNextSearchPage", () => {
 });
 
 describe("privacy backend boundary", () => {
-  it("returns the validated JSON export stream without trusting attachment headers", async () => {
+  it("aborts a backend that never returns export response headers", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "https://backend.test");
+    const fetchMock = vi.fn().mockImplementation(
+      async (_url: URL, init: RequestInit): Promise<Response> =>
+        await new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener(
+            "abort",
+            () =>
+              reject(new DOMException("The operation was aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rejection = expect(exportPersonalData()).rejects.toMatchObject({
+      status: 503,
+      problem: expect.objectContaining({ code: "BACKEND_UNREACHABLE" }),
+    });
+    await vi.advanceTimersByTimeAsync(140_001);
+
+    await rejection;
+    const requestSignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
+    expect(requestSignal.aborted).toBe(true);
+  });
+
+  it("returns the untouched JSON export stream after clearing its header timeout", async () => {
+    vi.useFakeTimers();
     vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "https://backend.test");
     const payload = JSON.stringify({ userId: "private-user", searches: [] });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(payload, {
-        status: 200,
-        headers: {
-          "content-disposition": 'attachment; filename="backend-name.json"',
-          "content-type": "application/json; charset=utf-8",
-        },
-      }),
-    );
+    const source = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode(payload));
+        controller.close();
+      },
+    });
+    const backendResponse = new Response(source, {
+      status: 200,
+      headers: {
+        "content-length": String(Buffer.byteLength(payload, "utf8")),
+        "content-disposition": 'attachment; filename="backend-name.json"',
+        "content-type": "application/json; charset=utf-8",
+      },
+    });
+    const jsonSpy = vi.spyOn(backendResponse, "json");
+    const textSpy = vi.spyOn(backendResponse, "text");
+    const blobSpy = vi.spyOn(backendResponse, "blob");
+    const arrayBufferSpy = vi.spyOn(backendResponse, "arrayBuffer");
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const fetchMock = vi.fn().mockResolvedValue(backendResponse);
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await exportPersonalData();
 
+    expect(response).toBe(backendResponse);
+    expect(response.headers.get("content-length")).toBe(
+      String(Buffer.byteLength(payload, "utf8")),
+    );
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 140_000);
+    const requestSignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
     expect(fetchMock).toHaveBeenCalledWith(
       new URL("/api/v1/privacy/export", "https://backend.test"),
       expect.objectContaining({
         cache: "no-store",
         method: "GET",
+        signal: requestSignal,
       }),
     );
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
     expect(headers.get("accept")).toBe("application/json");
+    expect(headers.get("accept-encoding")).toBe("identity");
+    expect(requestSignal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(140_001);
+    expect(requestSignal.aborted).toBe(false);
+    expect(response.bodyUsed).toBe(false);
+    expect(response.body?.locked).toBe(false);
+    expect(jsonSpy).not.toHaveBeenCalled();
+    expect(textSpy).not.toHaveBeenCalled();
+    expect(blobSpy).not.toHaveBeenCalled();
+    expect(arrayBufferSpy).not.toHaveBeenCalled();
     await expect(response.text()).resolves.toBe(payload);
+    expect(response.bodyUsed).toBe(true);
   });
 
   it.each([
@@ -718,7 +777,10 @@ describe("privacy backend boundary", () => {
       () =>
         new Response("{}", {
           status: 201,
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-length": "2",
+            "content-type": "application/json",
+          },
         }),
     ],
     [
@@ -726,7 +788,7 @@ describe("privacy backend boundary", () => {
       () =>
         new Response("<html>not JSON</html>", {
           status: 200,
-          headers: { "content-type": "text/html" },
+          headers: { "content-length": "21", "content-type": "text/html" },
         }),
     ],
     [
@@ -734,7 +796,10 @@ describe("privacy backend boundary", () => {
       () =>
         new Response(null, {
           status: 200,
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-length": "2",
+            "content-type": "application/json",
+          },
         }),
     ],
   ])("rejects an export with %s", async (_label, response) => {
@@ -743,6 +808,53 @@ describe("privacy backend boundary", () => {
     await expect(exportPersonalData()).rejects.toBeInstanceOf(
       BackendContractError,
     );
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["zero", "0"],
+    ["leading-zero", "02"],
+    ["signed", "+2"],
+    ["oversized", String(128 * MEBIBYTE + 1)],
+    ["unbounded integer", "9".repeat(1_000)],
+  ])(
+    "rejects and cancels a stream with a %s Content-Length",
+    async (_label, contentLength) => {
+      const headers = new Headers({ "content-type": "application/json" });
+      if (contentLength !== undefined) {
+        headers.set("content-length", contentLength);
+      }
+      const { response, cancel } = streamedResponse(
+        [new TextEncoder().encode("{}")],
+        { status: 200, headers },
+      );
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+      await expect(exportPersonalData()).rejects.toBeInstanceOf(
+        BackendContractError,
+      );
+      expect(cancel).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("rejects and cancels a content-encoded export", async () => {
+    const { response, cancel } = streamedResponse(
+      [new TextEncoder().encode("{}")],
+      {
+        status: 200,
+        headers: {
+          "content-encoding": "gzip",
+          "content-length": "2",
+          "content-type": "application/json",
+        },
+      },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(exportPersonalData()).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it("translates a failed export into the safe backend API error", async () => {
@@ -773,6 +885,47 @@ describe("privacy backend boundary", () => {
       retryAfter: "15",
       problem: expect.objectContaining({ code: "ACCESS_DENIED" }),
     });
+  });
+
+  it("aborts a stalled backend error body after its finite deadline", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("OPENSCHOLAR_API_BASE_URL", "https://backend.test");
+    let bodyController!: ReadableStreamDefaultController<Uint8Array>;
+    const backendResponse = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          bodyController = controller;
+        },
+      }),
+      {
+        status: 503,
+        headers: { "content-type": "application/problem+json" },
+      },
+    );
+    const fetchMock = vi.fn().mockImplementation(
+      async (_url: URL, init: RequestInit): Promise<Response> => {
+        init.signal?.addEventListener(
+          "abort",
+          () =>
+            bodyController.error(
+              new DOMException("The operation was aborted", "AbortError"),
+            ),
+          { once: true },
+        );
+        return backendResponse;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rejection = expect(exportPersonalData()).rejects.toMatchObject({
+      status: 503,
+      problem: expect.objectContaining({ code: "BACKEND_REQUEST_FAILED" }),
+    });
+    await vi.advanceTimersByTimeAsync(30_001);
+
+    await rejection;
+    const requestSignal = fetchMock.mock.calls[0]?.[1]?.signal as AbortSignal;
+    expect(requestSignal.aborted).toBe(true);
   });
 
   it("sends only the exact confirmation and requires the backend 204", async () => {

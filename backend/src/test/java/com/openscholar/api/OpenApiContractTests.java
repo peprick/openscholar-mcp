@@ -83,7 +83,49 @@ class OpenApiContractTests {
 			assertSecurity(endpoint, operation, responses);
 		});
 
+		assertPrivacyExportContract(operations.get("GET /api/v1/privacy/export"), document);
 		assertLocalReferencesResolve(document, document);
+	}
+
+	private static void assertPrivacyExportContract(
+			Map<String, Object> operation, Map<String, Object> document) {
+		assertThat(operation).as("privacy export operation").isNotNull();
+		assertThat((String) operation.get("description"))
+				.contains("repeatable-read", "100,000", "134,217,728", "never truncates");
+
+		Map<String, Object> responses = map(operation.get("responses"), "privacy export responses");
+		Map<String, Object> success = map(responses.get("200"), "privacy export success");
+		Map<String, Object> headers = map(success.get("headers"), "privacy export success headers");
+		assertThat(headers).containsKeys(
+				"Cache-Control", "Content-Disposition", "Content-Length", "X-Content-Type-Options");
+		assertThat(map(headers.get("Content-Length"), "privacy export Content-Length"))
+				.containsEntry("$ref", "#/components/headers/PrivacyExportContentLength");
+		assertThat(map(headers.get("Cache-Control"), "privacy export Cache-Control"))
+				.containsEntry("$ref", "#/components/headers/PrivacyExportCacheControl");
+		assertThat(map(headers.get("X-Content-Type-Options"), "privacy export nosniff"))
+				.containsEntry("$ref", "#/components/headers/NoSniff");
+
+		Map<String, Object> overLimit = map(responses.get("422"), "privacy export over-limit response");
+		assertThat((String) overLimit.get("description")).contains("PRIVACY_EXPORT_TOO_LARGE");
+		Map<String, Object> busy = map(responses.get("429"), "privacy export busy response");
+		assertThat((String) busy.get("description")).contains("PRIVACY_EXPORT_BUSY");
+		Map<String, Object> busyHeaders = map(busy.get("headers"), "privacy export busy headers");
+		assertThat(map(busyHeaders.get("Cache-Control"), "privacy export busy Cache-Control"))
+				.containsEntry("$ref", "#/components/headers/NoStore");
+		assertThat(map(busyHeaders.get("Retry-After"), "privacy export busy Retry-After"))
+				.containsEntry("$ref", "#/components/headers/RetryAfter");
+
+		Map<String, Object> components = map(document.get("components"), "components");
+		Map<String, Object> componentHeaders = map(components.get("headers"), "component headers");
+		Map<String, Object> contentLength = map(
+				componentHeaders.get("PrivacyExportContentLength"), "privacy export length header");
+		assertThat(map(contentLength.get("schema"), "privacy export length schema"))
+				.containsEntry("minimum", 1)
+				.containsEntry("maximum", 134_217_728);
+		Map<String, Object> cacheControl = map(
+				componentHeaders.get("PrivacyExportCacheControl"), "privacy export Cache-Control header");
+		assertThat(map(cacheControl.get("schema"), "privacy export Cache-Control schema"))
+				.containsEntry("const", "no-store, no-transform");
 	}
 
 	private static void assertSecurity(

@@ -15,6 +15,8 @@ import com.openscholar.jobs.ResearchRefreshJobNotRetryableException;
 import com.openscholar.paper.InvalidPaperIdentifierException;
 import com.openscholar.paper.PaperIdentifierNotFoundException;
 import com.openscholar.paper.PaperNotFoundException;
+import com.openscholar.privacy.PrivacyExportBusyException;
+import com.openscholar.privacy.PrivacyExportTooLargeException;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchDeadlineExceededException;
@@ -164,6 +166,38 @@ public class ApiExceptionHandler {
 		return ResponseEntity.unprocessableEntity()
 			.cacheControl(CacheControl.noStore())
 			.body(problem);
+	}
+
+	@ExceptionHandler(PrivacyExportTooLargeException.class)
+	ResponseEntity<ProblemDetail> handlePrivacyExportTooLarge(
+			PrivacyExportTooLargeException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.UNPROCESSABLE_ENTITY,
+				"PRIVACY_EXPORT_TOO_LARGE",
+				"Personal-data export too large",
+				exception.getMessage());
+		return ResponseEntity.unprocessableEntity()
+				.cacheControl(CacheControl.noStore())
+				.body(problem);
+	}
+
+	@ExceptionHandler(PrivacyExportBusyException.class)
+	ResponseEntity<ProblemDetail> handlePrivacyExportBusy(
+			PrivacyExportBusyException exception) {
+		ProblemDetail problem = problem(
+				HttpStatus.TOO_MANY_REQUESTS,
+				"PRIVACY_EXPORT_BUSY",
+				"Personal-data export busy",
+				exception.getMessage());
+		problem.setProperty("retryable", true);
+		long retryAfterSeconds = Math.max(1,
+				exception.retryAfter().getSeconds()
+						+ (exception.retryAfter().getNano() == 0 ? 0 : 1));
+		problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.cacheControl(CacheControl.noStore())
+				.header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds))
+				.body(problem);
 	}
 
 	@ExceptionHandler(SavedPaperNotFoundException.class)

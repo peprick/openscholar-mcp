@@ -23,6 +23,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.ObjectMapper;
 
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
@@ -36,6 +38,9 @@ class PrivacyControllerIntegrationTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private ObjectMapper objectMapper;
 
 	private UUID paperId;
 
@@ -96,11 +101,12 @@ class PrivacyControllerIntegrationTests {
 
 	@Test
 	void exportsOwnedSearchAndLibraryDataWithoutCaching() throws Exception {
-		mockMvc.perform(get("/api/v1/privacy/export"))
+		MvcResult result = mockMvc.perform(get("/api/v1/privacy/export"))
 				.andExpect(status().isOk())
-				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+				.andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store, no-transform"))
 				.andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
 						"attachment; filename=\"openscholar-personal-data.json\""))
+				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
 				.andExpect(jsonPath("$.userId").value(LOCAL_USER_ID.toString()))
 				.andExpect(jsonPath("$.displayName").value("Local OpenScholar User"))
 				.andExpect(jsonPath("$.searches.length()").value(1))
@@ -117,7 +123,12 @@ class PrivacyControllerIntegrationTests {
 				.andExpect(jsonPath("$.savedPapers[0].title").value("Private library paper"))
 				.andExpect(jsonPath("$.savedPapers[0].readingStatus").value("READING"))
 				.andExpect(jsonPath("$.savedPapers[0].tags[0]").value("methods"))
-				.andExpect(jsonPath("$.savedPapers[0].tags[1]").value("review"));
+				.andExpect(jsonPath("$.savedPapers[0].tags[1]").value("review"))
+				.andReturn();
+
+		byte[] content = result.getResponse().getContentAsByteArray();
+		assertThat(result.getResponse().getContentLengthLong()).isEqualTo(content.length);
+		assertThat(content).isEqualTo(objectMapper.writeValueAsBytes(objectMapper.readTree(content)));
 	}
 
 	@Test

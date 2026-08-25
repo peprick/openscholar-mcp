@@ -52,6 +52,16 @@ Logs can contain search topics, document titles, URLs, request IDs, and operatio
 3. Disable optional scheduled refresh or a newly enabled provider before reducing interactive safeguards.
 4. Capture a sanitized incident timeline and validate recovery with both readiness and a representative read flow.
 
+### Privacy export rejected or interrupted
+
+A `429 PRIVACY_EXPORT_BUSY` means the per-instance global or per-principal gate rejected the request before an export transaction or attachment opened. Honor `Retry-After`; do not create a tight retry loop. Check concurrent exports and database connection pressure without trying to infer which limit rejected a specific user.
+
+1. A `422 PRIVACY_EXPORT_TOO_LARGE` is a deliberate pre-commit boundary, not a partial export. Confirm whether the authenticated owner's searches, collections, and saved memberships exceed 100,000 combined rows or 128 MiB of exact UTF-8 JSON; do not increase either limit during incident response.
+2. For a timeout, distinguish the backend 120-second transaction/query timeout, the frontend's 140-second backend response-header deadline, its separate 30-second non-success-body deadline, Caddy's five-second dial and 150-second privacy response-header deadlines, and the edge's 340-second request-to-final-byte write deadline. The database timeout does not interrupt a blocked servlet write. The frontend header timer must be cleared after backend headers; generic routes must remain at their shorter response-header timeout.
+3. Check PostgreSQL connection pressure and long-lived repeatable-read transactions, then reproduce with an authorized synthetic account. Never copy a user's export into logs, monitoring, or an incident ticket.
+4. An accepted response must be no-store, no-transform, nosniff, an attachment, carry an exact `Content-Length`, and have no `Content-Encoding`. Confirm that the BFF requested identity encoding and rejected an encoded backend response. Treat a truncated stream or length mismatch as a failed download; the user should retry only after the underlying capacity or connectivity issue is understood.
+5. The 340-second Caddy write timeout begins after request headers and is listener-wide, not a privacy-route override or a post-response-header allowance. It budgets the privacy route's five-second dial, 150-second upstream-header ceiling, roughly 180 seconds for the body, and a small handler margin. If slow-client pressure affects other routes, preserve the 30-second generic upstream header waits and bounded application bodies, then add deployment-level connection/rate controls rather than silently extending the listener timeout again.
+
 ### Monitoring pipeline down
 
 1. Check Prometheus target status, blackbox-exporter status, and target-file JSON syntax.

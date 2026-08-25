@@ -133,6 +133,27 @@ expect_failure() {
 [[ -x "${production_compose_script}" ]] \
   || fail "production Compose wrapper is missing or not executable"
 
+for privacy_export_contract in \
+  "PRIVACY_EXPORT_GLOBAL_PERMITS|4" \
+  "PRIVACY_EXPORT_PER_PRINCIPAL_PERMITS|1" \
+  "PRIVACY_EXPORT_RETRY_AFTER|10s"; do
+  IFS='|' read -r privacy_export_setting privacy_export_default \
+    <<<"${privacy_export_contract}"
+  compose_mapping="${privacy_export_setting}: \${${privacy_export_setting}:-${privacy_export_default}}"
+  environment_mapping="${privacy_export_setting}=${privacy_export_default}"
+  grep -Fq -- "${compose_mapping}" "${repository_directory}/compose.yaml" \
+    || fail "development Compose is missing ${privacy_export_setting} with its safe default"
+  grep -Fq -- "${compose_mapping}" "${repository_directory}/deploy/compose.production.yaml" \
+    || fail "production Compose is missing ${privacy_export_setting} with its safe default"
+  grep -Fxq -- "${environment_mapping}" "${repository_directory}/.env.example" \
+    || fail "root environment example is missing ${privacy_export_setting} with its safe default"
+  grep -Fxq -- "${environment_mapping}" "${repository_directory}/backend/.env.example" \
+    || fail "backend environment example is missing ${privacy_export_setting} with its safe default"
+  grep -Fxq -- "${environment_mapping}" "${repository_directory}/deploy/production.env.example" \
+    || fail "production environment example is missing ${privacy_export_setting} with its safe default"
+done
+printf 'PASS: privacy-export admission settings follow every deployment configuration path\n'
+
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/openscholar-production-compose.XXXXXX")"
 cleanup() {
   local status=$?

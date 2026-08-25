@@ -6,6 +6,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+
+import com.openscholar.privacy.PrivacyExportBusyException;
+import com.openscholar.privacy.PrivacyExportTooLargeException;
 import com.openscholar.search.SearchCoordinationInterruptedException;
 import com.openscholar.search.SearchCoordinationTimeoutException;
 import com.openscholar.search.SearchDeadlineExceededException;
@@ -78,6 +82,36 @@ class ApiExceptionHandlerTests {
 						org.hamcrest.Matchers.containsString(NESTED_SECRET))));
 	}
 
+	@Test
+	void mapsOversizedPrivacyExportToNonRetryableUnprocessableEntityWithoutCaching() throws Exception {
+		mockMvc.perform(get("/test/privacy-export-too-large"))
+				.andExpect(status().isUnprocessableEntity())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(jsonPath("$.code").value("PRIVACY_EXPORT_TOO_LARGE"))
+				.andExpect(jsonPath("$.title").value("Personal-data export too large"))
+				.andExpect(jsonPath("$.retryable").doesNotExist())
+				.andExpect(jsonPath("$.detail")
+						.value("The personal-data export exceeds the supported record or byte limit"));
+	}
+
+	@Test
+	void mapsBusyPrivacyExportToGenericRetryableRateLimitWithoutCaching() throws Exception {
+		mockMvc.perform(get("/test/privacy-export-busy"))
+				.andExpect(status().isTooManyRequests())
+				.andExpect(header().string("Cache-Control", "no-store"))
+				.andExpect(header().string("Retry-After", "2"))
+				.andExpect(jsonPath("$.code").value("PRIVACY_EXPORT_BUSY"))
+				.andExpect(jsonPath("$.title").value("Personal-data export busy"))
+				.andExpect(jsonPath("$.retryable").value(true))
+				.andExpect(jsonPath("$.retryAfterSeconds").value(2))
+				.andExpect(jsonPath("$.detail")
+						.value("Personal-data export capacity is temporarily full. Try again later."))
+				.andExpect(content().string(org.hamcrest.Matchers.not(
+						org.hamcrest.Matchers.containsString("00000000-0000-0000-0000-000000000001"))))
+				.andExpect(content().string(org.hamcrest.Matchers.not(
+						org.hamcrest.Matchers.containsString("globalPermits"))));
+	}
+
 	@RestController
 	private static final class CoordinationFailureController {
 
@@ -101,6 +135,16 @@ class ApiExceptionHandlerTests {
 		@GetMapping("/test/execution-interrupted")
 		void executionInterrupted() {
 			throw new SearchExecutionInterruptedException(new InterruptedException(NESTED_SECRET));
+		}
+
+		@GetMapping("/test/privacy-export-too-large")
+		void privacyExportTooLarge() {
+			throw new PrivacyExportTooLargeException();
+		}
+
+		@GetMapping("/test/privacy-export-busy")
+		void privacyExportBusy() {
+			throw new PrivacyExportBusyException(Duration.ofSeconds(1).plusNanos(1));
 		}
 	}
 }

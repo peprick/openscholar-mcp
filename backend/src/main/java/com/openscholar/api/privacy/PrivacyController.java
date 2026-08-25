@@ -1,7 +1,9 @@
 package com.openscholar.api.privacy;
 
-import com.openscholar.privacy.PrivacyExport;
+import java.io.IOException;
+
 import com.openscholar.privacy.PrivacyUseCase;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -26,12 +28,19 @@ class PrivacyController {
 	}
 
 	@GetMapping(value = "/export", produces = MediaType.APPLICATION_JSON_VALUE)
-	ResponseEntity<PrivacyExport> exportPersonalData() {
-		return ResponseEntity.ok()
-				.cacheControl(CacheControl.noStore())
-				.header(HttpHeaders.CONTENT_DISPOSITION,
-						"attachment; filename=\"openscholar-personal-data.json\"")
-				.body(privacy.exportPersonalData());
+	void exportPersonalData(HttpServletResponse response) throws IOException {
+		privacy.exportPersonalData(contentLength -> {
+			response.setStatus(HttpServletResponse.SC_OK);
+			response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+			response.setContentLengthLong(contentLength);
+			response.setHeader(
+					HttpHeaders.CACHE_CONTROL,
+					CacheControl.noStore().noTransform().getHeaderValue());
+			response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+					"attachment; filename=\"openscholar-personal-data.json\"");
+			response.setHeader("X-Content-Type-Options", "nosniff");
+			return response.getOutputStream();
+		});
 	}
 
 	@DeleteMapping("/account")
