@@ -590,23 +590,36 @@
     ensureStorageAvailable();
     return new Promise((resolve, reject) => {
       const request = global.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+      let settled = false;
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE_NAME)) {
           request.result.createObjectStore(STORE_NAME, { keyPath: "slot" });
         }
       };
       request.onsuccess = () => {
+        if (settled) {
+          request.result.close();
+          return;
+        }
+        settled = true;
         request.result.onversionchange = () => request.result.close();
         resolve(request.result);
       };
-      request.onerror = () => reject(request.error ?? invalidPack());
-      request.onblocked = () =>
+      request.onerror = () => {
+        if (settled) return;
+        settled = true;
+        reject(request.error ?? invalidPack());
+      };
+      request.onblocked = () => {
+        if (settled) return;
+        settled = true;
         reject(
           new OfflinePackError(
             "Offline storage is busy in another tab.",
             "OfflinePackStorageBusyError",
           ),
         );
+      };
     });
   }
 

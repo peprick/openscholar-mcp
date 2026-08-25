@@ -376,6 +376,22 @@ describe("PdfReader", () => {
     expect(task.destroy).toHaveBeenCalledOnce();
   });
 
+  it("rejects a document whose page tree exceeds the reader ceiling", async () => {
+    const pdf = successfulPdf();
+    Object.assign(pdf.document, { numPages: 10_001 });
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+
+    render(<PdfReader source={source} title="A verified research paper" />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "This PDF cannot be displayed inside OpenScholar.",
+      }),
+    ).toBeVisible();
+    expect(pdf.task.destroy).toHaveBeenCalledOnce();
+    expect(pdf.document.getPage).not.toHaveBeenCalled();
+  });
+
   it("starts a clean session when a verified source changes", async () => {
     const firstPdf = successfulPdf();
     const secondPdf = successfulPdf();

@@ -26,12 +26,19 @@ an explicit browser-test mode). It may cache only:
 
 [ADR 0010](0010-store-one-encrypted-offline-metadata-pack.md) later extends this
 positive allowlist with an account-neutral static reader runtime. The fallback
-and runtime form one required, versioned cache pair: installation completes only
-after both are fetched and written, and the active worker serves their exact
-paths cache-only until a later worker version installs a complete replacement.
-This prevents an independent runtime or shell refresh from mixing reader
-versions. It does not permit an owned page, RSC response, API response, or user
-record in CacheStorage.
+and runtime form one required, versioned cache pair. The registration URL,
+worker, fallback marker, runtime marker, and application loader carry the same
+reader revision. The worker refuses an inexact script query or an update that
+reuses the active revision. It fetches both required assets with credentials
+omitted and accepts only non-redirected responses from the exact same-origin,
+queryless target with the expected media type and revision marker. Installation
+completes only after both cache writes succeed; any failed fetch or write removes
+the candidate cache. The active worker serves the unqueried pair cache-only and
+maps only its matching revision-qualified runtime request to that cached runtime.
+A newer revision request bypasses the old worker. This prevents an independent
+runtime or shell refresh, a failed upgrade, or a forward rollback from mixing
+reader versions. It does not permit an owned page, RSC response, API response,
+or user record in CacheStorage.
 
 Successful eligible navigations remain network-only. An eligible navigation
 whose network fetch rejects may receive the cached generic shell, but its
@@ -39,12 +46,16 @@ successful HTML or RSC response is never stored and does not refresh the reader
 pair.
 Requests for APIs, authentication, MCP, OAuth metadata, exports, external
 origins, document extensions, authorization headers, byte ranges, or dynamic
-image/data routes are not intercepted. Responses marked `private`, `no-store`,
-opaque, unsuccessful, or `Vary: *` are not stored.
+image/data routes are not intercepted. Public static/install fetches omit browser
+credentials. A response is not stored when it is `private`, `no-store`, opaque,
+unsuccessful, redirected, returned from a URL other than the exact request URL,
+or varies on `*` or `Cookie`.
 
 The worker uses an application-owned versioned cache prefix, removes only older
 OpenScholar shell caches after safe activation, and does not force
-`skipWaiting`. `/sw.js` is served with `no-store`/revalidation and
+`skipWaiting`. A waiting or failed candidate therefore leaves the incumbent
+cache and encrypted IndexedDB data intact. `/sw.js` is served with
+`no-store`/revalidation and
 `Service-Worker-Allowed: /`; public install assets bypass hosted session
 processing. When persistent registration is disabled in development or ordinary
 test runs, best-effort cleanup unregisters only the exact same-origin `/sw.js`

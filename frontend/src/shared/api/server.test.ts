@@ -24,6 +24,9 @@ import {
 
 vi.mock("server-only", () => ({}));
 
+const MEBIBYTE = 1_048_576;
+const SEARCH_RESPONSE_MAX_BYTES = 8 * MEBIBYTE;
+
 const requestCookie = vi.hoisted(() => ({ value: undefined as string | undefined }));
 
 vi.mock("next/headers", () => ({
@@ -73,6 +76,27 @@ function offlinePackJsonWithByteLength(targetBytes: number): {
   return { json, payload };
 }
 
+function streamedResponse(
+  chunks: Uint8Array[],
+  init: ResponseInit,
+): { response: Response; cancel: ReturnType<typeof vi.fn> } {
+  let nextChunk = 0;
+  const cancel = vi.fn();
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[nextChunk];
+      nextChunk += 1;
+      if (chunk === undefined) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+    cancel,
+  });
+  return { response: new Response(body, init), cancel };
+}
+
 afterEach(() => {
   requestCookie.value = undefined;
   vi.unstubAllEnvs();
@@ -120,6 +144,264 @@ describe("fetchBackend hosted authentication", () => {
 
     const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
     expect(headers.get("authorization")).toBe("Bearer caller-token");
+  });
+});
+
+describe("bounded backend JSON responses", () => {
+  const resolution = {
+    paperId: testIds.paper,
+    identifierType: "DOI" as const,
+    normalizedValue: "10.1000/example",
+  };
+
+  it("accepts an ordinary streamed JSON success without Content-Length", async () => {
+    const encoded = new TextEncoder().encode(JSON.stringify(resolution));
+    const midpoint = Math.floor(encoded.byteLength / 2);
+    const { response } = streamedResponse(
+      [encoded.slice(0, midpoint), encoded.slice(midpoint)],
+      {
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(resolvePaperIdentifier("10.1000/example")).resolves.toEqual(
+      resolution,
+    );
+  });
+
+  it("accepts a valid declared JSON body length", async () => {
+    const json = JSON.stringify(resolution);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(json, {
+          status: 200,
+          headers: {
+            "content-length": String(Buffer.byteLength(json, "utf8")),
+            "content-type": "application/json",
+          },
+        }),
+      ),
+    );
+
+    await expect(resolvePaperIdentifier("10.1000/example")).resolves.toEqual(
+      resolution,
+    );
+  });
+
+  it("accepts an ordinary abstract-bearing search page above the small-response ceiling", async () => {
+    const payload = searchResponseFixture();
+    const abstractLength = 60 * 1_024;
+    const baseResult = payload.results[0]!;
+    payload.results = Array.from({ length: 20 }, (_, index) => ({
+      ...baseResult,
+      rank: index + 1,
+      paperId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      abstractText: "x".repeat(abstractLength),
+    }));
+    const json = JSON.stringify(payload);
+    const byteLength = Buffer.byteLength(json, "utf8");
+    expect(byteLength).toBeGreaterThan(MEBIBYTE);
+    expect(byteLength).toBeLessThan(SEARCH_RESPONSE_MAX_BYTES);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(json, {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const result = await getNextSearchPage(testIds.search);
+
+    expect(result.data.results).toHaveLength(20);
+    expect(result.data.results.every((paper) => paper.abstractText?.length === abstractLength)).toBe(
+      true,
+    );
+  });
+
+  it("rejects a declared search response above its resource ceiling before reading", async () => {
+    const { response, cancel } = streamedResponse(
+      [new TextEncoder().encode(JSON.stringify(searchResponseFixture()))],
+      {
+        status: 200,
+        headers: {
+          "content-length": String(SEARCH_RESPONSE_MAX_BYTES + 1),
+          "content-type": "application/json",
+        },
+      },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(getNextSearchPage(testIds.search)).rejects.toBeInstanceOf(
+      BackendContractError,
+    );
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["a missing length", undefined],
+    ["a forged short length", "1"],
+  ])(
+    "caps an oversized streamed search response with %s",
+    async (_label, contentLength) => {
+      const headers = new Headers({ "content-type": "application/json" });
+      if (contentLength !== undefined) {
+        headers.set("content-length", contentLength);
+      }
+      const { response, cancel } = streamedResponse(
+        [
+          new Uint8Array(5 * MEBIBYTE),
+          new Uint8Array(4 * MEBIBYTE),
+          new Uint8Array([1]),
+        ],
+        { status: 200, headers },
+      );
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+      await expect(getNextSearchPage(testIds.search)).rejects.toBeInstanceOf(
+        BackendContractError,
+      );
+      expect(cancel).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(["invalid", "1048577", "999999999999999999999999999999"])(
+    "rejects a forged or oversized declared success length of %s before reading",
+    async (contentLength) => {
+      const { response, cancel } = streamedResponse(
+        [new TextEncoder().encode(JSON.stringify(resolution))],
+        {
+          status: 200,
+          headers: {
+            "content-length": contentLength,
+            "content-type": "application/json",
+          },
+        },
+      );
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+      await expect(
+        resolvePaperIdentifier("10.1000/example"),
+      ).rejects.toBeInstanceOf(BackendContractError);
+      expect(cancel).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([
+    ["a missing length", undefined],
+    ["a forged short length", "1"],
+  ])("caps a chunked success with %s and cancels on overflow", async (_label, length) => {
+    const headers = new Headers({ "content-type": "application/json" });
+    if (length !== undefined) headers.set("content-length", length);
+    const { response, cancel } = streamedResponse(
+      [
+        new Uint8Array(700 * 1_024),
+        new Uint8Array(400 * 1_024),
+        new Uint8Array([1]),
+      ],
+      { status: 200, headers },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(
+      resolvePaperIdentifier("10.1000/example"),
+    ).rejects.toBeInstanceOf(BackendContractError);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("rejects and cancels a successful body with the wrong media type", async () => {
+    const { response, cancel } = streamedResponse(
+      [new TextEncoder().encode(JSON.stringify(resolution))],
+      { status: 200, headers: { "content-type": "text/plain" } },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(
+      resolvePaperIdentifier("10.1000/example"),
+    ).rejects.toBeInstanceOf(BackendContractError);
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("preserves an ordinary bounded Problem Details response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            type: "urn:openscholar:problem:paper-identifier-not-found",
+            title: "Paper not found",
+            status: 404,
+            detail: "No visible paper uses that identifier.",
+            code: "PAPER_IDENTIFIER_NOT_FOUND",
+          },
+          {
+            status: 404,
+            headers: {
+              "content-type": "application/problem+json; charset=utf-8",
+              "retry-after": "12",
+            },
+          },
+        ),
+      ),
+    );
+
+    await expect(resolvePaperIdentifier("10.1000/missing")).rejects.toMatchObject({
+      status: 404,
+      retryAfter: "12",
+      problem: expect.objectContaining({ code: "PAPER_IDENTIFIER_NOT_FOUND" }),
+    });
+  });
+
+  it("cancels an oversized chunked problem and exposes only the safe fallback", async () => {
+    const { response, cancel } = streamedResponse(
+      [
+        new Uint8Array(40 * 1_024),
+        new Uint8Array(25 * 1_024),
+        new Uint8Array([1]),
+      ],
+      {
+        status: 502,
+        headers: {
+          "content-type": "application/problem+json",
+          "retry-after": "9",
+        },
+      },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(resolvePaperIdentifier("10.1000/missing")).rejects.toMatchObject({
+      status: 502,
+      retryAfter: "9",
+      problem: expect.objectContaining({ code: "BACKEND_REQUEST_FAILED" }),
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("does not parse a problem body with a non-JSON media type", async () => {
+    const { response, cancel } = streamedResponse(
+      [
+        new TextEncoder().encode(
+          JSON.stringify({
+            title: "Unsafe upstream detail",
+            status: 400,
+            detail: "This body must not cross the boundary.",
+            code: "UPSTREAM_DETAIL",
+          }),
+        ),
+      ],
+      { status: 400, headers: { "content-type": "text/plain" } },
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(resolvePaperIdentifier("10.1000/missing")).rejects.toMatchObject({
+      status: 400,
+      problem: expect.objectContaining({ code: "BACKEND_REQUEST_FAILED" }),
+    });
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });
 
@@ -286,7 +568,7 @@ describe("getOfflineCollectionPack", () => {
     );
   });
 
-  it("preserves a structured backend error before applying success-body checks", async () => {
+  it("uses the safe fallback for an error with a non-JSON media type", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -312,7 +594,7 @@ describe("getOfflineCollectionPack", () => {
     await expect(getOfflineCollectionPack(testIds.collection)).rejects.toMatchObject({
       status: 422,
       retryAfter: "30",
-      problem: expect.objectContaining({ code: "OFFLINE_PACK_TOO_LARGE" }),
+      problem: expect.objectContaining({ code: "BACKEND_REQUEST_FAILED" }),
     });
   });
 });

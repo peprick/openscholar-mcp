@@ -1,0 +1,805 @@
+{
+  "schemaVersion": 2,
+  "fixtureId": "paper-deduplication-development-v2",
+  "policyId": "paper-deduplication-policy-v2",
+  "split": "DEVELOPMENT",
+  "labelUnit": "BIBLIOGRAPHIC_MANIFESTATION",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "retrievedAt": "2026-08-25T12:00:00Z",
+  "records": [
+    {
+      "key": "doi-url",
+      "goldCluster": "cluster-001",
+      "caseFamily": "DOI_NORMALIZATION",
+      "provider": {"name": "crossref", "recordId": "CR-001-A"},
+      "paper": {
+        "title": "Normalization of persistent article identifiers",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "https://doi.org/10.5555/Normalized.Alpha"}],
+        "authors": [{"displayName": "Nadia Iqbal", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "doi-prefix",
+      "goldCluster": "cluster-001",
+      "caseFamily": "DOI_NORMALIZATION",
+      "provider": {"name": "datacite", "recordId": "DC-001-B"},
+      "paper": {
+        "title": "Normalization of persistent article identifiers",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "doi:10.5555/NORMALIZED.ALPHA"}],
+        "authors": [{"displayName": "Nadia Iqbal", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "doi-bare",
+      "goldCluster": "cluster-001",
+      "caseFamily": "DOI_NORMALIZATION",
+      "provider": {"name": "doaj", "recordId": "DJ-001-C"},
+      "paper": {
+        "title": "Persistent identifier normalization in article catalogs",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/normalized.alpha"}],
+        "authors": [{"displayName": "N. Iqbal", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "arxiv-modern-prefixed",
+      "goldCluster": "cluster-002",
+      "caseFamily": "ARXIV_MODERN_VERSION",
+      "provider": {"name": "arxiv", "recordId": "AX-002-A"},
+      "paper": {
+        "title": "Modern preprint version normalization",
+        "publicationYear": 2025,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "arXiv:2501.01234v1"}],
+        "authors": [{"displayName": "Elena Martín", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "arxiv-modern-abs",
+      "goldCluster": "cluster-002",
+      "caseFamily": "ARXIV_MODERN_VERSION",
+      "provider": {"name": "openalex", "recordId": "OA-002-B"},
+      "paper": {
+        "title": "Modern preprint version normalization",
+        "publicationYear": 2025,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "https://arxiv.org/abs/2501.01234v7"}],
+        "authors": [{"displayName": "Elena Martín", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "arxiv-modern-pdf",
+      "goldCluster": "cluster-002",
+      "caseFamily": "ARXIV_MODERN_VERSION",
+      "provider": {"name": "core", "recordId": "CO-002-C"},
+      "paper": {
+        "title": "Repository copy of a modern preprint",
+        "publicationYear": 2025,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "https://export.arxiv.org/pdf/2501.01234.pdf"}],
+        "authors": [{"displayName": "E. Martín", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "arxiv-legacy-version",
+      "goldCluster": "cluster-003",
+      "caseFamily": "ARXIV_LEGACY_VERSION",
+      "provider": {"name": "arxiv", "recordId": "AX-003-A"},
+      "paper": {
+        "title": "Legacy archive identifiers in physics",
+        "publicationYear": 1999,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "hep-th/9901001v1"}],
+        "authors": [{"displayName": "Satoshi Mori", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "arxiv-legacy-prefix",
+      "goldCluster": "cluster-003",
+      "caseFamily": "ARXIV_LEGACY_VERSION",
+      "provider": {"name": "openalex", "recordId": "OA-003-B"},
+      "paper": {
+        "title": "Legacy archive identifiers in physics",
+        "publicationYear": 1999,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "arXiv:hep-th/9901001v9"}],
+        "authors": [{"displayName": "Satoshi Mori", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "arxiv-legacy-pdf",
+      "goldCluster": "cluster-003",
+      "caseFamily": "ARXIV_LEGACY_VERSION",
+      "provider": {"name": "core", "recordId": "CO-003-C"},
+      "paper": {
+        "title": "A repository rendering of legacy archive metadata",
+        "publicationYear": 1999,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "https://arxiv.org/pdf/hep-th/9901001.pdf"}],
+        "authors": [{"displayName": "S. Mori", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "openalex-url",
+      "goldCluster": "cluster-004",
+      "caseFamily": "OPENALEX_NORMALIZATION",
+      "provider": {"name": "openalex", "recordId": "OA-004-A"},
+      "paper": {
+        "title": "Canonical work identifiers from a scholarly graph",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "OPENALEX", "value": "https://openalex.org/W42424242"}],
+        "authors": [{"displayName": "Priya Nair", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "openalex-works",
+      "goldCluster": "cluster-004",
+      "caseFamily": "OPENALEX_NORMALIZATION",
+      "provider": {"name": "datacite", "recordId": "DC-004-B"},
+      "paper": {
+        "title": "Canonical work identifiers from a scholarly graph",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "OPENALEX", "value": "https://openalex.org/works/W42424242"}],
+        "authors": [{"displayName": "Priya Nair", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "openalex-bare",
+      "goldCluster": "cluster-004",
+      "caseFamily": "OPENALEX_NORMALIZATION",
+      "provider": {"name": "core", "recordId": "CO-004-C"},
+      "paper": {
+        "title": "Graph work identifier metadata",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "OPENALEX", "value": "w42424242"}],
+        "authors": [{"displayName": "P. Nair", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "bridge-doi",
+      "goldCluster": "cluster-005",
+      "caseFamily": "IDENTIFIER_BRIDGE",
+      "provider": {"name": "crossref", "recordId": "CR-005-A"},
+      "paper": {
+        "title": "Cross-database identifier bridges in biomedicine",
+        "publicationYear": 2020,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/bridge.gamma"}],
+        "authors": [{"displayName": "Lina Brooks", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "bridge-crosswalk",
+      "goldCluster": "cluster-005",
+      "caseFamily": "IDENTIFIER_BRIDGE",
+      "provider": {"name": "pubmed", "recordId": "PM-005-B"},
+      "paper": {
+        "title": "Cross-database identifier bridges in biomedicine",
+        "publicationYear": 2020,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [
+          {"type": "DOI", "value": "doi:10.5555/BRIDGE.GAMMA"},
+          {"type": "PMID", "value": "987654321"},
+          {"type": "PMCID", "value": "PMC12345678"}
+        ],
+        "authors": [{"displayName": "Lina Brooks", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "bridge-pmcid",
+      "goldCluster": "cluster-005",
+      "caseFamily": "IDENTIFIER_BRIDGE",
+      "provider": {"name": "pmc", "recordId": "PC-005-C"},
+      "paper": {
+        "title": "An open repository copy of a biomedical article",
+        "publicationYear": 2020,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "PMCID", "value": "pmc12345678"}],
+        "authors": [{"displayName": "L. Brooks", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "repository-lower",
+      "goldCluster": "cluster-006",
+      "caseFamily": "REPOSITORY_NAMESPACE",
+      "provider": {"name": "zenodo", "recordId": "ZN-006-A"},
+      "paper": {
+        "title": "Repository namespace identity",
+        "publicationYear": 2019,
+        "documentType": "REPORT",
+        "language": "en",
+        "identifiers": [{"type": "REPOSITORY", "namespace": "zenodo", "value": "record-7788"}],
+        "authors": [{"displayName": "Omar Diallo", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "repository-case",
+      "goldCluster": "cluster-006",
+      "caseFamily": "REPOSITORY_NAMESPACE",
+      "provider": {"name": "core", "recordId": "CO-006-B"},
+      "paper": {
+        "title": "Repository namespace identity",
+        "publicationYear": 2019,
+        "documentType": "REPORT",
+        "language": "en",
+        "identifiers": [{"type": "REPOSITORY", "namespace": "Zenodo", "value": "RECORD-7788"}],
+        "authors": [{"displayName": "Omar Diallo", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "repository-upper",
+      "goldCluster": "cluster-006",
+      "caseFamily": "REPOSITORY_NAMESPACE",
+      "provider": {"name": "institutional-repository", "recordId": "IR-006-C"},
+      "paper": {
+        "title": "An archived copy identified within its repository",
+        "publicationYear": 2019,
+        "documentType": "REPORT",
+        "language": "en",
+        "identifiers": [{"type": "REPOSITORY", "namespace": "ZENODO", "value": "Record-7788"}],
+        "authors": [{"displayName": "O. Diallo", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "provider-replay-initial",
+      "goldCluster": "cluster-007",
+      "caseFamily": "PROVIDER_REPLAY",
+      "provider": {"name": "core", "recordId": "CORE-RP-77"},
+      "paper": {
+        "title": "Provider replay without external identifiers",
+        "publicationYear": 2018,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Fatima Zahra", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "provider-replay-enriched",
+      "goldCluster": "cluster-007",
+      "caseFamily": "PROVIDER_REPLAY",
+      "provider": {"name": "core", "recordId": "CORE-RP-77"},
+      "paper": {
+        "title": "Provider replay with enriched metadata",
+        "abstractText": "A later rendering of the same provider record.",
+        "publicationYear": 2018,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "venueName": "Fixture Journal",
+        "identifiers": [],
+        "authors": [{"displayName": "Fatima Zahra", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "provider-replay-sparse",
+      "goldCluster": "cluster-007",
+      "caseFamily": "PROVIDER_REPLAY",
+      "provider": {"name": "core", "recordId": "CORE-RP-77"},
+      "paper": {
+        "title": "Sparse replay of one provider record",
+        "publicationYear": 2018,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "F. Zahra", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-title-a",
+      "goldCluster": "cluster-008",
+      "caseFamily": "TITLE_YEAR_FIRST_AUTHOR",
+      "provider": {"name": "doaj", "recordId": "DJ-008-A"},
+      "paper": {
+        "title": "Adaptive Retrieval for Scholarly Archives",
+        "publicationYear": 2023,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Meera Rao", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-title-b",
+      "goldCluster": "cluster-008",
+      "caseFamily": "TITLE_YEAR_FIRST_AUTHOR",
+      "provider": {"name": "core", "recordId": "CO-008-B"},
+      "paper": {
+        "title": "Adaptive Retrieval for Scholarly Archives",
+        "publicationYear": 2023,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Meera Rao", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-title-c",
+      "goldCluster": "cluster-008",
+      "caseFamily": "TITLE_YEAR_FIRST_AUTHOR",
+      "provider": {"name": "institutional-repository", "recordId": "IR-008-C"},
+      "paper": {
+        "title": "Adaptive Retrieval for Scholarly Archives",
+        "publicationYear": 2023,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Meera Rao", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-unicode-a",
+      "goldCluster": "cluster-009",
+      "caseFamily": "UNICODE_PUNCTUATION",
+      "provider": {"name": "doaj", "recordId": "DJ-009-A"},
+      "paper": {
+        "title": "Über naïve matching: a café study",
+        "publicationYear": 2017,
+        "documentType": "ARTICLE",
+        "language": "de",
+        "identifiers": [],
+        "authors": [{"displayName": "Zoë Müller", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-unicode-b",
+      "goldCluster": "cluster-009",
+      "caseFamily": "UNICODE_PUNCTUATION",
+      "provider": {"name": "core", "recordId": "CO-009-B"},
+      "paper": {
+        "title": "UBER NAIVE MATCHING — A CAFE STUDY",
+        "publicationYear": 2017,
+        "documentType": "ARTICLE",
+        "language": "de",
+        "identifiers": [],
+        "authors": [{"displayName": "Zoe Muller", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-unicode-c",
+      "goldCluster": "cluster-009",
+      "caseFamily": "UNICODE_PUNCTUATION",
+      "provider": {"name": "institutional-repository", "recordId": "IR-009-C"},
+      "paper": {
+        "title": "Über naïve matching – a café study",
+        "publicationYear": 2017,
+        "documentType": "ARTICLE",
+        "language": "de",
+        "identifiers": [],
+        "authors": [{"displayName": "Z. Müller", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-author-a",
+      "goldCluster": "cluster-010",
+      "caseFamily": "AUTHOR_ALIAS",
+      "provider": {"name": "doaj", "recordId": "DJ-010-A"},
+      "paper": {
+        "title": "Author identity signals for duplicate detection",
+        "publicationYear": 2024,
+        "documentType": "CONFERENCE_PAPER",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Alexandra Chen", "orcid": "0000-0002-1825-0097", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-author-b",
+      "goldCluster": "cluster-010",
+      "caseFamily": "AUTHOR_ALIAS",
+      "provider": {"name": "core", "recordId": "CO-010-B"},
+      "paper": {
+        "title": "Author identity signals for duplicate detection",
+        "publicationYear": 2024,
+        "documentType": "CONFERENCE_PAPER",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "A. Chen", "orcid": "https://orcid.org/0000-0002-1825-0097", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-author-c",
+      "goldCluster": "cluster-010",
+      "caseFamily": "AUTHOR_ALIAS",
+      "provider": {"name": "institutional-repository", "recordId": "IR-010-C"},
+      "paper": {
+        "title": "Author identity signals for duplicate detection",
+        "publicationYear": 2024,
+        "documentType": "CONFERENCE_PAPER",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Alex Chen", "orcid": "0000-0002-1825-0097", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-year-a",
+      "goldCluster": "cluster-011",
+      "caseFamily": "YEAR_TOLERANCE",
+      "provider": {"name": "crossref", "recordId": "CR-011-A"},
+      "paper": {
+        "title": "Online-first publication dates and catalog identity",
+        "publicationYear": 2020,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Samuel Okafor", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-year-b",
+      "goldCluster": "cluster-011",
+      "caseFamily": "YEAR_TOLERANCE",
+      "provider": {"name": "doaj", "recordId": "DJ-011-B"},
+      "paper": {
+        "title": "Online-first publication dates and catalog identity",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Samuel Okafor", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-year-c",
+      "goldCluster": "cluster-011",
+      "caseFamily": "YEAR_TOLERANCE",
+      "provider": {"name": "core", "recordId": "CO-011-C"},
+      "paper": {
+        "title": "Online first publication dates & catalog identity",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "S. Okafor", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-rich-a",
+      "goldCluster": "cluster-012",
+      "caseFamily": "SPARSE_RICH_METADATA",
+      "provider": {"name": "doaj", "recordId": "DJ-012-A"},
+      "paper": {
+        "title": "Metadata completeness and canonical paper identity",
+        "abstractText": "A complete abstract supplied by the journal index.",
+        "publicationDate": "2016-04-11",
+        "publicationYear": 2016,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "venueName": "Journal of Fixture Studies",
+        "identifiers": [],
+        "authors": [{"displayName": "Lucía Torres", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "metadata-rich-b",
+      "goldCluster": "cluster-012",
+      "caseFamily": "SPARSE_RICH_METADATA",
+      "provider": {"name": "core", "recordId": "CO-012-B"},
+      "paper": {
+        "title": "Metadata completeness and canonical paper identity",
+        "publicationYear": 2016,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Lucía Torres", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "metadata-rich-c",
+      "goldCluster": "cluster-012",
+      "caseFamily": "SPARSE_RICH_METADATA",
+      "provider": {"name": "institutional-repository", "recordId": "IR-012-C"},
+      "paper": {
+        "title": "Metadata completeness & canonical paper identity",
+        "abstractText": "Repository metadata contains a shorter abstract.",
+        "publicationYear": 2016,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "venueName": "Journal of Fixture Studies",
+        "identifiers": [],
+        "authors": [{"displayName": "L. Torres", "position": 0, "corresponding": false}]
+      }
+    },
+    {
+      "key": "negative-common-a",
+      "goldCluster": "cluster-013",
+      "caseFamily": "COMMON_TITLE_COLLISION",
+      "provider": {"name": "doaj", "recordId": "DJ-013-A"},
+      "paper": {
+        "title": "Introduction to Machine Learning",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Amara Singh", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-common-b",
+      "goldCluster": "cluster-014",
+      "caseFamily": "COMMON_TITLE_COLLISION",
+      "provider": {"name": "core", "recordId": "CO-014-B"},
+      "paper": {
+        "title": "Introduction to Machine Learning",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [],
+        "authors": [{"displayName": "Benjamin Wu", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-edition-a",
+      "goldCluster": "cluster-015",
+      "caseFamily": "ANNUAL_EDITION_COLLISION",
+      "provider": {"name": "datacite", "recordId": "DC-015-A"},
+      "paper": {
+        "title": "Annual Survey of Open Science 2024",
+        "publicationYear": 2024,
+        "documentType": "REPORT",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/annual.2024"}],
+        "authors": [{"displayName": "Open Methods Group", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-edition-b",
+      "goldCluster": "cluster-016",
+      "caseFamily": "ANNUAL_EDITION_COLLISION",
+      "provider": {"name": "datacite", "recordId": "DC-016-B"},
+      "paper": {
+        "title": "Annual Survey of Open Science 2025",
+        "publicationYear": 2025,
+        "documentType": "REPORT",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/annual.2025"}],
+        "authors": [{"displayName": "Open Methods Group", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-preprint",
+      "goldCluster": "cluster-017",
+      "caseFamily": "PREPRINT_PUBLISHED_BOUNDARY",
+      "provider": {"name": "arxiv", "recordId": "AX-017-A"},
+      "paper": {
+        "title": "Version boundaries in evidence synthesis",
+        "publicationYear": 2023,
+        "documentType": "PREPRINT",
+        "language": "en",
+        "identifiers": [{"type": "ARXIV", "value": "2303.01017"}],
+        "authors": [{"displayName": "Hana Kim", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-published",
+      "goldCluster": "cluster-018",
+      "caseFamily": "PREPRINT_PUBLISHED_BOUNDARY",
+      "provider": {"name": "crossref", "recordId": "CR-018-B"},
+      "paper": {
+        "title": "Version boundaries in evidence synthesis",
+        "publicationYear": 2024,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/version.boundary"}],
+        "authors": [{"displayName": "Hana Kim", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-thesis",
+      "goldCluster": "cluster-019",
+      "caseFamily": "THESIS_ARTICLE_BOUNDARY",
+      "provider": {"name": "institutional-repository", "recordId": "IR-019-A"},
+      "paper": {
+        "title": "Learning systems for public health surveillance",
+        "publicationYear": 2021,
+        "documentType": "THESIS",
+        "language": "en",
+        "identifiers": [{"type": "REPOSITORY", "namespace": "university-a", "value": "thesis-019"}],
+        "authors": [{"displayName": "Ravi Patel", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-article",
+      "goldCluster": "cluster-020",
+      "caseFamily": "THESIS_ARTICLE_BOUNDARY",
+      "provider": {"name": "doaj", "recordId": "DJ-020-B"},
+      "paper": {
+        "title": "Learning systems for public health surveillance",
+        "publicationYear": 2021,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/public.health.article"}],
+        "authors": [{"displayName": "Ravi Patel", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-original",
+      "goldCluster": "cluster-021",
+      "caseFamily": "CORRECTION_BOUNDARY",
+      "provider": {"name": "crossref", "recordId": "CR-021-A"},
+      "paper": {
+        "title": "Stable evaluation of scholarly matching",
+        "publicationYear": 2020,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/stable.matching"}],
+        "authors": [{"displayName": "Noor Hassan", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-correction",
+      "goldCluster": "cluster-022",
+      "caseFamily": "CORRECTION_BOUNDARY",
+      "provider": {"name": "crossref", "recordId": "CR-022-B"},
+      "paper": {
+        "title": "Correction: Stable evaluation of scholarly matching",
+        "publicationYear": 2021,
+        "documentType": "OTHER",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/stable.matching.correction"}],
+        "authors": [{"displayName": "Noor Hassan", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-consortium-a",
+      "goldCluster": "cluster-023",
+      "caseFamily": "CONSORTIUM_HOMONYM",
+      "provider": {"name": "doaj", "recordId": "DJ-023-A"},
+      "paper": {
+        "title": "Global observations of seasonal respiratory disease",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/global.observations.one"}],
+        "authors": [{"openAlexId": "A777000", "displayName": "Global Health Consortium", "position": 0, "corresponding": true}]
+      }
+    },
+    {
+      "key": "negative-consortium-b",
+      "goldCluster": "cluster-024",
+      "caseFamily": "CONSORTIUM_HOMONYM",
+      "provider": {"name": "core", "recordId": "CO-024-B"},
+      "paper": {
+        "title": "Global observations of seasonal respiratory disease",
+        "publicationYear": 2022,
+        "documentType": "ARTICLE",
+        "language": "en",
+        "identifiers": [{"type": "DOI", "value": "10.5555/global.observations.two"}],
+        "authors": [{"openAlexId": "https://openalex.org/A777000", "displayName": "Global Health Consortium", "position": 0, "corresponding": true}]
+      }
+    }
+  ],
+  "criticalPairs": [
+    {
+      "left": "negative-common-a",
+      "right": "negative-common-b",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "COMMON_TITLE_COLLISION",
+      "reason": "A generic title and year do not identify a work when the first authors differ."
+    },
+    {
+      "left": "negative-edition-a",
+      "right": "negative-edition-b",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "ANNUAL_EDITION_COLLISION",
+      "reason": "Annual editions are distinct bibliographic manifestations."
+    },
+    {
+      "left": "negative-preprint",
+      "right": "negative-published",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "PREPRINT_PUBLISHED_BOUNDARY",
+      "reason": "A preprint and version of record stay separate without an authoritative crosswalk."
+    },
+    {
+      "left": "negative-thesis",
+      "right": "negative-article",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "THESIS_ARTICLE_BOUNDARY",
+      "reason": "A thesis and a related article are distinct publication types."
+    },
+    {
+      "left": "negative-original",
+      "right": "negative-correction",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "CORRECTION_BOUNDARY",
+      "reason": "A correction notice must not replace its original article."
+    },
+    {
+      "left": "negative-consortium-a",
+      "right": "negative-consortium-b",
+      "relation": "MUST_SEPARATE",
+      "caseFamily": "CONSORTIUM_HOMONYM",
+      "reason": "A shared consortium identity is not sufficient paper identity evidence."
+    }
+  ],
+  "ingestOrders": [
+    {
+      "key": "fixture",
+      "recordKeys": [
+        "doi-url", "doi-prefix", "doi-bare",
+        "arxiv-modern-prefixed", "arxiv-modern-abs", "arxiv-modern-pdf",
+        "arxiv-legacy-version", "arxiv-legacy-prefix", "arxiv-legacy-pdf",
+        "openalex-url", "openalex-works", "openalex-bare",
+        "bridge-doi", "bridge-crosswalk", "bridge-pmcid",
+        "repository-lower", "repository-case", "repository-upper",
+        "provider-replay-initial", "provider-replay-enriched", "provider-replay-sparse",
+        "metadata-title-a", "metadata-title-b", "metadata-title-c",
+        "metadata-unicode-a", "metadata-unicode-b", "metadata-unicode-c",
+        "metadata-author-a", "metadata-author-b", "metadata-author-c",
+        "metadata-year-a", "metadata-year-b", "metadata-year-c",
+        "metadata-rich-a", "metadata-rich-b", "metadata-rich-c",
+        "negative-common-a", "negative-common-b",
+        "negative-edition-a", "negative-edition-b",
+        "negative-preprint", "negative-published",
+        "negative-thesis", "negative-article",
+        "negative-original", "negative-correction",
+        "negative-consortium-a", "negative-consortium-b"
+      ]
+    },
+    {
+      "key": "reverse",
+      "recordKeys": [
+        "negative-consortium-b", "negative-consortium-a",
+        "negative-correction", "negative-original",
+        "negative-article", "negative-thesis",
+        "negative-published", "negative-preprint",
+        "negative-edition-b", "negative-edition-a",
+        "negative-common-b", "negative-common-a",
+        "metadata-rich-c", "metadata-rich-b", "metadata-rich-a",
+        "metadata-year-c", "metadata-year-b", "metadata-year-a",
+        "metadata-author-c", "metadata-author-b", "metadata-author-a",
+        "metadata-unicode-c", "metadata-unicode-b", "metadata-unicode-a",
+        "metadata-title-c", "metadata-title-b", "metadata-title-a",
+        "provider-replay-sparse", "provider-replay-enriched", "provider-replay-initial",
+        "repository-upper", "repository-case", "repository-lower",
+        "bridge-pmcid", "bridge-crosswalk", "bridge-doi",
+        "openalex-bare", "openalex-works", "openalex-url",
+        "arxiv-legacy-pdf", "arxiv-legacy-prefix", "arxiv-legacy-version",
+        "arxiv-modern-pdf", "arxiv-modern-abs", "arxiv-modern-prefixed",
+        "doi-bare", "doi-prefix", "doi-url"
+      ]
+    },
+    {
+      "key": "seeded-20260825",
+      "recordKeys": [
+        "bridge-crosswalk",
+        "doi-url", "arxiv-modern-prefixed", "arxiv-legacy-version", "openalex-url",
+        "repository-lower", "provider-replay-initial",
+        "metadata-title-a", "metadata-unicode-a", "metadata-author-a", "metadata-year-a", "metadata-rich-a",
+        "negative-common-a", "negative-edition-a", "negative-preprint", "negative-thesis", "negative-original", "negative-consortium-a",
+        "bridge-pmcid",
+        "doi-prefix", "arxiv-modern-abs", "arxiv-legacy-prefix", "openalex-works",
+        "repository-case", "provider-replay-enriched",
+        "metadata-title-b", "metadata-unicode-b", "metadata-author-b", "metadata-year-b", "metadata-rich-b",
+        "negative-common-b", "negative-edition-b", "negative-published", "negative-article", "negative-correction", "negative-consortium-b",
+        "bridge-doi",
+        "doi-bare", "arxiv-modern-pdf", "arxiv-legacy-pdf", "openalex-bare",
+        "repository-upper", "provider-replay-sparse",
+        "metadata-title-c", "metadata-unicode-c", "metadata-author-c", "metadata-year-c", "metadata-rich-c"
+      ]
+    }
+  ]
+}

@@ -42,7 +42,27 @@ import { getBackendAccessToken } from "@/shared/auth/session";
 
 const DEFAULT_BACKEND_ORIGIN = "http://localhost:8080";
 const REQUEST_TIMEOUT_MS = 30_000;
-const OFFLINE_COLLECTION_PACK_MAX_BYTES = 1_048_576;
+const MEBIBYTE = 1_048_576;
+const DEFAULT_SUCCESS_JSON_MAX_BYTES = MEBIBYTE;
+// Search pages support 50 abstract-bearing results. Eight MiB matches the
+// backend's default per-provider response ceiling while retaining a finite BFF
+// allocation boundary for configured providers or stored local results.
+const SEARCH_RESPONSE_MAX_BYTES = 8 * MEBIBYTE;
+// One canonical paper can inherit an abstract from an eight-MiB-bounded
+// provider response.
+const PAPER_DETAILS_RESPONSE_MAX_BYTES = 8 * MEBIBYTE;
+// Related-paper responses contain at most 25 abstract-bearing results.
+const RELATED_PAPERS_RESPONSE_MAX_BYTES = 4 * MEBIBYTE;
+// Collection and saved-library pages contain at most 100 metadata-only items;
+// they exclude abstracts, provider payloads, and source documents.
+const LIBRARY_RESPONSE_MAX_BYTES = 2 * MEBIBYTE;
+const PROBLEM_JSON_MAX_BYTES = 64 * 1_024;
+const OFFLINE_COLLECTION_PACK_MAX_BYTES = MEBIBYTE;
+const SUCCESS_JSON_MEDIA_TYPES = new Set(["application/json"]);
+const PROBLEM_JSON_MEDIA_TYPES = new Set([
+  "application/json",
+  "application/problem+json",
+]);
 
 export class BackendApiError extends Error {
   constructor(
@@ -125,7 +145,13 @@ async function problemFrom(response: Response): Promise<ApiProblem> {
     code: "BACKEND_REQUEST_FAILED",
   };
   try {
-    const parsed = apiProblemSchema.safeParse(await response.json());
+    const parsed = apiProblemSchema.safeParse(
+      await readBoundedJsonResponse(
+        response,
+        PROBLEM_JSON_MAX_BYTES,
+        PROBLEM_JSON_MEDIA_TYPES,
+      ),
+    );
     return parsed.success ? parsed.data : fallback;
   } catch {
     return fallback;
@@ -137,6 +163,7 @@ async function requestJson<T>(
   schema: ZodType<T>,
   resource: string,
   init: RequestInit = {},
+  maximumBytes = DEFAULT_SUCCESS_JSON_MAX_BYTES,
 ): Promise<{ data: T; status: number; location: string | null }> {
   const response = await fetchBackend(path, init);
   if (!response.ok) {
@@ -147,7 +174,18 @@ async function requestJson<T>(
     );
   }
 
-  const parsed = schema.safeParse(await response.json());
+  let body: unknown;
+  try {
+    body = await readBoundedJsonResponse(
+      response,
+      maximumBytes,
+      SUCCESS_JSON_MEDIA_TYPES,
+    );
+  } catch {
+    throw new BackendContractError(resource);
+  }
+
+  const parsed = schema.safeParse(body);
   if (!parsed.success) {
     throw new BackendContractError(resource);
   }
@@ -187,20 +225,60 @@ async function requireExpectedSuccess(
   }
 }
 
-function hasJsonContentType(response: Response): boolean {
+function responseMediaType(response: Response): string | null {
   const contentType = response.headers.get("content-type");
-  return (
-    contentType?.split(";", 1)[0]?.trim().toLowerCase() === "application/json"
-  );
+  return contentType?.split(";", 1)[0]?.trim().toLowerCase() ?? null;
 }
 
-async function readOfflineCollectionPackResponse(
+function hasJsonContentType(response: Response): boolean {
+  return responseMediaType(response) === "application/json";
+}
+
+async function cancelResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
+function validateDeclaredContentLength(
   response: Response,
-): Promise<OfflineCollectionPack> {
-  const resource = "offline collection pack";
-  if (!hasJsonContentType(response) || response.body === null) {
-    await response.body?.cancel().catch(() => undefined);
-    throw new BackendContractError(resource);
+  maximumBytes: number,
+): void {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === null) return;
+
+  const normalized = contentLength.trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error("Invalid backend Content-Length");
+  }
+
+  let declaredBytes: bigint;
+  try {
+    declaredBytes = BigInt(normalized);
+  } catch {
+    throw new Error("Invalid backend Content-Length");
+  }
+  if (declaredBytes > BigInt(maximumBytes)) {
+    throw new Error("Backend JSON response is too large");
+  }
+}
+
+async function readBoundedJsonResponse(
+  response: Response,
+  maximumBytes: number,
+  allowedMediaTypes: ReadonlySet<string>,
+): Promise<unknown> {
+  try {
+    const mediaType = responseMediaType(response);
+    if (mediaType === null || !allowedMediaTypes.has(mediaType)) {
+      throw new Error("Unexpected backend JSON media type");
+    }
+    validateDeclaredContentLength(response, maximumBytes);
+  } catch (error) {
+    await cancelResponseBody(response);
+    throw error;
+  }
+
+  if (response.body === null) {
+    throw new Error("Backend JSON response has no body");
   }
 
   const reader = response.body.getReader();
@@ -213,16 +291,14 @@ async function readOfflineCollectionPackResponse(
       if (done) break;
 
       totalBytes += value.byteLength;
-      if (totalBytes > OFFLINE_COLLECTION_PACK_MAX_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        throw new BackendContractError(resource);
+      if (totalBytes > maximumBytes) {
+        throw new Error("Backend JSON response is too large");
       }
       chunks.push(value);
     }
   } catch (error) {
-    if (error instanceof BackendContractError) throw error;
     await reader.cancel().catch(() => undefined);
-    throw new BackendContractError(resource);
+    throw error;
   } finally {
     reader.releaseLock();
   }
@@ -234,9 +310,24 @@ async function readOfflineCollectionPackResponse(
     offset += chunk.byteLength;
   }
 
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } catch {
+    throw new Error("Backend JSON response could not be decoded");
+  }
+}
+
+async function readOfflineCollectionPackResponse(
+  response: Response,
+): Promise<OfflineCollectionPack> {
+  const resource = "offline collection pack";
   let decoded: unknown;
   try {
-    decoded = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+    decoded = await readBoundedJsonResponse(
+      response,
+      OFFLINE_COLLECTION_PACK_MAX_BYTES,
+      SUCCESS_JSON_MEDIA_TYPES,
+    );
   } catch {
     throw new BackendContractError(resource);
   }
@@ -264,11 +355,17 @@ export async function getSystemStatus(): Promise<SystemStatusResponse> {
 export async function createSearch(
   request: CreateSearchRequest,
 ): Promise<{ data: SearchResponse; status: number; location: string | null }> {
-  return requestJson("/api/v1/searches", searchResponseSchema, "search", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(request),
-  });
+  return requestJson(
+    "/api/v1/searches",
+    searchResponseSchema,
+    "search",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    },
+    SEARCH_RESPONSE_MAX_BYTES,
+  );
 }
 
 export async function getSearch(searchId: string): Promise<SearchResponse> {
@@ -276,6 +373,8 @@ export async function getSearch(searchId: string): Promise<SearchResponse> {
     `/api/v1/searches/${encodeURIComponent(searchId)}`,
     searchResponseSchema,
     "saved search",
+    {},
+    SEARCH_RESPONSE_MAX_BYTES,
   )).data;
 }
 
@@ -287,6 +386,7 @@ export async function getNextSearchPage(
     searchResponseSchema,
     "next search page",
     { method: "POST" },
+    SEARCH_RESPONSE_MAX_BYTES,
   );
 }
 
@@ -297,6 +397,8 @@ export async function getPaperDetails(
     `/api/v1/papers/${encodeURIComponent(paperId)}`,
     paperDetailsResponseSchema,
     "paper details",
+    {},
+    PAPER_DETAILS_RESPONSE_MAX_BYTES,
   )).data;
 }
 
@@ -320,6 +422,8 @@ export async function getRelatedPapers(
     `/api/v1/papers/${encodeURIComponent(paperId)}/related?${query}`,
     relatedPapersResponseSchema,
     "related papers",
+    {},
+    RELATED_PAPERS_RESPONSE_MAX_BYTES,
   )).data;
   if (related.sourcePaperId.toLowerCase() !== paperId.toLowerCase()) {
     throw new BackendContractError("related papers");
@@ -359,6 +463,8 @@ export async function getCollections(
     `/api/v1/collections?${query}`,
     collectionListResponseSchema,
     "collection list",
+    {},
+    LIBRARY_RESPONSE_MAX_BYTES,
   )).data;
 }
 
@@ -407,6 +513,8 @@ export async function getCollection(
     `/api/v1/collections/${encodeURIComponent(collectionId)}?${query}`,
     collectionDetailsResponseSchema,
     "collection details",
+    {},
+    LIBRARY_RESPONSE_MAX_BYTES,
   )).data;
 }
 
@@ -493,6 +601,8 @@ export async function searchSavedLibrary(
     `/api/v1/library/papers?${query}`,
     savedLibraryResponseSchema,
     "saved library",
+    {},
+    LIBRARY_RESPONSE_MAX_BYTES,
   )).data;
 }
 

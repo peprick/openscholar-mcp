@@ -46,6 +46,7 @@ async function expectNoSeriousAccessibilityViolations(
 }
 
 test("privacy export downloads only the current owner's deterministic data", async ({
+  context,
   page,
 }) => {
   await page.goto("/data");
@@ -53,13 +54,18 @@ test("privacy export downloads only the current owner's deterministic data", asy
     page.getByRole("heading", { level: 1, name: "Your data & privacy" }),
   ).toBeVisible();
 
-  const exportResponsePromise = page.waitForResponse(
+  const exportResponsePromise = context.waitForEvent(
+    "response",
     (response) =>
       response.url().endsWith("/api/privacy/export") &&
       response.request().method() === "GET",
   );
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download my data" }).click();
+  const exportLink = page.getByRole("link", { name: "Download my data" });
+  await expect(exportLink).toHaveAttribute("href", "/api/privacy/export");
+  await expect(exportLink).toHaveAttribute("target", "_blank");
+  await expect(exportLink).toHaveAttribute("rel", "noopener");
+  await exportLink.click();
 
   const [exportResponse, download] = await Promise.all([
     exportResponsePromise,
@@ -70,6 +76,11 @@ test("privacy export downloads only the current owner's deterministic data", asy
   expect(exportResponse.headers()["content-type"]).toContain("application/json");
   expect(download.suggestedFilename()).toBe("openscholar-personal-data.json");
   expect(await download.failure()).toBeNull();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "data export download started" }),
+  ).toBeVisible();
 
   const downloadPath = await download.path();
   if (downloadPath === null) throw new Error("Privacy export did not create a file.");
@@ -104,6 +115,39 @@ test("privacy export downloads only the current owner's deterministic data", asy
     ],
   });
   await expectNoSeriousAccessibilityViolations(page);
+});
+
+test("a failed privacy export keeps the privacy center available", async ({
+  context,
+  page,
+}) => {
+  await context.route("**/api/privacy/export", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        title: "Export unavailable",
+        status: 503,
+        detail: "The export could not be prepared.",
+        code: "BACKEND_UNAVAILABLE",
+      }),
+      contentType: "application/problem+json",
+      status: 503,
+    });
+  });
+  await page.goto("/data");
+
+  const errorPagePromise = context.waitForEvent("page");
+  await page.getByRole("link", { name: "Download my data" }).click();
+  const errorPage = await errorPagePromise;
+  await errorPage.waitForLoadState("domcontentloaded");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Your data & privacy" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "download started" }),
+  ).toBeVisible();
+  await expect(errorPage.locator("body")).toContainText("Export unavailable");
+  await errorPage.close();
 });
 
 test("account deletion requires the exact phrase and leaves an empty workspace", async ({

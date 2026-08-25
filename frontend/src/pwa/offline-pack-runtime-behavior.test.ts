@@ -24,6 +24,7 @@ type SharedDatabase = {
   connections: Set<FakeDatabase>;
   created: boolean;
   messages: string[];
+  pendingUpgrades: Set<() => void>;
   randomByte: number;
   records: Map<string, Record<string, unknown>>;
   version: number;
@@ -105,6 +106,9 @@ class FakeDatabase {
     if (this.closed) return;
     this.closed = true;
     this.shared.connections.delete(this);
+    for (const resume of this.shared.pendingUpgrades) {
+      queueMicrotask(resume);
+    }
   }
 
   isClosed(): boolean {
@@ -135,6 +139,34 @@ function fakeIndexedDb(shared: SharedDatabase) {
         onupgradeneeded: null as RequestHandler | null,
         result: database,
       };
+      let completed = false;
+      const finishOpen = () => {
+        if (completed) return;
+        if (requestedVersion < shared.version) {
+          completed = true;
+          shared.pendingUpgrades.delete(finishOpen);
+          request.error = new DOMException(
+            "The requested version is older than the existing database.",
+            "VersionError",
+          );
+          request.onerror?.();
+          return;
+        }
+        if (
+          requestedVersion > shared.version &&
+          [...shared.connections].some((connection) => !connection.isClosed())
+        ) {
+          return;
+        }
+        completed = true;
+        shared.pendingUpgrades.delete(finishOpen);
+        if (requestedVersion > shared.version) {
+          shared.version = requestedVersion;
+          request.onupgradeneeded?.();
+        }
+        shared.connections.add(database);
+        request.onsuccess?.();
+      };
       queueMicrotask(() => {
         if (requestedVersion < shared.version) {
           request.error = new DOMException(
@@ -149,14 +181,12 @@ function fakeIndexedDb(shared: SharedDatabase) {
             connection.onversionchange?.();
           }
           if ([...shared.connections].some((connection) => !connection.isClosed())) {
+            shared.pendingUpgrades.add(finishOpen);
             request.onblocked?.();
             return;
           }
-          shared.version = requestedVersion;
-          request.onupgradeneeded?.();
         }
-        shared.connections.add(database);
-        request.onsuccess?.();
+        finishOpen();
       });
       return request;
     },
@@ -196,6 +226,7 @@ function sharedDatabase(): SharedDatabase {
     connections: new Set(),
     created: false,
     messages: [],
+    pendingUpgrades: new Set(),
     randomByte: 0,
     records: new Map(),
     version: 0,
@@ -272,6 +303,27 @@ function runtimeFor(
 }
 
 describe("offline-pack durable lifecycle fence", () => {
+  it("closes a late connection after a blocked database upgrade", async () => {
+    const shared = sharedDatabase();
+    shared.created = true;
+    shared.version = 1;
+    const blocker = await openDatabaseVersion(shared, 1);
+    blocker.onversionchange = () => undefined;
+    const runtime = runtimeFor(shared);
+
+    await expect(runtime.inspect()).rejects.toMatchObject({
+      name: "OfflinePackStorageBusyError",
+    });
+    expect(blocker.isClosed()).toBe(false);
+    expect(shared.connections).toEqual(new Set([blocker]));
+
+    blocker.close();
+
+    await vi.waitFor(() => expect(shared.version).toBe(2));
+    await vi.waitFor(() => expect(shared.connections.size).toBe(0));
+    expect(shared.pendingUpgrades.size).toBe(0);
+  });
+
   it("upgrades the database in place and prevents a legacy v1 client from fresh-saving", async () => {
     const shared = sharedDatabase();
     shared.created = true;

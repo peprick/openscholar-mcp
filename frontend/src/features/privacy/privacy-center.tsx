@@ -8,10 +8,8 @@ import type {
   OfflinePackDeletionFence,
   OpenScholarOfflinePackRuntime,
 } from "@/pwa/offline-pack-runtime";
-import { apiProblemSchema } from "@/shared/api/schemas";
 
 const DELETE_CONFIRMATION = "DELETE_MY_DATA";
-const EXPORT_FILENAME = "openscholar-personal-data.json";
 const DELETE_UNCONFIRMED_MESSAGE =
   "OpenScholar could not confirm whether server deletion completed. The encrypted offline copy on this device was already removed. Refresh this page to check your workspace before trying again.";
 const OFFLINE_PURGE_FAILED_MESSAGE =
@@ -23,18 +21,6 @@ type Feedback = {
   kind: "error" | "status";
   message: string;
 };
-
-async function responseErrorMessage(
-  response: Response,
-  fallback: string,
-): Promise<string> {
-  try {
-    const parsed = apiProblemSchema.safeParse(await response.json());
-    return parsed.success ? parsed.data.detail : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 function ActionFeedback({ feedback }: { feedback: Feedback | null }): React.JSX.Element | null {
   if (feedback === null) return null;
@@ -50,57 +36,18 @@ function ActionFeedback({ feedback }: { feedback: Feedback | null }): React.JSX.
 }
 
 export function PrivacyCenter(): React.JSX.Element {
-  const [exportPending, setExportPending] = useState(false);
   const [exportFeedback, setExportFeedback] = useState<Feedback | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteComplete, setDeleteComplete] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<Feedback | null>(null);
 
-  async function downloadPersonalData(): Promise<void> {
-    setExportPending(true);
+  function announcePersonalDataDownload(): void {
     setExportFeedback({
       kind: "status",
-      message: "Preparing your private JSON export…",
+      message:
+        "Your OpenScholar data export download started. Your browser will show when it finishes or if it fails.",
     });
-    try {
-      const response = await fetch("/api/privacy/export", {
-        cache: "no-store",
-        headers: { accept: "application/json" },
-      });
-      if (!response.ok) {
-        setExportFeedback({
-          kind: "error",
-          message: await responseErrorMessage(
-            response,
-            "OpenScholar could not prepare your data export. Please try again.",
-          ),
-        });
-        return;
-      }
-
-      const downloadUrl = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = EXPORT_FILENAME;
-      link.hidden = true;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
-      setExportFeedback({
-        kind: "status",
-        message: "Your OpenScholar data export was downloaded.",
-      });
-    } catch {
-      setExportFeedback({
-        kind: "error",
-        message:
-          "OpenScholar could not prepare your data export. Please try again.",
-      });
-    } finally {
-      setExportPending(false);
-    }
   }
 
   async function deletePersonalData(
@@ -200,14 +147,20 @@ export function PrivacyCenter(): React.JSX.Element {
             <li>Research PDFs are not included because OpenScholar does not store them.</li>
             <li>The downloaded file may contain private research interests; keep it safe.</li>
           </ul>
-          <button
+          <a
+            aria-describedby="export-download-help"
             className="button button--primary"
-            disabled={exportPending}
-            onClick={() => void downloadPersonalData()}
-            type="button"
+            href="/api/privacy/export"
+            onClick={announcePersonalDataDownload}
+            rel="noopener"
+            target="_blank"
           >
-            {exportPending ? "Preparing download…" : "Download my data"}
-          </button>
+            Download my data
+          </a>
+          <small id="export-download-help">
+            Your browser handles this download directly. If OpenScholar cannot
+            prepare it, the error opens separately so this page stays available.
+          </small>
           <ActionFeedback feedback={exportFeedback} />
         </div>
       </section>

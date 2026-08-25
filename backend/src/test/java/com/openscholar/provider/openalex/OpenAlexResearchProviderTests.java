@@ -39,6 +39,7 @@ class OpenAlexResearchProviderTests {
 	private static final URI BASE_URL = URI.create("https://api.openalex.test");
 	private static final Instant NOW = Instant.parse("2026-08-16T12:00:00Z");
 	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+	private static final int DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 	@Test
 	void sendsAuthorizedFilteredRequestAndMapsCompleteWork() {
@@ -355,6 +356,40 @@ class OpenAlexResearchProviderTests {
 	}
 
 	@Test
+	void rejectsDuplicateAbstractPositionsBelowTheTransportLimit() {
+		assertRejectedAbstract("\"first\": [0], \"second\": [0]");
+	}
+
+	@Test
+	void rejectsNegativeAbstractPositionsBelowTheTransportLimit() {
+		assertRejectedAbstract("\"invalid\": [-1]");
+	}
+
+	@Test
+	void rejectsNullAbstractPositionsBelowTheTransportLimit() {
+		assertRejectedAbstract("\"invalid\": [null]");
+	}
+
+	@Test
+	void rejectsOutOfRangeAbstractPositionsBelowTheTransportLimit() {
+		assertRejectedAbstract("\"invalid\": [" + (OpenAlexResearchProvider.MAX_ABSTRACT_POSITION + 1) + "]");
+	}
+
+	@Test
+	void rejectsExcessiveAbstractWordsBelowTheTransportLimit() {
+		String positions = positionsFromZeroThrough(OpenAlexResearchProvider.MAX_ABSTRACT_WORDS);
+
+		assertRejectedAbstract("\"repeated\": [" + positions + "]");
+	}
+
+	@Test
+	void rejectsOversizedReconstructedAbstractsBelowTheTransportLimit() {
+		String oversizedWord = "x".repeat(OpenAlexResearchProvider.MAX_ABSTRACT_OUTPUT_CHARACTERS + 1);
+
+		assertRejectedAbstract("\"" + oversizedWord + "\": [0]");
+	}
+
+	@Test
 	void exposesOnlyPdfUrlsFromOpenAccessLocations() {
 		Harness harness = harness(null);
 		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
@@ -453,7 +488,7 @@ class OpenAlexResearchProviderTests {
 	}
 
 	private static Harness harness(String apiKey) {
-		return harness(apiKey, 8 * 1024 * 1024);
+		return harness(apiKey, DEFAULT_MAX_RESPONSE_BYTES);
 	}
 
 	private static Harness harness(String apiKey, int maxResponseBytes) {
@@ -475,6 +510,46 @@ class OpenAlexResearchProviderTests {
 					assertThat(exception.retryable()).isFalse();
 				});
 		harness.server().verify();
+	}
+
+	private static void assertRejectedAbstract(String invertedIndexJson) {
+		String response = responseWithAbstract(invertedIndexJson);
+		assertThat(response.getBytes(StandardCharsets.UTF_8).length).isLessThan(DEFAULT_MAX_RESPONSE_BYTES);
+		Harness harness = harness(null);
+		harness.server().expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/works"))
+				.andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> harness.provider().search(minimalQuery()))
+				.isInstanceOfSatisfying(ProviderException.class, exception -> {
+					assertThat(exception.provider()).isEqualTo(ProviderId.OPENALEX);
+					assertThat(exception.errorCode()).isEqualTo(OpenAlexResearchProvider.RESPONSE_ERROR);
+					assertThat(exception.retryable()).isFalse();
+				});
+		harness.server().verify();
+	}
+
+	private static String responseWithAbstract(String invertedIndexJson) {
+		return """
+				{
+				  "meta": {"count": 1},
+				  "results": [{
+				    "id": "https://openalex.org/W123",
+				    "title": "Abstract boundary test",
+				    "abstract_inverted_index": {%s}
+				  }]
+				}
+				""".formatted(invertedIndexJson);
+	}
+
+	private static String positionsFromZeroThrough(int lastPosition) {
+		StringBuilder positions = new StringBuilder(lastPosition * 6);
+		for (int position = 0; position <= lastPosition; position++) {
+			if (!positions.isEmpty()) {
+				positions.append(',');
+			}
+			positions.append(position);
+		}
+		return positions.toString();
 	}
 
 	private static ProviderSearchQuery minimalQuery() {

@@ -235,9 +235,12 @@ describe("PrivacyCenter", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("downloads the export with a fixed private-data filename", async () => {
+  it("starts the native same-origin export without buffering browser bytes", async () => {
     const user = userEvent.setup();
-    const createObjectURL = vi.fn().mockReturnValue("blob:private-export");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const blobSpy = vi.spyOn(Response.prototype, "blob");
+    const createObjectURL = vi.fn();
     const revokeObjectURL = vi.fn();
     const NativeURL = URL;
     class DownloadURL extends NativeURL {
@@ -245,44 +248,34 @@ describe("PrivacyCenter", () => {
       static revokeObjectURL = revokeObjectURL;
     }
     vi.stubGlobal("URL", DownloadURL);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse({ searches: [], collections: [], savedPapers: [] }),
-      ),
-    );
-    let downloadedFilename = "";
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
-      this: HTMLAnchorElement,
-    ) {
-      downloadedFilename = this.download;
-    });
     render(<PrivacyCenter />);
 
-    await user.click(screen.getByRole("button", { name: "Download my data" }));
+    const download = screen.getByRole("link", { name: "Download my data" });
+    expect(download).toHaveAttribute("href", "/api/privacy/export");
+    expect(download).toHaveAttribute("target", "_blank");
+    expect(download).toHaveAttribute("rel", "noopener");
+    expect(download).toHaveAttribute(
+      "aria-describedby",
+      "export-download-help",
+    );
+    expect(
+      screen.getByText(/error opens separately so this page stays available/i),
+    ).toBeInTheDocument();
+    download.addEventListener("click", (event) => event.preventDefault(), {
+      once: true,
+    });
+
+    await user.click(download);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Your OpenScholar data export was downloaded.",
+      "Your OpenScholar data export download started. Your browser will show when it finishes or if it fails.",
     );
-    expect(downloadedFilename).toBe("openscholar-personal-data.json");
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    await waitFor(() =>
-      expect(revokeObjectURL).toHaveBeenCalledWith("blob:private-export"),
+    expect(screen.getByRole("status")).not.toHaveTextContent(
+      /downloaded|completed/i,
     );
-  });
-
-  it("announces export failures without exposing a broken download", async () => {
-    const user = userEvent.setup();
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click");
-    render(<PrivacyCenter />);
-
-    await user.click(screen.getByRole("button", { name: "Download my data" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "OpenScholar could not prepare your data export. Please try again.",
-    );
-    expect(clickSpy).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Download my data" })).toBeEnabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(blobSpy).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
   });
 });

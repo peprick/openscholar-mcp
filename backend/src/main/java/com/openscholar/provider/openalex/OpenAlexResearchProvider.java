@@ -13,7 +13,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +48,9 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 	static final String UNAVAILABLE = "OPENALEX_UNAVAILABLE";
 	static final String RESPONSE_ERROR = "OPENALEX_RESPONSE_ERROR";
 	static final String RESPONSE_TOO_LARGE = "OPENALEX_RESPONSE_TOO_LARGE";
+	static final int MAX_ABSTRACT_WORDS = 10_000;
+	static final int MAX_ABSTRACT_POSITION = 20_000;
+	static final int MAX_ABSTRACT_OUTPUT_CHARACTERS = 100_000;
 
 	private static final String SELECT_FIELDS = String.join(",",
 			"id",
@@ -310,28 +313,65 @@ final class OpenAlexResearchProvider implements ResearchProvider {
 		return Math.max(1, Math.min(100, requestedPageSize));
 	}
 
-	private static String reconstructAbstract(Map<String, List<Integer>> invertedIndex) {
+	private String reconstructAbstract(Map<String, List<Integer>> invertedIndex) {
 		if (invertedIndex == null || invertedIndex.isEmpty()) {
 			return null;
 		}
-		record PositionedWord(int position, String word) {
+
+		BitSet occupiedPositions = new BitSet(MAX_ABSTRACT_POSITION + 1);
+		int wordCount = 0;
+		int outputCharacters = 0;
+		int highestPosition = -1;
+		for (Map.Entry<String, List<Integer>> entry : invertedIndex.entrySet()) {
+			String word = entry.getKey();
+			List<Integer> positions = entry.getValue();
+			if (word == null || word.isBlank() || positions == null || positions.isEmpty()) {
+				throw invalidAbstractIndex();
+			}
+			for (Integer position : positions) {
+				if (position == null || position < 0 || position > MAX_ABSTRACT_POSITION) {
+					throw invalidAbstractIndex();
+				}
+				if (occupiedPositions.get(position)) {
+					throw invalidAbstractIndex();
+				}
+				occupiedPositions.set(position);
+				wordCount++;
+				if (wordCount > MAX_ABSTRACT_WORDS) {
+					throw invalidAbstractIndex();
+				}
+
+				int separatorCharacters = wordCount == 1 ? 0 : 1;
+				if (word.length() > MAX_ABSTRACT_OUTPUT_CHARACTERS - outputCharacters - separatorCharacters) {
+					throw invalidAbstractIndex();
+				}
+				outputCharacters += separatorCharacters + word.length();
+				highestPosition = Math.max(highestPosition, position);
+			}
 		}
 
-		List<PositionedWord> words = new ArrayList<>();
-		invertedIndex.forEach((word, positions) -> {
-			if (word == null || word.isBlank() || positions == null) {
-				return;
+		String[] wordsByPosition = new String[highestPosition + 1];
+		invertedIndex.forEach((word, positions) -> positions.forEach(position -> wordsByPosition[position] = word));
+		StringBuilder abstractText = new StringBuilder(outputCharacters);
+		for (String word : wordsByPosition) {
+			if (word == null) {
+				continue;
 			}
-			positions.stream()
-					.filter(Objects::nonNull)
-					.filter(position -> position >= 0)
-					.forEach(position -> words.add(new PositionedWord(position, word)));
-		});
-		words.sort(Comparator.comparingInt(PositionedWord::position).thenComparing(PositionedWord::word));
-		if (words.isEmpty()) {
-			return null;
+			if (!abstractText.isEmpty()) {
+				abstractText.append(' ');
+			}
+			abstractText.append(word);
 		}
-		return words.stream().map(PositionedWord::word).reduce((left, right) -> left + " " + right).orElse(null);
+		return abstractText.toString();
+	}
+
+	private ProviderException invalidAbstractIndex() {
+		return providerException(
+				RESPONSE_ERROR,
+				"OpenAlex returned an invalid or oversized abstract index",
+				false,
+				null,
+				null);
 	}
 
 	private static List<ProviderAuthor> mapAuthors(List<OpenAlexAuthorship> authorships) {

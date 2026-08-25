@@ -36,18 +36,18 @@ afterEach(() => {
 describe("personal-data export BFF route", () => {
   it("streams the JSON body with fixed private download headers", async () => {
     const payload = JSON.stringify({ userId: "private-user", searches: [] });
-    vi.mocked(exportPersonalData).mockResolvedValue(
-      new Response(payload, {
-        status: 200,
-        headers: {
-          "cache-control": "public, max-age=3600",
-          "content-disposition": 'attachment; filename="unsafe.html"',
-          "content-type": "application/json; charset=utf-8",
-          "set-cookie": "backend-secret=leaked",
-          "x-backend-internal": "private",
-        },
-      }),
-    );
+    const backendResponse = new Response(payload, {
+      status: 200,
+      headers: {
+        "cache-control": "public, max-age=3600",
+        "content-disposition": 'attachment; filename="unsafe.html"',
+        "content-type": "application/json; charset=utf-8",
+        "set-cookie": "backend-secret=leaked",
+        "x-backend-internal": "private",
+      },
+    });
+    const blobSpy = vi.spyOn(backendResponse, "blob");
+    vi.mocked(exportPersonalData).mockResolvedValue(backendResponse);
 
     const response = await GET();
 
@@ -60,6 +60,7 @@ describe("personal-data export BFF route", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(response.headers.get("x-backend-internal")).toBeNull();
+    expect(blobSpy).not.toHaveBeenCalled();
     await expect(response.text()).resolves.toBe(payload);
   });
 

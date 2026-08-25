@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 2,
+  "policyId": "paper-deduplication-policy-v2",
+  "developmentFixtureId": "paper-deduplication-development-v2",
+  "developmentFixtureSha256": "080b2731f4e8b28ae88e07fc77238ff38ea369b97bf17b4964d7eebe72e06a46",
+  "status": "EVALUATION_ONLY",
+  "labelUnit": "BIBLIOGRAPHIC_MANIFESTATION",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "productionBaseline": {
+    "algorithm": "EXACT_IDENTIFIERS_AND_PROVIDER_RECORDS_ONLY",
+    "matchPrecedence": ["DOI", "OPENALEX", "PROVIDER_RECORD", "ANY_EXACT_IDENTIFIER"],
+    "normalization": [
+      "DOI_PREFIX_URL_AND_CASE",
+      "OPENALEX_URL_AND_CASE",
+      "ARXIV_URL_PDF_VERSION_AND_CASE",
+      "OTHER_IDENTIFIER_TRIM_AND_CASE",
+      "REPOSITORY_NAMESPACE_TRIM_AND_CASE"
+    ],
+    "metadataFallback": "DISABLED"
+  },
+  "allowedFeatures": [
+    "NORMALIZED_TITLE",
+    "PUBLICATION_YEAR",
+    "FIRST_AUTHOR_NAME",
+    "FIRST_AUTHOR_ORCID",
+    "FIRST_AUTHOR_OPENALEX",
+    "DOCUMENT_TYPE",
+    "EXACT_IDENTIFIER",
+    "EXACT_PROVIDER_RECORD"
+  ],
+  "forbiddenFeatures": [
+    "FIXTURE_RECORD_KEY",
+    "GOLD_CLUSTER",
+    "CASE_FAMILY",
+    "PROVIDER_RANK",
+    "CITATION_COUNT",
+    "ABSTRACT_SEMANTIC_SIMILARITY"
+  ],
+  "caseFamilies": [
+    {"key": "DOI_NORMALIZATION", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "ARXIV_MODERN_VERSION", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "ARXIV_LEGACY_VERSION", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "OPENALEX_NORMALIZATION", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "IDENTIFIER_BRIDGE", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "REPOSITORY_NAMESPACE", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "PROVIDER_REPLAY", "signalClass": "EXACT_SIGNAL", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "TITLE_YEAR_FIRST_AUTHOR", "signalClass": "METADATA_ONLY", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "UNICODE_PUNCTUATION", "signalClass": "METADATA_ONLY", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "AUTHOR_ALIAS", "signalClass": "METADATA_ONLY", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "YEAR_TOLERANCE", "signalClass": "METADATA_ONLY", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "SPARSE_RICH_METADATA", "signalClass": "METADATA_ONLY", "minimumGoldPositivePairs": 3, "minimumCriticalMustSeparatePairs": 0},
+    {"key": "COMMON_TITLE_COLLISION", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1},
+    {"key": "ANNUAL_EDITION_COLLISION", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1},
+    {"key": "PREPRINT_PUBLISHED_BOUNDARY", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1},
+    {"key": "THESIS_ARTICLE_BOUNDARY", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1},
+    {"key": "CORRECTION_BOUNDARY", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1},
+    {"key": "CONSORTIUM_HOMONYM", "signalClass": "MUST_SEPARATE", "minimumGoldPositivePairs": 0, "minimumCriticalMustSeparatePairs": 1}
+  ],
+  "metrics": [
+    "PAIRWISE_PRECISION_RECALL_F1",
+    "B_CUBED_PRECISION_RECALL_F1",
+    "EXACT_CLUSTER_MATCH_RATE",
+    "CASE_FAMILY_PAIRWISE",
+    "INGEST_ORDER_PARTITION_STABILITY"
+  ],
+  "ingestOrderKeys": ["fixture", "reverse", "seeded-20260825"],
+  "activation": {
+    "mode": "KEEP_EXACT_PRODUCTION_BASELINE_UNLESS_EVERY_GATE_PASSES",
+    "allGatesRequired": true,
+    "holdoutRequired": true,
+    "gates": {
+      "minimumPairwisePrecision": 1.0,
+      "minimumBCubedPrecision": 1.0,
+      "maximumCriticalFalseMerges": 0,
+      "maximumCriticalMissedLinks": 0,
+      "minimumExactSignalRecall": 1.0,
+      "minimumOverallPairwiseRecall": 0.8,
+      "minimumMetadataOnlyRecall": 0.75,
+      "minimumPairwiseRecallGainOverExactBaseline": 0.15,
+      "minimumBCubedF1GainOverExactBaseline": 0.05,
+      "minimumPerCaseFamilyRecall": 0.66,
+      "minimumPositivePairsForFamilyGate": 3,
+      "requireOrderInvariantPartitions": true
+    },
+    "expectedExactBaseline": {
+      "recordCount": 48,
+      "goldClusterCount": 24,
+      "goldPositivePairCount": 36,
+      "truePositives": 21,
+      "falsePositives": 0,
+      "falseNegatives": 15,
+      "trueNegatives": 1092,
+      "pairwisePrecision": 1.0,
+      "pairwiseRecall": 0.5833333333333334,
+      "pairwiseF1": 0.7368421052631579,
+      "bCubedPrecision": 1.0,
+      "bCubedRecall": 0.7916666666666666,
+      "bCubedF1": 0.8837209302325582,
+      "exactClusterMatches": 19,
+      "exactClusterMatchRate": 0.7916666666666666,
+      "exactSignalRecall": 1.0,
+      "metadataOnlyRecall": 0.0,
+      "criticalFalseMerges": 0,
+      "criticalMissedLinks": 0
+    }
+  }
+}

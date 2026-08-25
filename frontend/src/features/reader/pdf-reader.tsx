@@ -21,6 +21,7 @@ const MAX_CANVAS_PIXELS = 16_000_000;
 const MAX_CANVAS_SIDE = 8_192;
 const MAX_CSS_SIDE = 5_000;
 const MAX_PDF_BYTES = 75 * 1024 * 1024;
+const MAX_PDF_PAGES = 10_000;
 const MAX_ACCESSIBLE_TEXT_CHARS = 40_000;
 const MAX_ACCESSIBLE_TEXT_ITEMS = 5_000;
 const PDF_LOAD_TIMEOUT_MS = 45_000;
@@ -206,6 +207,14 @@ function PdfReaderSession({
         const loadedDocument = await loadingTask.promise;
         if (!active || loadFailed) {
           destroyLoadingTask();
+          return;
+        }
+        if (
+          !Number.isSafeInteger(loadedDocument.numPages) ||
+          loadedDocument.numPages < 1 ||
+          loadedDocument.numPages > MAX_PDF_PAGES
+        ) {
+          failLoad();
           return;
         }
         window.clearTimeout(loadTimeout);
