@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "policyId": "provider-fusion-policy-v1",
+  "developmentFixtureId": "provider-fusion-development-v1",
+  "developmentFixtureSha256": "999f34ee1b025b4faeab0ed08436576ac46411f2ecae99ab6a56857acb4fe7f4",
+  "status": "EVALUATION_ONLY",
+  "requiredProviders": ["OPENALEX", "EUROPE_PMC"],
+  "requiredExactOverlapSignals": ["DOI", "PMID", "PMCID"],
+  "ranking": {
+    "method": "RECIPROCAL_RANK_FUSION",
+    "rrfK": 60,
+    "tieBreak": [
+      "FUSED_SCORE_DESC",
+      "PRIMARY_PROVIDER_RANK_ASC",
+      "PRIMARY_PROVIDER_ASC",
+      "PRIMARY_PROVIDER_RECORD_ID_ASC",
+      "CANONICAL_PAPER_UUID_ASC"
+    ]
+  },
+  "cutoffs": {
+    "recallAt": 20,
+    "ndcgAt": 10,
+    "precisionAt": 5,
+    "reciprocalRankAt": 20
+  },
+  "constraints": {
+    "queryGroupCount": 8,
+    "maxRecordsPerProviderPerQuery": 10,
+    "metadataOnly": true
+  },
+  "metrics": [
+    "RECALL_AT_20",
+    "NDCG_AT_10",
+    "PRECISION_AT_5",
+    "MEAN_RECIPROCAL_RANK_AT_20",
+    "PAIRWISE_DEDUPLICATION_PRECISION_RECALL_F1",
+    "PER_FIELD_METADATA_COVERAGE"
+  ],
+  "metadataCoverageFields": [
+    "TITLE",
+    "DOCUMENT_TYPE",
+    "SOURCE_URL",
+    "DOI",
+    "PMID",
+    "PMCID",
+    "ABSTRACT",
+    "AUTHORS",
+    "ORCID",
+    "PUBLICATION_YEAR",
+    "VENUE",
+    "LANGUAGE",
+    "ISSN",
+    "CITATION_COUNT"
+  ],
+  "metadataFusionGainFields": [
+    "ABSTRACT",
+    "ORCID",
+    "PUBLICATION_YEAR",
+    "VENUE",
+    "LANGUAGE",
+    "ISSN",
+    "CITATION_COUNT"
+  ],
+  "gates": {
+    "minimumEuropePmcUniqueRelevantQueryCount": 4,
+    "minimumMacroRecallGain": 0.20,
+    "minimumMacroNdcgDelta": 0.10,
+    "minimumMacroPrecisionDelta": 0.02,
+    "minimumMrrDelta": 0.10,
+    "minimumFusedCompletenessDelta": 0.06,
+    "minimumPerFieldFusionDelta": 0.01,
+    "maximumPerQueryNdcgRegression": 0.06,
+    "maximumRegressingQueryCount": 1,
+    "minimumExactDedupPrecision": 1.0,
+    "minimumExactDedupRecall": 1.0,
+    "maximumCriticalFalseMerges": 0,
+    "requireVariedFixtureMetadata": true,
+    "forbidDocumentFields": true
+  }
+}

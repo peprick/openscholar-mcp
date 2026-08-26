@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "provider-fusion-development-v1",
+  "policyId": "provider-fusion-policy-v1",
+  "split": "DEVELOPMENT",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "queries": [
+    {
+      "key": "oral-cancer-ai-diagnosis",
+      "text": "artificial intelligence early oral cancer diagnosis",
+      "judgments": {
+        "q1-shared": 3,
+        "q1-openalex-hard-one": 0,
+        "q1-openalex-calibration": 2,
+        "q1-openalex-screening": 1,
+        "q1-openalex-hard-two": 0,
+        "q1-openalex-followup": 1,
+        "q1-europe-pmc-triage": 2,
+        "q1-europe-pmc-hard": 0,
+        "q1-europe-pmc-validation": 1,
+        "q1-missed-external-validation": 2
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q1-oa-shared","goldPaperKey":"q1-shared","providerRecordId":"W-PQ-Q1-S","title":"Synthetic multimodal screening for early oral carcinoma","documentType":"ARTICLE","authors":[{"displayName":"Asha Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.shared"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/shared","reportedOpenAccess":true},
+            {"key":"q1-oa-hard-one","goldPaperKey":"q1-openalex-hard-one","providerRecordId":"W-PQ-Q1-H1","title":"Veterinary oral lesion image classification","documentType":"ARTICLE","authors":[{"displayName":"Bela Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/hard-one","reportedOpenAccess":true},
+            {"key":"q1-oa-calibration","goldPaperKey":"q1-openalex-calibration","providerRecordId":"W-PQ-Q1-O1","title":"Calibration of oral lesion image classifiers","documentType":"ARTICLE","abstractText":"Synthetic calibration study metadata for oral lesion classifiers.","publicationYear":2021,"language":"en","venueName":"Journal of Synthetic Oral Imaging","citationCount":14,"authors":[{"displayName":"Cora Example","orcid":"https://fixtures.openscholar.test/orcid/q1-oa-calibration"}],"issn":["https://fixtures.openscholar.test/issn/q1-oa-calibration"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/calibration","reportedOpenAccess":false},
+            {"key":"q1-oa-screening","goldPaperKey":"q1-openalex-screening","providerRecordId":"W-PQ-Q1-O2","title":"Community screening workflows for oral dysplasia","documentType":"ARTICLE","authors":[{"displayName":"Dev Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/screening","reportedOpenAccess":true},
+            {"key":"q1-oa-hard-two","goldPaperKey":"q1-openalex-hard-two","providerRecordId":"W-PQ-Q1-H2","title":"Neural enhancement for intraoral scanner hardware","documentType":"ARTICLE","authors":[{"displayName":"Eli Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.oa.h2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/hard-two","reportedOpenAccess":false},
+            {"key":"q1-oa-followup","goldPaperKey":"q1-openalex-followup","providerRecordId":"W-PQ-Q1-O3","title":"Longitudinal follow-up after oral cancer screening","documentType":"ARTICLE","authors":[{"displayName":"Farah Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.oa.o3"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q1/followup","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q1-ep-shared","goldPaperKey":"q1-shared","providerRecordId":"MED:900000001001","title":"Synthetic multimodal screening for early oral carcinoma","documentType":"ARTICLE","abstractText":"Synthetic prospective screening metadata spanning imaging and referral outcomes.","publicationYear":2022,"language":"en","venueName":"Synthetic Clinical Screening","citationCount":23,"authors":[{"displayName":"Asha Example","orcid":"https://fixtures.openscholar.test/orcid/q1-ep-shared"}],"issn":["https://fixtures.openscholar.test/issn/q1-ep-shared"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q1.shared"},{"type":"PMID","value":"900000001001"},{"type":"PMCID","value":"PMC900000001001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q1/shared","reportedOpenAccess":true},
+            {"key":"q1-ep-triage","goldPaperKey":"q1-europe-pmc-triage","providerRecordId":"MED:900000001002","title":"Point-of-care oral dysplasia triage","documentType":"ARTICLE","authors":[{"displayName":"Gita Example"}],"identifiers":[{"type":"PMID","value":"900000001002"},{"type":"PMCID","value":"PMC900000001002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q1/triage","reportedOpenAccess":true},
+            {"key":"q1-ep-hard","goldPaperKey":"q1-europe-pmc-hard","providerRecordId":"MED:900000001003","title":"Dental scanner illumination correction","documentType":"ARTICLE","authors":[{"displayName":"Hari Example"}],"identifiers":[{"type":"PMID","value":"900000001003"},{"type":"PMCID","value":"PMC900000001003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q1/hard","reportedOpenAccess":false},
+            {"key":"q1-ep-validation","goldPaperKey":"q1-europe-pmc-validation","providerRecordId":"MED:900000001004","title":"Prospective validation of oral lesion referral rules","documentType":"ARTICLE","authors":[{"displayName":"Ira Example"}],"identifiers":[{"type":"PMID","value":"900000001004"},{"type":"PMCID","value":"PMC900000001004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q1/validation","reportedOpenAccess":true}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q1-oa-shared","rightRecordKey":"q1-ep-shared","relation":"MUST_LINK","signal":"DOI","reason":"Normalized DOI evidence identifies one article."},
+        {"leftRecordKey":"q1-oa-hard-one","rightRecordKey":"q1-ep-triage","relation":"MUST_SEPARATE","signal":"NONE","reason":"Veterinary classification is distinct from human dysplasia triage."}
+      ]
+    },
+    {
+      "key": "rare-disease-genomic-diagnosis",
+      "text": "rare disease genomic diagnosis graph learning",
+      "judgments": {
+        "q2-openalex-hard": 0,
+        "q2-shared": 3,
+        "q2-openalex-variant-ranking": 2,
+        "q2-openalex-phenotype": 1,
+        "q2-europe-pmc-hard-one": 0,
+        "q2-europe-pmc-trio": 3,
+        "q2-europe-pmc-cohort": 2,
+        "q2-europe-pmc-hard-two": 0,
+        "q2-europe-pmc-case-series": 1,
+        "q2-europe-pmc-hard-three": 0,
+        "q2-missed-functional-study": 3
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q2-oa-hard","goldPaperKey":"q2-openalex-hard","providerRecordId":"W-PQ-Q2-H1","title":"Rare-event fraud diagnosis with graph learning","documentType":"ARTICLE","authors":[{"displayName":"Jaya Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q2.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q2/hard","reportedOpenAccess":false},
+            {"key":"q2-oa-shared","goldPaperKey":"q2-shared","providerRecordId":"W-PQ-Q2-S","title":"Phenotype graphs for rare genomic diagnosis","documentType":"ARTICLE","authors":[{"displayName":"Kiran Example"}],"identifiers":[{"type":"PMID","value":"900000002003"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q2/shared","reportedOpenAccess":true},
+            {"key":"q2-oa-variant","goldPaperKey":"q2-openalex-variant-ranking","providerRecordId":"W-PQ-Q2-O1","title":"Knowledge graph ranking of orphan variants","documentType":"ARTICLE","authors":[{"displayName":"Lina Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q2.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q2/variant","reportedOpenAccess":true},
+            {"key":"q2-oa-phenotype","goldPaperKey":"q2-openalex-phenotype","providerRecordId":"W-PQ-Q2-O2","title":"Phenotype expansion in unsolved Mendelian disease","documentType":"ARTICLE","authors":[{"displayName":"Mira Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q2.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q2/phenotype","reportedOpenAccess":false}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q2-ep-hard-one","goldPaperKey":"q2-europe-pmc-hard-one","providerRecordId":"MED:900000002001","title":"Graph atlas of common variants in healthy adults","documentType":"ARTICLE","authors":[{"displayName":"Nila Example"}],"identifiers":[{"type":"PMID","value":"900000002001"},{"type":"PMCID","value":"PMC900000002001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/hard-one","reportedOpenAccess":true},
+            {"key":"q2-ep-trio","goldPaperKey":"q2-europe-pmc-trio","providerRecordId":"MED:900000002002","title":"Trio sequencing for unresolved childhood syndromes","documentType":"ARTICLE","abstractText":"Synthetic trio-sequencing cohort metadata for unresolved pediatric syndromes.","publicationYear":2020,"language":"en","venueName":"Synthetic Rare Disease Reports","citationCount":31,"authors":[{"displayName":"Omar Example","orcid":"https://fixtures.openscholar.test/orcid/q2-ep-trio"}],"issn":["https://fixtures.openscholar.test/issn/q2-ep-trio"],"identifiers":[{"type":"PMID","value":"900000002002"},{"type":"PMCID","value":"PMC900000002002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/trio","reportedOpenAccess":true},
+            {"key":"q2-ep-shared","goldPaperKey":"q2-shared","providerRecordId":"MED:900000002003","title":"Phenotype graphs for rare genomic diagnosis","documentType":"ARTICLE","authors":[{"displayName":"Kiran Example"}],"identifiers":[{"type":"PMID","value":"900000002003"},{"type":"PMCID","value":"PMC900000002003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/shared","reportedOpenAccess":true},
+            {"key":"q2-ep-cohort","goldPaperKey":"q2-europe-pmc-cohort","providerRecordId":"MED:900000002004","title":"Long-read diagnosis in a rare-disease cohort","documentType":"ARTICLE","authors":[{"displayName":"Pia Example"}],"identifiers":[{"type":"PMID","value":"900000002004"},{"type":"PMCID","value":"PMC900000002004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/cohort","reportedOpenAccess":true},
+            {"key":"q2-ep-hard-two","goldPaperKey":"q2-europe-pmc-hard-two","providerRecordId":"MED:900000002005","title":"Population graph embeddings for wellness surveys","documentType":"ARTICLE","authors":[{"displayName":"Quin Example"}],"identifiers":[{"type":"PMID","value":"900000002005"},{"type":"PMCID","value":"PMC900000002005"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/hard-two","reportedOpenAccess":false},
+            {"key":"q2-ep-case-series","goldPaperKey":"q2-europe-pmc-case-series","providerRecordId":"MED:900000002006","title":"Genome-first diagnosis in a clinical case series","documentType":"ARTICLE","authors":[{"displayName":"Ravi Example"}],"identifiers":[{"type":"PMID","value":"900000002006"},{"type":"PMCID","value":"PMC900000002006"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/case-series","reportedOpenAccess":true},
+            {"key":"q2-ep-hard-three","goldPaperKey":"q2-europe-pmc-hard-three","providerRecordId":"MED:900000002007","title":"Graph diagnosis of rare faults in turbines","documentType":"ARTICLE","authors":[{"displayName":"Sara Example"}],"identifiers":[{"type":"PMID","value":"900000002007"},{"type":"PMCID","value":"PMC900000002007"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q2/hard-three","reportedOpenAccess":false}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q2-oa-shared","rightRecordKey":"q2-ep-shared","relation":"MUST_LINK","signal":"PMID","reason":"The shared PMID identifies one indexed clinical article."},
+        {"leftRecordKey":"q2-oa-hard","rightRecordKey":"q2-ep-trio","relation":"MUST_SEPARATE","signal":"NONE","reason":"Financial fraud classification is not genomic diagnosis."}
+      ]
+    },
+    {
+      "key": "maternal-sepsis-prediction",
+      "text": "maternal sepsis early warning prediction",
+      "judgments": {
+        "q3-shared": 3,
+        "q3-openalex-warning": 2,
+        "q3-openalex-hard": 0,
+        "q3-openalex-audit": 1,
+        "q3-openalex-validation": 2,
+        "q3-europe-pmc-hard": 0,
+        "q3-europe-pmc-workflow": 0,
+        "q3-missed-rural-cohort": 2
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q3-oa-shared","goldPaperKey":"q3-shared","providerRecordId":"W-PQ-Q3-S","title":"Early warning scores for maternal sepsis","documentType":"ARTICLE","authors":[{"displayName":"Tara Example"}],"identifiers":[{"type":"PMCID","value":"PMC900000003002"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q3/shared","reportedOpenAccess":true},
+            {"key":"q3-oa-warning","goldPaperKey":"q3-openalex-warning","providerRecordId":"W-PQ-Q3-O1","title":"Obstetric sepsis warning model validation","documentType":"ARTICLE","abstractText":"Synthetic external-validation metadata for an obstetric sepsis warning model.","publicationYear":2023,"language":"en","venueName":"Synthetic Obstetric Informatics","citationCount":9,"authors":[{"displayName":"Uma Example","orcid":"https://fixtures.openscholar.test/orcid/q3-oa-warning"}],"issn":["https://fixtures.openscholar.test/issn/q3-oa-warning"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q3.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q3/warning","reportedOpenAccess":true},
+            {"key":"q3-oa-hard","goldPaperKey":"q3-openalex-hard","providerRecordId":"W-PQ-Q3-H1","title":"Sepsis prediction in industrial fermentation tanks","documentType":"ARTICLE","authors":[{"displayName":"Vera Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q3.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q3/hard","reportedOpenAccess":false},
+            {"key":"q3-oa-audit","goldPaperKey":"q3-openalex-audit","providerRecordId":"W-PQ-Q3-O2","title":"Audit of maternal infection escalation pathways","documentType":"ARTICLE","authors":[{"displayName":"Wafa Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q3.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q3/audit","reportedOpenAccess":false},
+            {"key":"q3-oa-validation","goldPaperKey":"q3-openalex-validation","providerRecordId":"W-PQ-Q3-O3","title":"External validation of maternal sepsis alerts","documentType":"ARTICLE","authors":[{"displayName":"Xena Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q3.oa.o3"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q3/validation","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q3-ep-hard","goldPaperKey":"q3-europe-pmc-hard","providerRecordId":"MED:900000003001","title":"General adult sepsis billing-code prediction","documentType":"ARTICLE","authors":[{"displayName":"Yara Example"}],"identifiers":[{"type":"PMID","value":"900000003001"},{"type":"PMCID","value":"PMC900000003001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q3/hard","reportedOpenAccess":true},
+            {"key":"q3-ep-shared","goldPaperKey":"q3-shared","providerRecordId":"MED:900000003002","title":"Early warning scores for maternal sepsis","documentType":"ARTICLE","abstractText":"Synthetic maternity-cohort metadata for early warning score calibration.","publicationYear":2024,"language":"en","venueName":"Synthetic Maternal Health Journal","citationCount":18,"authors":[{"displayName":"Tara Example","orcid":"https://fixtures.openscholar.test/orcid/q3-ep-shared"}],"issn":["https://fixtures.openscholar.test/issn/q3-ep-shared"],"identifiers":[{"type":"PMID","value":"900000003002"},{"type":"PMCID","value":"PMC900000003002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q3/shared","reportedOpenAccess":true},
+            {"key":"q3-ep-workflow","goldPaperKey":"q3-europe-pmc-workflow","providerRecordId":"MED:900000003003","title":"Ward workflow for suspected maternal infection","documentType":"ARTICLE","authors":[{"displayName":"Zara Example"}],"identifiers":[{"type":"PMID","value":"900000003003"},{"type":"PMCID","value":"PMC900000003003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q3/workflow","reportedOpenAccess":false}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q3-oa-shared","rightRecordKey":"q3-ep-shared","relation":"MUST_LINK","signal":"PMCID","reason":"The shared PMCID identifies one repository-held article."},
+        {"leftRecordKey":"q3-oa-hard","rightRecordKey":"q3-ep-workflow","relation":"MUST_SEPARATE","signal":"NONE","reason":"Industrial fermentation is distinct from obstetric clinical workflow."}
+      ]
+    },
+    {
+      "key": "antimicrobial-resistance-surveillance",
+      "text": "antimicrobial resistance wastewater genomic surveillance",
+      "judgments": {
+        "q4-openalex-hard": 0,
+        "q4-shared": 3,
+        "q4-openalex-sampling": 1,
+        "q4-europe-pmc-resistome": 2,
+        "q4-europe-pmc-trends": 1,
+        "q4-europe-pmc-hard": 0,
+        "q4-europe-pmc-outbreak": 2,
+        "q4-missed-regional-network": 1
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q4-oa-hard","goldPaperKey":"q4-openalex-hard","providerRecordId":"W-PQ-Q4-H1","title":"Antimicrobial coatings in wastewater pipes","documentType":"ARTICLE","authors":[{"displayName":"Ari Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q4.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q4/hard","reportedOpenAccess":false},
+            {"key":"q4-oa-shared","goldPaperKey":"q4-shared","providerRecordId":"W-PQ-Q4-S","title":"Wastewater genomics for resistance surveillance","documentType":"ARTICLE","authors":[{"displayName":"Bo Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q4.shared"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q4/shared","reportedOpenAccess":true},
+            {"key":"q4-oa-sampling","goldPaperKey":"q4-openalex-sampling","providerRecordId":"W-PQ-Q4-O1","title":"Composite sampling for municipal resistomes","documentType":"ARTICLE","authors":[{"displayName":"Chi Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q4.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q4/sampling","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q4-ep-shared","goldPaperKey":"q4-shared","providerRecordId":"MED:900000004001","title":"Wastewater genomics for resistance surveillance","documentType":"ARTICLE","authors":[{"displayName":"Bo Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q4.shared"},{"type":"PMID","value":"900000004001"},{"type":"PMCID","value":"PMC900000004001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q4/shared","reportedOpenAccess":true},
+            {"key":"q4-ep-resistome","goldPaperKey":"q4-europe-pmc-resistome","providerRecordId":"MED:900000004002","title":"Hospital catchment resistome monitoring","documentType":"ARTICLE","abstractText":"Synthetic longitudinal metadata for hospital-catchment resistome surveillance.","publicationYear":2019,"language":"en","venueName":"Synthetic Genomic Surveillance","citationCount":27,"authors":[{"displayName":"Diya Example","orcid":"https://fixtures.openscholar.test/orcid/q4-ep-resistome"}],"issn":["https://fixtures.openscholar.test/issn/q4-ep-resistome"],"identifiers":[{"type":"PMID","value":"900000004002"},{"type":"PMCID","value":"PMC900000004002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q4/resistome","reportedOpenAccess":true},
+            {"key":"q4-ep-trends","goldPaperKey":"q4-europe-pmc-trends","providerRecordId":"MED:900000004003","title":"Seasonal resistance trends in sewage metagenomes","documentType":"ARTICLE","authors":[{"displayName":"Ena Example"}],"identifiers":[{"type":"PMID","value":"900000004003"},{"type":"PMCID","value":"PMC900000004003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q4/trends","reportedOpenAccess":true},
+            {"key":"q4-ep-hard","goldPaperKey":"q4-europe-pmc-hard","providerRecordId":"MED:900000004004","title":"Wastewater pump failure surveillance","documentType":"ARTICLE","authors":[{"displayName":"Fio Example"}],"identifiers":[{"type":"PMID","value":"900000004004"},{"type":"PMCID","value":"PMC900000004004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q4/hard","reportedOpenAccess":false},
+            {"key":"q4-ep-outbreak","goldPaperKey":"q4-europe-pmc-outbreak","providerRecordId":"MED:900000004005","title":"Genomic warning of a regional resistance outbreak","documentType":"ARTICLE","authors":[{"displayName":"Gia Example"}],"identifiers":[{"type":"PMID","value":"900000004005"},{"type":"PMCID","value":"PMC900000004005"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q4/outbreak","reportedOpenAccess":true}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q4-oa-shared","rightRecordKey":"q4-ep-shared","relation":"MUST_LINK","signal":"DOI","reason":"DOI normalization links the duplicated surveillance article."},
+        {"leftRecordKey":"q4-oa-hard","rightRecordKey":"q4-ep-resistome","relation":"MUST_SEPARATE","signal":"NONE","reason":"Pipe coatings are distinct from catchment resistome surveillance."}
+      ]
+    },
+    {
+      "key": "neurodegenerative-biomarkers",
+      "text": "blood biomarkers early neurodegenerative disease",
+      "judgments": {
+        "q5-openalex-hard-one": 0,
+        "q5-shared": 3,
+        "q5-openalex-panel": 2,
+        "q5-openalex-hard-two": 0,
+        "q5-openalex-longitudinal": 2,
+        "q5-openalex-proteomics": 1,
+        "q5-openalex-validation": 1,
+        "q5-europe-pmc-assay": 0,
+        "q5-europe-pmc-hard": 0,
+        "q5-europe-pmc-review": 0,
+        "q5-missed-autopsy-linkage": 3
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q5-oa-hard-one","goldPaperKey":"q5-openalex-hard-one","providerRecordId":"W-PQ-Q5-H1","title":"Blood pressure biomarkers in healthy athletes","documentType":"ARTICLE","authors":[{"displayName":"Hana Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/hard-one","reportedOpenAccess":false},
+            {"key":"q5-oa-shared","goldPaperKey":"q5-shared","providerRecordId":"W-PQ-Q5-S","title":"Plasma biomarkers for early neurodegeneration","documentType":"ARTICLE","authors":[{"displayName":"Ivan Example"}],"identifiers":[{"type":"PMID","value":"900000005001"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/shared","reportedOpenAccess":true},
+            {"key":"q5-oa-panel","goldPaperKey":"q5-openalex-panel","providerRecordId":"W-PQ-Q5-O1","title":"Multiplex blood panel for prodromal dementia","documentType":"ARTICLE","abstractText":"Synthetic biomarker-panel metadata for a prodromal dementia cohort.","publicationYear":2022,"language":"en","venueName":"Synthetic Neurodiagnostics","citationCount":16,"authors":[{"displayName":"Jin Example","orcid":"https://fixtures.openscholar.test/orcid/q5-oa-panel"}],"issn":["https://fixtures.openscholar.test/issn/q5-oa-panel"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/panel","reportedOpenAccess":true},
+            {"key":"q5-oa-hard-two","goldPaperKey":"q5-openalex-hard-two","providerRecordId":"W-PQ-Q5-H2","title":"Wearable biomarkers of training fatigue","documentType":"ARTICLE","authors":[{"displayName":"Kali Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.h2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/hard-two","reportedOpenAccess":true},
+            {"key":"q5-oa-longitudinal","goldPaperKey":"q5-openalex-longitudinal","providerRecordId":"W-PQ-Q5-O2","title":"Longitudinal neurofilament trajectories before diagnosis","documentType":"ARTICLE","authors":[{"displayName":"Lior Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/longitudinal","reportedOpenAccess":false},
+            {"key":"q5-oa-proteomics","goldPaperKey":"q5-openalex-proteomics","providerRecordId":"W-PQ-Q5-O3","title":"Proteomic signatures of cognitive decline","documentType":"ARTICLE","authors":[{"displayName":"Mina Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.o3"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/proteomics","reportedOpenAccess":true},
+            {"key":"q5-oa-validation","goldPaperKey":"q5-openalex-validation","providerRecordId":"W-PQ-Q5-O4","title":"Cross-cohort validation of plasma markers","documentType":"ARTICLE","authors":[{"displayName":"Noa Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q5.oa.o4"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q5/validation","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q5-ep-shared","goldPaperKey":"q5-shared","providerRecordId":"MED:900000005001","title":"Plasma biomarkers for early neurodegeneration","documentType":"ARTICLE","abstractText":"Synthetic discovery-cohort metadata for plasma neurodegeneration biomarkers.","publicationYear":2023,"language":"en","venueName":"Synthetic Translational Neurology","citationCount":35,"authors":[{"displayName":"Ivan Example","orcid":"https://fixtures.openscholar.test/orcid/q5-ep-shared"}],"issn":["https://fixtures.openscholar.test/issn/q5-ep-shared"],"identifiers":[{"type":"PMID","value":"900000005001"},{"type":"PMCID","value":"PMC900000005001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q5/shared","reportedOpenAccess":true},
+            {"key":"q5-ep-assay","goldPaperKey":"q5-europe-pmc-assay","providerRecordId":"MED:900000005002","title":"Assay harmonization for neurodegenerative biomarkers","documentType":"ARTICLE","authors":[{"displayName":"Ona Example"}],"identifiers":[{"type":"PMID","value":"900000005002"},{"type":"PMCID","value":"PMC900000005002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q5/assay","reportedOpenAccess":true},
+            {"key":"q5-ep-hard","goldPaperKey":"q5-europe-pmc-hard","providerRecordId":"MED:900000005003","title":"Peripheral blood counts after endurance exercise","documentType":"ARTICLE","authors":[{"displayName":"Pavel Example"}],"identifiers":[{"type":"PMID","value":"900000005003"},{"type":"PMCID","value":"PMC900000005003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q5/hard","reportedOpenAccess":false},
+            {"key":"q5-ep-review","goldPaperKey":"q5-europe-pmc-review","providerRecordId":"MED:900000005004","title":"Narrative review of generic laboratory reference ranges","documentType":"ARTICLE","authors":[{"displayName":"Qara Example"}],"identifiers":[{"type":"PMID","value":"900000005004"},{"type":"PMCID","value":"PMC900000005004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q5/review","reportedOpenAccess":true}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q5-oa-shared","rightRecordKey":"q5-ep-shared","relation":"MUST_LINK","signal":"PMID","reason":"The same PMID appears in both provider records."},
+        {"leftRecordKey":"q5-oa-hard-one","rightRecordKey":"q5-ep-assay","relation":"MUST_SEPARATE","signal":"NONE","reason":"Athletic blood pressure is not a neurodegenerative assay study."}
+      ]
+    },
+    {
+      "key": "immunotherapy-adverse-events",
+      "text": "immune checkpoint inhibitor adverse event prediction",
+      "judgments": {
+        "q6-shared": 3,
+        "q6-openalex-model": 2,
+        "q6-openalex-hard": 0,
+        "q6-openalex-monitoring": 1,
+        "q6-europe-pmc-hard-one": 0,
+        "q6-europe-pmc-prospective": 3,
+        "q6-europe-pmc-toxicity": 2,
+        "q6-europe-pmc-hard-two": 0,
+        "q6-europe-pmc-followup": 1,
+        "q6-missed-multicenter": 2
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q6-oa-shared","goldPaperKey":"q6-shared","providerRecordId":"W-PQ-Q6-S","title":"Predicting checkpoint inhibitor adverse events","documentType":"ARTICLE","authors":[{"displayName":"Rina Example"}],"identifiers":[{"type":"PMCID","value":"PMC900000006003"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q6/shared","reportedOpenAccess":true},
+            {"key":"q6-oa-model","goldPaperKey":"q6-openalex-model","providerRecordId":"W-PQ-Q6-O1","title":"Clinical model for immune toxicity risk","documentType":"ARTICLE","authors":[{"displayName":"Sami Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q6.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q6/model","reportedOpenAccess":false},
+            {"key":"q6-oa-hard","goldPaperKey":"q6-openalex-hard","providerRecordId":"W-PQ-Q6-H1","title":"Adverse event prediction for vaccine logistics","documentType":"ARTICLE","authors":[{"displayName":"Tia Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q6.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q6/hard","reportedOpenAccess":false},
+            {"key":"q6-oa-monitoring","goldPaperKey":"q6-openalex-monitoring","providerRecordId":"W-PQ-Q6-O2","title":"Remote monitoring during checkpoint therapy","documentType":"ARTICLE","authors":[{"displayName":"Uri Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q6.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q6/monitoring","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q6-ep-hard-one","goldPaperKey":"q6-europe-pmc-hard-one","providerRecordId":"MED:900000006001","title":"Checkpoint control in distributed computing","documentType":"ARTICLE","authors":[{"displayName":"Vani Example"}],"identifiers":[{"type":"PMID","value":"900000006001"},{"type":"PMCID","value":"PMC900000006001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/hard-one","reportedOpenAccess":false},
+            {"key":"q6-ep-prospective","goldPaperKey":"q6-europe-pmc-prospective","providerRecordId":"MED:900000006002","title":"Prospective immune toxicity risk cohort","documentType":"ARTICLE","abstractText":"Synthetic prospective-cohort metadata for checkpoint-therapy toxicity risk.","publicationYear":2025,"language":"en","venueName":"Synthetic Cancer Safety","citationCount":11,"authors":[{"displayName":"Wren Example","orcid":"https://fixtures.openscholar.test/orcid/q6-ep-prospective"}],"issn":["https://fixtures.openscholar.test/issn/q6-ep-prospective"],"identifiers":[{"type":"PMID","value":"900000006002"},{"type":"PMCID","value":"PMC900000006002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/prospective","reportedOpenAccess":true},
+            {"key":"q6-ep-shared","goldPaperKey":"q6-shared","providerRecordId":"MED:900000006003","title":"Predicting checkpoint inhibitor adverse events","documentType":"ARTICLE","authors":[{"displayName":"Rina Example"}],"identifiers":[{"type":"PMID","value":"900000006003"},{"type":"PMCID","value":"PMC900000006003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/shared","reportedOpenAccess":true},
+            {"key":"q6-ep-toxicity","goldPaperKey":"q6-europe-pmc-toxicity","providerRecordId":"MED:900000006004","title":"Early laboratory signals of immune toxicity","documentType":"ARTICLE","authors":[{"displayName":"Xia Example"}],"identifiers":[{"type":"PMID","value":"900000006004"},{"type":"PMCID","value":"PMC900000006004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/toxicity","reportedOpenAccess":true},
+            {"key":"q6-ep-hard-two","goldPaperKey":"q6-europe-pmc-hard-two","providerRecordId":"MED:900000006005","title":"Generic adverse event terminology harmonization","documentType":"ARTICLE","authors":[{"displayName":"Yuki Example"}],"identifiers":[{"type":"PMID","value":"900000006005"},{"type":"PMCID","value":"PMC900000006005"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/hard-two","reportedOpenAccess":true},
+            {"key":"q6-ep-followup","goldPaperKey":"q6-europe-pmc-followup","providerRecordId":"MED:900000006006","title":"Follow-up after severe checkpoint toxicity","documentType":"ARTICLE","authors":[{"displayName":"Zed Example"}],"identifiers":[{"type":"PMID","value":"900000006006"},{"type":"PMCID","value":"PMC900000006006"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q6/followup","reportedOpenAccess":false}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q6-oa-shared","rightRecordKey":"q6-ep-shared","relation":"MUST_LINK","signal":"PMCID","reason":"Repository identity is established by the shared PMCID."},
+        {"leftRecordKey":"q6-oa-hard","rightRecordKey":"q6-ep-prospective","relation":"MUST_SEPARATE","signal":"NONE","reason":"Vaccine logistics is distinct from checkpoint-therapy toxicity."}
+      ]
+    },
+    {
+      "key": "tuberculosis-drug-resistance",
+      "text": "tuberculosis drug resistance rapid sequencing",
+      "judgments": {
+        "q7-shared": 3,
+        "q7-openalex-workflow": 1,
+        "q7-openalex-panel": 1,
+        "q7-openalex-hard-one": 0,
+        "q7-openalex-culture": 2,
+        "q7-openalex-hard-two": 0,
+        "q7-europe-pmc-method": 1,
+        "q7-missed-community-study": 2
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q7-oa-shared","goldPaperKey":"q7-shared","providerRecordId":"W-PQ-Q7-S","title":"Rapid sequencing for tuberculosis resistance","documentType":"ARTICLE","authors":[{"displayName":"Ayo Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.shared"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/shared","reportedOpenAccess":true},
+            {"key":"q7-oa-workflow","goldPaperKey":"q7-openalex-workflow","providerRecordId":"W-PQ-Q7-O1","title":"Same-day sequencing workflow for tuberculosis","documentType":"ARTICLE","abstractText":"Synthetic workflow metadata for same-day tuberculosis resistance sequencing.","publicationYear":2020,"language":"en","venueName":"Synthetic Clinical Microbiology","citationCount":21,"authors":[{"displayName":"Bea Example","orcid":"https://fixtures.openscholar.test/orcid/q7-oa-workflow"}],"issn":["https://fixtures.openscholar.test/issn/q7-oa-workflow"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.oa.o1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/workflow","reportedOpenAccess":true},
+            {"key":"q7-oa-panel","goldPaperKey":"q7-openalex-panel","providerRecordId":"W-PQ-Q7-O2","title":"Targeted resistance panel evaluation","documentType":"ARTICLE","authors":[{"displayName":"Cai Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.oa.o2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/panel","reportedOpenAccess":false},
+            {"key":"q7-oa-hard-one","goldPaperKey":"q7-openalex-hard-one","providerRecordId":"W-PQ-Q7-H1","title":"Drug resistance in agricultural weeds","documentType":"ARTICLE","authors":[{"displayName":"Dara Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/hard-one","reportedOpenAccess":false},
+            {"key":"q7-oa-culture","goldPaperKey":"q7-openalex-culture","providerRecordId":"W-PQ-Q7-O3","title":"Sequencing compared with culture susceptibility","documentType":"ARTICLE","authors":[{"displayName":"Ema Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.oa.o3"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/culture","reportedOpenAccess":true},
+            {"key":"q7-oa-hard-two","goldPaperKey":"q7-openalex-hard-two","providerRecordId":"W-PQ-Q7-H2","title":"Rapid sequencing of soil microbial diversity","documentType":"ARTICLE","authors":[{"displayName":"Fara Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.oa.h2"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q7/hard-two","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q7-ep-shared","goldPaperKey":"q7-shared","providerRecordId":"MED:900000007001","title":"Rapid sequencing for tuberculosis resistance","documentType":"ARTICLE","abstractText":"Synthetic multicenter metadata for rapid resistance-sequencing validation.","publicationYear":2021,"language":"en","venueName":"Synthetic Tuberculosis Genomics","citationCount":29,"authors":[{"displayName":"Ayo Example","orcid":"https://fixtures.openscholar.test/orcid/q7-ep-shared"}],"issn":["https://fixtures.openscholar.test/issn/q7-ep-shared"],"identifiers":[{"type":"DOI","value":"10.5555/pq.q7.shared"},{"type":"PMID","value":"900000007001"},{"type":"PMCID","value":"PMC900000007001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q7/shared","reportedOpenAccess":true},
+            {"key":"q7-ep-method","goldPaperKey":"q7-europe-pmc-method","providerRecordId":"MED:900000007002","title":"Library preparation method for rapid resistance testing","documentType":"ARTICLE","authors":[{"displayName":"Gus Example"}],"identifiers":[{"type":"PMID","value":"900000007002"},{"type":"PMCID","value":"PMC900000007002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q7/method","reportedOpenAccess":true}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q7-oa-shared","rightRecordKey":"q7-ep-shared","relation":"MUST_LINK","signal":"DOI","reason":"The normalized DOI joins the shared sequencing study."},
+        {"leftRecordKey":"q7-oa-hard-one","rightRecordKey":"q7-ep-method","relation":"MUST_SEPARATE","signal":"NONE","reason":"Agricultural weed resistance is distinct from tuberculosis testing."}
+      ]
+    },
+    {
+      "key": "cardiovascular-digital-twins",
+      "text": "cardiovascular digital twin personalized treatment",
+      "judgments": {
+        "q8-openalex-hard": 0,
+        "q8-shared": 2,
+        "q8-europe-pmc-personalization": 3,
+        "q8-europe-pmc-hard": 0,
+        "q8-europe-pmc-hemodynamics": 2,
+        "q8-europe-pmc-followup": 1,
+        "q8-missed-randomized-study": 3
+      },
+      "providerResults": [
+        {
+          "provider": "OPENALEX",
+          "records": [
+            {"key":"q8-oa-hard","goldPaperKey":"q8-openalex-hard","providerRecordId":"W-PQ-Q8-H1","title":"Digital twins for cardiovascular pump maintenance","documentType":"ARTICLE","authors":[{"displayName":"Hiro Example"}],"identifiers":[{"type":"DOI","value":"10.5555/pq.q8.oa.h1"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q8/hard","reportedOpenAccess":false},
+            {"key":"q8-oa-shared","goldPaperKey":"q8-shared","providerRecordId":"W-PQ-Q8-S","title":"Patient-specific cardiovascular digital twins","documentType":"ARTICLE","authors":[{"displayName":"Ina Example"}],"identifiers":[{"type":"PMID","value":"900000008002"}],"sourceUrl":"https://fixtures.openscholar.test/openalex/q8/shared","reportedOpenAccess":true}
+          ]
+        },
+        {
+          "provider": "EUROPE_PMC",
+          "records": [
+            {"key":"q8-ep-personalization","goldPaperKey":"q8-europe-pmc-personalization","providerRecordId":"MED:900000008001","title":"Personalized therapy simulation with cardiac twins","documentType":"ARTICLE","abstractText":"Synthetic validation metadata for patient-specific cardiac treatment simulation.","publicationYear":2026,"language":"en","venueName":"Synthetic Cardiovascular Modeling","citationCount":6,"authors":[{"displayName":"Jori Example","orcid":"https://fixtures.openscholar.test/orcid/q8-ep-personalization"}],"issn":["https://fixtures.openscholar.test/issn/q8-ep-personalization"],"identifiers":[{"type":"PMID","value":"900000008001"},{"type":"PMCID","value":"PMC900000008001"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q8/personalization","reportedOpenAccess":true},
+            {"key":"q8-ep-shared","goldPaperKey":"q8-shared","providerRecordId":"MED:900000008002","title":"Patient-specific cardiovascular digital twins","documentType":"ARTICLE","authors":[{"displayName":"Ina Example"}],"identifiers":[{"type":"PMID","value":"900000008002"},{"type":"PMCID","value":"PMC900000008002"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q8/shared","reportedOpenAccess":true},
+            {"key":"q8-ep-hard","goldPaperKey":"q8-europe-pmc-hard","providerRecordId":"MED:900000008003","title":"Digital twin governance for hospital buildings","documentType":"ARTICLE","authors":[{"displayName":"Koa Example"}],"identifiers":[{"type":"PMID","value":"900000008003"},{"type":"PMCID","value":"PMC900000008003"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q8/hard","reportedOpenAccess":false},
+            {"key":"q8-ep-hemodynamics","goldPaperKey":"q8-europe-pmc-hemodynamics","providerRecordId":"MED:900000008004","title":"Hemodynamic calibration of cardiac digital twins","documentType":"ARTICLE","authors":[{"displayName":"Luz Example"}],"identifiers":[{"type":"PMID","value":"900000008004"},{"type":"PMCID","value":"PMC900000008004"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q8/hemodynamics","reportedOpenAccess":true},
+            {"key":"q8-ep-followup","goldPaperKey":"q8-europe-pmc-followup","providerRecordId":"MED:900000008005","title":"Follow-up outcomes after twin-guided planning","documentType":"ARTICLE","authors":[{"displayName":"Moe Example"}],"identifiers":[{"type":"PMID","value":"900000008005"},{"type":"PMCID","value":"PMC900000008005"}],"sourceUrl":"https://fixtures.openscholar.test/europe-pmc/q8/followup","reportedOpenAccess":true}
+          ]
+        }
+      ],
+      "criticalPairs": [
+        {"leftRecordKey":"q8-oa-shared","rightRecordKey":"q8-ep-shared","relation":"MUST_LINK","signal":"PMID","reason":"Both records retain the same biomedical index identifier."},
+        {"leftRecordKey":"q8-oa-hard","rightRecordKey":"q8-ep-personalization","relation":"MUST_SEPARATE","signal":"NONE","reason":"Pump maintenance is distinct from personalized cardiac treatment."}
+      ]
+    }
+  ]
+}

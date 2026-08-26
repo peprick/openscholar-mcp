@@ -117,7 +117,7 @@ Europe PMC is default-off and keyless. It uses only the Articles REST `/search` 
 
 ### MCP
 
-The `/mcp` endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set in local mode. It exposes five bounded tools over stateless Streamable HTTP. Use the [MCP quickstart](../docs/MCP_QUICKSTART.md) for key generation, client configuration, tool discovery, and protocol smoke checks.
+The `/mcp` endpoint is disabled at the security boundary until `MCP_LOCAL_API_KEY` is set in local mode. It exposes six bounded tools over stateless Streamable HTTP. Use the [MCP quickstart](../docs/MCP_QUICKSTART.md) for key generation, client configuration, tool discovery, and protocol smoke checks.
 
 ## Verify
 
@@ -128,6 +128,8 @@ With Docker running:
 ```
 
 The suite includes unit, MVC, module-boundary, migration, persistence, provider-contract, raw MCP, and PostgreSQL/pgvector Testcontainers coverage. Normal verification does not contact live research providers or Ollama.
+
+The deterministic Europe PMC quality gate can be isolated with `./mvnw --batch-mode --no-transfer-progress -Dtest=EuropePmcProviderQualityEvaluationTests test`. It uses synthetic inputs and the real catalog/search-snapshot stores; it neither enables Europe PMC nor publishes metrics to readers. Live evidence is a separate manual capture against an isolated backend with exactly OpenAlex and Europe PMC active: from the repository root, run `node scripts/capture-europe-pmc-quality.mjs --base-url http://127.0.0.1:8080`. If Actuator uses a separate private origin, also pass `--management-url http://127.0.0.1:9091`; a separately authenticated metrics endpoint may use `OPENSCHOLAR_PROVIDER_QUALITY_METRICS_BEARER_TOKEN`. Production Actuator stays private and un-published—use an approved loopback/private tunnel or evaluation endpoint, never a public proxy route. The capture requires exactly eight requests per provider, is bounded to already fused metadata/search first pages, and writes only below ignored `backend/target/provider-quality/`; it cannot compute isolated-provider quality deltas or inspect raw pre-reconciliation false merges. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for the evidence and default-enablement boundaries.
 
 ## Optional local embeddings
 
@@ -173,6 +175,7 @@ The backend is a Spring Modulith modular monolith. Feature modules expose applic
 - [Architecture](../docs/ARCHITECTURE.md)
 - [Data model](../docs/DATA_MODEL.md)
 - [Development guide](../docs/DEVELOPMENT.md)
+- [Provider quality evaluation](../docs/PROVIDER_QUALITY.md)
 - [Hosted deployment](../docs/DEPLOYMENT.md)
 - [Operations runbook](../docs/OPERATIONS_RUNBOOK.md)
 - [Threat model](../docs/THREAT_MODEL.md)

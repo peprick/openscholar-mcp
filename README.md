@@ -85,6 +85,8 @@ Generate a local MCP key with `openssl rand -hex 32`. Never commit the generated
 
 Europe PMC is an opt-in metadata source, not a document source. Its adapter uses only the REST `/search` route, maps DOI/PMID/PMCID and bibliographic metadata, leaves `pdfUrl` null, and never calls full-text, supplementary-file, PDF, or bulk-download routes. Any provider-reported open-access value remains an unverified hint; legal-access verification continues through the separate exact-identifier pipeline.
 
+Its [provider-quality evaluation](docs/PROVIDER_QUALITY.md) is engineering-only: a deterministic synthetic PR gate exercises the real catalog/search-snapshot mechanics, while an optional live capture samples bounded, already fused metadata pages into an ignored local report. The capture is diagnostic and cannot compare isolated providers or audit raw pre-reconciliation false merges. These metrics are not shown to readers, and default enablement still requires a future bounded isolated-provider/raw-candidate evaluator, an independent holdout, and time-separated live evidence.
+
 ## Use it from an agent
 
 With `MCP_LOCAL_API_KEY` configured, connect a Streamable HTTP client to `http://127.0.0.1:8080/mcp`:
@@ -184,6 +186,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 - [Security and legal boundaries](docs/SECURITY_AND_LEGAL.md)
 - [Deployment guide](docs/DEPLOYMENT.md)
 - [Testing strategy](docs/TESTING_STRATEGY.md)
+- [Provider quality evaluation](docs/PROVIDER_QUALITY.md)
 
 ## Current status
 

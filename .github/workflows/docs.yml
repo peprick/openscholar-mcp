@@ -7,12 +7,18 @@ on:
       - "**/*.md"
       - "docs/**"
       - "scripts/validate-docs.mjs"
+      - "scripts/capture-europe-pmc-quality.mjs"
+      - "scripts/test-capture-europe-pmc-quality.mjs"
+      - "backend/src/test/resources/search/provider-quality/europe-pmc-live-queries-v1.json"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "**/*.md"
       - "docs/**"
       - "scripts/validate-docs.mjs"
+      - "scripts/capture-europe-pmc-quality.mjs"
+      - "scripts/test-capture-europe-pmc-quality.mjs"
+      - "backend/src/test/resources/search/provider-quality/europe-pmc-live-queries-v1.json"
       - ".github/workflows/docs.yml"
 
 permissions:
@@ -24,7 +30,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Local links
+    name: Docs and capture checks
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -41,3 +47,9 @@ jobs:
 
       - name: Validate local documentation links
         run: node scripts/validate-docs.mjs
+
+      - name: Validate provider-quality capture utility
+        run: node scripts/capture-europe-pmc-quality.mjs --validate-query-set
+
+      - name: Exercise provider-quality capture utility
+        run: node scripts/test-capture-europe-pmc-quality.mjs

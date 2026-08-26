@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "querySetId": "europe-pmc-live-queries-v1",
+  "sourcePolicy": "AUTHOR_WRITTEN_TOPICS_WITHOUT_RELEVANCE_LABELS",
+  "pageSize": 20,
+  "queries": [
+    {
+      "key": "cancer-ml-diagnosis",
+      "query": "machine learning cancer diagnosis"
+    },
+    {
+      "key": "crispr-off-target",
+      "query": "CRISPR gene editing off target detection"
+    },
+    {
+      "key": "antimicrobial-surveillance",
+      "query": "antimicrobial resistance genomic surveillance"
+    },
+    {
+      "key": "single-cell-tumor",
+      "query": "single cell RNA sequencing tumor microenvironment"
+    },
+    {
+      "key": "long-covid-cardiovascular",
+      "query": "long COVID cardiovascular outcomes"
+    },
+    {
+      "key": "malaria-vaccine",
+      "query": "malaria vaccine efficacy children"
+    },
+    {
+      "key": "alzheimer-biomarkers",
+      "query": "Alzheimer disease plasma biomarkers"
+    },
+    {
+      "key": "ibd-microbiome",
+      "query": "microbiome inflammatory bowel disease"
+    }
+  ]
+}

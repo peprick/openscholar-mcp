@@ -587,6 +587,10 @@ fi
 
 run_stage "Validate documentation links" \
   "${host_env[@]}" node scripts/validate-docs.mjs
+run_stage "Validate provider-quality capture utility" \
+  "${host_env[@]}" node scripts/capture-europe-pmc-quality.mjs --validate-query-set
+run_stage "Exercise provider-quality capture utility" \
+  "${host_env[@]}" node scripts/test-capture-europe-pmc-quality.mjs
 run_stage "Validate immutable supply-chain policy" \
   "${host_env[@]}" scripts/validate-supply-chain.sh
 validator_images_touched=true

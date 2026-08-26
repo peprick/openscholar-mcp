@@ -28,6 +28,7 @@ The root [README](../README.md) is the fastest path to running OpenScholar. Use 
 
 - [Testing strategy](TESTING_STRATEGY.md) — unit, integration, browser, contract, and policy coverage.
 - [Search quality](SEARCH_QUALITY.md) — lexical, deduplication, vector, and hybrid evaluation results.
+- [Provider quality](PROVIDER_QUALITY.md) — deterministic provider-fusion mechanics and opt-in live metadata-capture protocol.
 - [HNSW evaluation protocol](HNSW_EVALUATION_PROTOCOL.md) — approximate-nearest-neighbor mechanics gate.
 - [Holdout evaluation protocol](HOLDOUT_EVALUATION_PROTOCOL.md) — frozen related-paper validation process.
 - [Performance evidence](PERFORMANCE_EVIDENCE.md) — reproducible local performance measurements and their limits.
