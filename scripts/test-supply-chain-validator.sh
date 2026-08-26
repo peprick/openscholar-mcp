@@ -72,6 +72,153 @@ reset_fixture
 )
 printf 'PASS: unmodified repository fixture passes\n'
 
+release_worker_fixture="${fixture}/.github/workflows/release-one-image.yml"
+release_orchestrator_fixture="${fixture}/.github/workflows/release-images.yml"
+
+reset_fixture
+perl -0pi -e \
+  's#repository=ghcr[.]io/peprick/openscholar-backend#repository=ghcr.io/unreviewed/openscholar-backend#' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release worker cannot publish outside the reviewed repository" \
+  "release image workflow repository mapping is incomplete for backend"
+
+reset_fixture
+perl -0pi -e \
+  's/--platform linux\/amd64/--platform linux\/arm64/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release build platform cannot drift from reviewed linux amd64" \
+  "release images and scans must target only linux/amd64"
+
+reset_fixture
+perl -0pi -e \
+  's/exit-code: "1"/exit-code: "0"/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release image scan cannot become fail-open" \
+  "local and registry fix-available high/critical scan gates must remain fail closed"
+
+reset_fixture
+perl -0pi -e \
+  's/ignore-unfixed: false/ignore-unfixed: true/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release evidence cannot omit unfixed vulnerabilities" \
+  "exact-digest vulnerability review evidence must include fix-available and unfixed findings at every severity"
+
+reset_fixture
+perl -0pi -e \
+  's/(          exit-code: "1")/$1\n        continue-on-error: true/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release image scan cannot ignore a failing action" \
+  "release-critical steps must not be skippable or fail open"
+
+reset_fixture
+perl -0pi -e \
+  's/(          exit-code: "1")/$1\n        "continue-on-error" : true/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "quoted release image scan key cannot ignore a failing action" \
+  "release-critical steps must not be skippable or fail open"
+
+reset_fixture
+perl -0pi -e \
+  's/(      - name: Enforce the local high and critical vulnerability gate\n)/$1        if: false\n/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release image scan cannot be conditionally skipped" \
+  "release-critical steps must not be skippable or fail open"
+
+reset_fixture
+perl -0pi -e \
+  's/(      - name: Enforce the local high and critical vulnerability gate\n)/$1        "if" : false\n/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "quoted release image scan key cannot be conditionally skipped" \
+  "release-critical steps must not be skippable or fail open"
+
+reset_fixture
+perl -0pi -e \
+  's/cosign sign --yes "\$\{DIGEST_REF\}"/cosign sign --yes "\${DIGEST_REF}" || true/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release signature cannot be made fail-open" \
+  "release-critical steps must not be skippable or fail open"
+
+reset_fixture
+perl -0pi -e \
+  's/GITHUB_WORKFLOW_REF/GITHUB_WORKFLOW_SHA/g' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release worker rejects an unreviewed direct caller" \
+  "direct calls must repeat the canonical caller, repository, and protected-tag guards"
+
+reset_fixture
+perl -0pi -e \
+  's/deployment_ref: \$\{\{ steps[.]approve[.]outputs[.]deployment_ref \}\}/deployment_ref: \${{ steps.publish.outputs.deployment_ref }}/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release output cannot escape before the evidence chain succeeds" \
+  "deployment output must remain empty until the full evidence chain succeeds"
+
+reset_fixture
+perl -0pi -e \
+  's/validate_ref BACKEND_IMAGE ghcr[.]io\/peprick\/openscholar-backend/validate_ref BACKEND_IMAGE ghcr.io\/peprick\/openscholar-frontend/' \
+  "${release_orchestrator_fixture}"
+expect_failure \
+  "aggregate release manifest cannot cross-wire image repositories" \
+  "aggregate manifest must bind BACKEND_IMAGE to ghcr.io/peprick/openscholar-backend"
+
+reset_fixture
+perl -0pi -e \
+  's/"sha-\$\{GITHUB_SHA\}"/"\$\{RELEASE_TAG\}"/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release publication tag must stay bound to the source SHA" \
+  "release image workflows must preserve the exact source-SHA tag guard"
+
+reset_fixture
+perl -0pi -e \
+  's/cosign sign --yes "\$\{DIGEST_REF\}"/cosign version/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "exact registry digest signing cannot be removed" \
+  "exact-digest signing and provenance/SBOM attestation chain is incomplete"
+
+reset_fixture
+perl -0pi -e \
+  's/actions\/attest\@1e69f48acb82d1966a394da916b4c1698aa569d6/actions\/attest\@0000000000000000000000000000000000000000/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "reviewed provenance and SBOM attestation action cannot drift" \
+  "exact-digest signing and provenance/SBOM attestation chain is incomplete"
+
+reset_fixture
+perl -0pi -e \
+  's/"\$\{IMAGE_RELEASE_ENABLED\}" != "true"/-z "\$\{IMAGE_RELEASE_ENABLED\}"/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release environment enablement cannot be weakened" \
+  "fail-closed release enablement guard is missing"
+
+reset_fixture
+perl -0pi -e \
+  's/GITHUB_REF_PROTECTED/GITHUB_REF_NAME/' \
+  "${release_orchestrator_fixture}"
+expect_failure \
+  "unprotected release refs are rejected" \
+  "protected release ref guard is missing"
+
+reset_fixture
+perl -0pi -e \
+  's/set -Eeuo pipefail/set -Eeuo pipefail\n          docker compose up/' \
+  "${release_worker_fixture}"
+expect_failure \
+  "release evidence workflow cannot gain a deployment command" \
+  "release image workflows must produce evidence only and must not deploy"
+
 reset_fixture
 perl -0pi -e \
   's/uses: actions\/checkout\@[0-9a-f]{40}/"uses" : actions\/checkout\@v6/' \

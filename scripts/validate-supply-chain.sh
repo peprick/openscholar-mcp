@@ -425,6 +425,195 @@ EOF
   fi
 }
 
+# These checks intentionally match literal shell/GitHub expressions inside workflow files,
+# and grouped conjunctions intentionally share one diagnostic for a single invariant.
+# shellcheck disable=SC2015,SC2016,SC2126
+validate_release_image_workflows() {
+  local orchestrator='.github/workflows/release-images.yml'
+  local worker='.github/workflows/release-one-image.yml'
+  local request_case_line mkdir_line local_scan_line login_line push_line registry_scan_line
+  local sign_line provenance_line sbom_line upload_line approve_line
+
+  if [[ ! -f "${orchestrator}" || -L "${orchestrator}" \
+    || ! -f "${worker}" || -L "${worker}" ]]; then
+    report_failure "release image workflows are missing or are not regular files"
+    return
+  fi
+
+  [[ "$(grep -Fc -- 'uses: ./.github/workflows/release-one-image.yml' "${orchestrator}")" -eq 4 ]] \
+    || report_failure "${orchestrator}: exactly four static image jobs must call the closed worker"
+  for image_key in backend frontend caddy blackbox-exporter; do
+    [[ "$(grep -Ec "^[[:space:]]+image_key:[[:space:]]+${image_key}$" "${orchestrator}")" -eq 1 ]] \
+      || report_failure "${orchestrator}: release image key ${image_key} must appear exactly once"
+  done
+  grep -Fq -- '- "v*.*.*"' "${orchestrator}" \
+    || report_failure "${orchestrator}: stable tag events must reach the fail-closed release validator"
+  grep -Fq -- 'workflow_dispatch:' "${orchestrator}" \
+    || report_failure "${orchestrator}: protected manual release retry is missing"
+  grep -Fq -- 'group: release-images' "${orchestrator}" \
+    && grep -Fq -- 'cancel-in-progress: false' "${orchestrator}" \
+    || report_failure "${orchestrator}: releases must serialize globally without cancellation"
+  grep -Fq -- 'GITHUB_REPOSITORY}" != "peprick/openscholar-mcp' "${orchestrator}" \
+    || report_failure "${orchestrator}: canonical repository guard is missing"
+  grep -Fq -- 'GITHUB_REF_PROTECTED:-false}" != "true' "${orchestrator}" \
+    || report_failure "${orchestrator}: protected release ref guard is missing"
+  grep -Fq -- '"${GITHUB_REF}" == "refs/tags/${DISPATCH_RELEASE_TAG}"' "${orchestrator}" \
+    || report_failure "${orchestrator}: manual retries must run from the exact protected release tag"
+  grep -Fq -- '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' "${orchestrator}" \
+    || report_failure "${orchestrator}: exact stable semantic-version guard is missing"
+  grep -Fq -- 'refs/tags/${release_tag}^{commit}' "${orchestrator}" \
+    && grep -Fq -- '"${tag_commit}" != "${GITHUB_SHA}"' "${orchestrator}" \
+    || report_failure "${orchestrator}: release tag must resolve to the exact source commit"
+  grep -Fq -- 'git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main' "${orchestrator}" \
+    || report_failure "${orchestrator}: release source must be reachable from origin/main"
+  [[ "$(grep -Fc -- 'packages: write' "${orchestrator}")" -eq 4 \
+    && "$(grep -Fc -- 'id-token: write' "${orchestrator}")" -eq 4 \
+    && "$(grep -Fc -- 'attestations: write' "${orchestrator}")" -eq 4 ]] \
+    || report_failure "${orchestrator}: each image caller needs only the declared release permissions"
+  if grep -Fq -- 'secrets: inherit' "${orchestrator}" \
+    || grep -Eq -- '(GHCR_TOKEN|PERSONAL_ACCESS_TOKEN|COSIGN_PASSWORD)' "${orchestrator}" "${worker}"; then
+    report_failure "release image workflows must not inherit or require long-lived publication credentials"
+  fi
+
+  grep -Fq -- 'workflow_call:' "${worker}" \
+    || report_failure "${worker}: worker must be callable only as a reusable workflow"
+  grep -Fq -- 'environment: image-release' "${worker}" \
+    || report_failure "${worker}: protected image-release environment is missing"
+  grep -Fq -- 'GITHUB_REPOSITORY}" != "peprick/openscholar-mcp' "${worker}" \
+    && grep -Fq -- 'GITHUB_REF_PROTECTED:-false}" != "true' "${worker}" \
+    && grep -Fq -- '"${GITHUB_REF}" != "refs/tags/${RELEASE_TAG}"' "${worker}" \
+    && grep -Fq -- '"${GITHUB_WORKFLOW_REF}" != "${expected_caller}"' "${worker}" \
+    || report_failure "${worker}: direct calls must repeat the canonical caller, repository, and protected-tag guards"
+  grep -Fq -- 'refs/tags/${RELEASE_TAG}^{commit}' "${worker}" \
+    && grep -Fq -- '"${tag_commit}" != "${GITHUB_SHA}"' "${worker}" \
+    && grep -Fq -- 'git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main' "${worker}" \
+    || report_failure "${worker}: direct calls must bind the stable tag to the exact main-reachable source"
+  grep -Fq -- 'IMAGE_RELEASE_ENABLED: ${{ vars.IMAGE_RELEASE_ENABLED }}' "${worker}" \
+    && grep -Fq -- '"${IMAGE_RELEASE_ENABLED}" != "true"' "${worker}" \
+    || report_failure "${worker}: fail-closed release enablement guard is missing"
+  if grep -Eq "^[[:space:]]*['\"]?if['\"]?[[:space:]]*:.*IMAGE_RELEASE_ENABLED" "${worker}"; then
+    report_failure "${worker}: release enablement must fail, not skip the publishing job or step"
+  fi
+  if grep -Eq '^[[:space:]]{6}(context|dockerfile|repository):' "${worker}" \
+    || grep -Eq '\$\{\{[[:space:]]*inputs[.](context|dockerfile|repository)' "${worker}"; then
+    report_failure "${worker}: callers must not control a build context, Dockerfile, or repository"
+  fi
+  request_case_line="$({ grep -nF -- 'backend|frontend|caddy|blackbox-exporter)' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  mkdir_line="$({ grep -nF -- 'mkdir -p "${evidence_dir}"' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  if [[ -z "${request_case_line}" || -z "${mkdir_line}" \
+    || "${request_case_line}" -ge "${mkdir_line}" ]] \
+    || grep -Fq -- 'release-evidence/${{ inputs.image_key }}' "${worker}" \
+    || ! grep -Fq -- 'path: ${{ steps.request.outputs.evidence_dir }}/' "${worker}"; then
+    report_failure "${worker}: the image key must be closed before any evidence path or artifact is derived"
+  fi
+
+  while IFS='|' read -r image_key context dockerfile repository; do
+    grep -Fq -- "${image_key})" "${worker}" \
+      && grep -Fq -- "context=${context}" "${worker}" \
+      && grep -Fq -- "dockerfile=${dockerfile}" "${worker}" \
+      && grep -Fq -- "repository=${repository}" "${worker}" \
+      || report_failure "${worker}: release image workflow repository mapping is incomplete for ${image_key}"
+  done <<'EOF'
+backend|backend|backend/Dockerfile|ghcr.io/peprick/openscholar-backend
+frontend|frontend|frontend/Dockerfile|ghcr.io/peprick/openscholar-frontend
+caddy|deploy/images/caddy|deploy/images/caddy/Dockerfile|ghcr.io/peprick/openscholar-caddy
+blackbox-exporter|deploy/images/blackbox-exporter|deploy/images/blackbox-exporter/Dockerfile|ghcr.io/peprick/openscholar-blackbox-exporter
+EOF
+
+  [[ "$(grep -Fc -- 'docker build --pull' "${worker}")" -eq 1 ]] \
+    || report_failure "${worker}: every runtime must be built exactly once by the closed worker"
+  [[ "$(grep -Fc -- '--platform linux/amd64' "${worker}")" -eq 2 ]] \
+    && grep -Fq -- 'DOCKER_DEFAULT_PLATFORM: linux/amd64' "${worker}" \
+    && grep -Fq -- 'TRIVY_PLATFORM: linux/amd64' "${worker}" \
+    || report_failure "${worker}: release images and scans must target only linux/amd64"
+  grep -Fq -- '"${IMAGE_TAG}" != "sha-${GITHUB_SHA}"' "${worker}" \
+    && grep -Fq -- 'printf '\''image_tag=sha-%s\n'\'' "${GITHUB_SHA}"' "${orchestrator}" \
+    || report_failure "release image workflows must preserve the exact source-SHA tag guard"
+
+  [[ "$(grep -Fc -- 'exit-code: "1"' "${worker}")" -eq 2 \
+    && "$(grep -Fc -- 'severity: HIGH,CRITICAL' "${worker}")" -eq 2 \
+    && "$(grep -Fc -- 'ignore-unfixed: true' "${worker}")" -eq 2 \
+    && "$(grep -Fc -- 'limit-severities-for-sarif: true' "${worker}")" -eq 2 ]] \
+    || report_failure "${worker}: local and registry fix-available high/critical scan gates must remain fail closed"
+  [[ "$(grep -Fc -- 'image-ref: ${{ steps.publish.outputs.digest_ref }}' "${worker}")" -eq 2 \
+    && "$(grep -Ec '^[[:space:]]+scanners: vuln$' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'ignore-unfixed: false' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'format: json' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'output: ${{ steps.image.outputs.evidence_dir }}/registry-vulnerabilities.json' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'exit-code: "0"' "${worker}")" -eq 1 ]] \
+    || report_failure "${worker}: exact-digest vulnerability review evidence must include fix-available and unfixed findings at every severity"
+  if grep -Eq "^[[:space:]]*['\"]?continue-on-error['\"]?[[:space:]]*:" "${worker}" \
+    || grep -Fq -- '|| true' "${worker}" \
+    || grep -Fq -- 'set +e' "${worker}" \
+    || [[ "$(grep -Ec "^[[:space:]]*['\"]?if['\"]?[[:space:]]*:" "${worker}")" -ne 1 ]] \
+    || ! grep -Fq -- "if: always() && steps.request.outcome == 'success'" "${worker}"; then
+    report_failure "${worker}: release-critical steps must not be skippable or fail open"
+  fi
+  [[ "$(grep -Fc -- 'format: cyclonedx' "${worker}")" -eq 1 ]] \
+    && grep -Fq -- 'sbom-path: ${{ steps.image.outputs.evidence_dir }}/image.cdx.json' "${worker}" \
+    || report_failure "${worker}: digest-bound CycloneDX evidence is incomplete"
+  [[ "$(grep -Fc -- 'image-ref: ${{ steps.publish.outputs.digest_ref }}' "${worker}")" -eq 2 ]] \
+    && grep -Fq -- 'docker pull --platform linux/amd64 "${DIGEST_REF}"' "${worker}" \
+    || report_failure "${worker}: returned registry digest is not pulled and rescanned"
+
+  local_scan_line="$({ grep -nF -- 'output: ${{ steps.image.outputs.evidence_dir }}/local-image.sarif' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  login_line="$({ grep -nF -- 'uses: docker/login-action@' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  push_line="$({ grep -nF -- 'docker push "${PUBLISHED_REF}"' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  registry_scan_line="$({ grep -nF -- 'output: ${{ steps.image.outputs.evidence_dir }}/registry-image.sarif' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  review_scan_line="$({ grep -nF -- 'output: ${{ steps.image.outputs.evidence_dir }}/registry-vulnerabilities.json' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  sign_line="$({ grep -nF -- 'cosign sign --yes "${DIGEST_REF}"' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  provenance_line="$({ grep -nF -- 'id: provenance' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  sbom_line="$({ grep -nF -- 'id: sbom-attestation' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  upload_line="$({ grep -nF -- 'uses: actions/upload-artifact@' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  approve_line="$({ grep -nF -- 'id: approve' "${worker}" || true; } | head -1 | cut -d: -f1)"
+  if [[ -z "${local_scan_line}" || -z "${login_line}" || -z "${push_line}" \
+    || -z "${registry_scan_line}" || -z "${review_scan_line}" || -z "${sign_line}" \
+    || -z "${provenance_line}" \
+    || -z "${sbom_line}" || -z "${upload_line}" || -z "${approve_line}" \
+    || "${local_scan_line}" -ge "${login_line}" \
+    || "${login_line}" -ge "${push_line}" \
+    || "${push_line}" -ge "${registry_scan_line}" \
+    || "${registry_scan_line}" -ge "${review_scan_line}" \
+    || "${review_scan_line}" -ge "${sign_line}" \
+    || "${sign_line}" -ge "${provenance_line}" \
+    || "${provenance_line}" -ge "${sbom_line}" \
+    || "${sbom_line}" -ge "${upload_line}" \
+    || "${upload_line}" -ge "${approve_line}" ]]; then
+    report_failure "${worker}: scan, publish, rescan, sign, attest, retain, and approve order is unsafe"
+  fi
+
+  [[ "$(grep -Fc -- 'cosign sign --yes "${DIGEST_REF}"' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'release-one-image\\.yml@refs/tags/v[0-9]+' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'cosign-release: v3.1.3' "${worker}")" -eq 1 \
+    && "$(grep -Fc -- 'uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2' "${worker}")" -eq 2 \
+    && "$(grep -Fc -- 'push-to-registry: true' "${worker}")" -eq 2 \
+    && "$(grep -Fc -- 'create-storage-record: false' "${worker}")" -eq 2 ]] \
+    || report_failure "${worker}: exact-digest signing and provenance/SBOM attestation chain is incomplete"
+  grep -Fq -- 'deployment_ref: ${{ steps.approve.outputs.deployment_ref }}' "${worker}" \
+    || report_failure "${worker}: deployment output must remain empty until the full evidence chain succeeds"
+  [[ "$(grep -hF -- 'retention-days: 90' "${worker}" "${orchestrator}" | wc -l | tr -d '[:space:]')" -eq 2 ]] \
+    && grep -Fq -- 'release-output/release-images.env' "${orchestrator}" \
+    || report_failure "release image workflows must retain per-image evidence and the aggregate manifest for 90 days"
+  while IFS='|' read -r variable repository; do
+    grep -Fq -- "validate_ref ${variable} ${repository}" "${orchestrator}" \
+      || report_failure "${orchestrator}: aggregate manifest must bind ${variable} to ${repository}"
+  done <<'EOF'
+BACKEND_IMAGE|ghcr.io/peprick/openscholar-backend
+FRONTEND_IMAGE|ghcr.io/peprick/openscholar-frontend
+CADDY_IMAGE|ghcr.io/peprick/openscholar-caddy
+BLACKBOX_EXPORTER_IMAGE|ghcr.io/peprick/openscholar-blackbox-exporter
+EOF
+  for variable in BACKEND_IMAGE FRONTEND_IMAGE CADDY_IMAGE BLACKBOX_EXPORTER_IMAGE; do
+    grep -Fq -- "printf '${variable}=%s\\n'" "${orchestrator}" \
+      || report_failure "${orchestrator}: release-images.env is missing ${variable}"
+  done
+  if grep -Eq -- '(^|[[:space:]])(kubectl|helm|terraform|ssh|scp)[[:space:]]|docker[[:space:]]+compose|production-compose[.]sh|deploy/production[.]env' \
+    "${orchestrator}" "${worker}"; then
+    report_failure "release image workflows must produce evidence only and must not deploy"
+  fi
+}
+
 cd -- "${repository_directory}"
 
 validate_action_references
@@ -441,10 +630,11 @@ validate_runtime_scan_coverage
 validate_sarif_severity_gates
 validate_production_platform_policy
 validate_hardened_runtime_builds
+validate_release_image_workflows
 scripts/validate-vulnerability-exceptions.sh
 
 if [[ "${failures}" -ne 0 ]]; then
   exit 1
 fi
 
-printf 'Supply-chain validation passed: immutable Actions, images, wrapper, and scan coverage are consistent.\n'
+printf 'Supply-chain validation passed: immutable Actions, images, release evidence, wrapper, and scan coverage are consistent.\n'

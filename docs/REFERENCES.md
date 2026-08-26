@@ -103,6 +103,12 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [PostgreSQL `pg_restore`](https://www.postgresql.org/docs/17/app-pgrestore.html)
 - [GitHub dependency review](https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review)
 - [GitHub CodeQL code scanning](https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning-with-codeql)
+- [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
+- [GitHub CLI attestation verification](https://cli.github.com/manual/gh_attestation_verify)
+- [GitHub Container Registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [GitHub Packages access and visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
+- [GitHub Actions variable scopes and precedence](https://docs.github.com/en/actions/reference/workflows-and-actions/variables)
+- [Sigstore Cosign keyless signing](https://docs.sigstore.dev/cosign/signing/signing_with_containers/)
 - [CycloneDX specification](https://cyclonedx.org/specification/overview/)
 
 ## Version caveat
