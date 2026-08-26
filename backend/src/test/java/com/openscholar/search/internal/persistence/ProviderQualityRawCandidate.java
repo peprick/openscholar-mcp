@@ -81,9 +81,10 @@ record ProviderQualityRawCandidate(
 		String rawProviderRecordId = record.providerRecordId();
 		String providerRecordId = required(
 				rawProviderRecordId, "providerRecordId", 1, 1_024);
-		if (!providerRecordId.equals(rawProviderRecordId)) {
+		if (!providerRecordId.equals(rawProviderRecordId)
+				|| providerRecordId.codePoints().anyMatch(Character::isISOControl)) {
 			throw new IllegalArgumentException(
-					"providerRecordId must not contain surrounding whitespace");
+					"providerRecordId must not contain surrounding whitespace or control characters");
 		}
 		Integer publicationYear = publicationYear(record.publicationYear());
 		Integer citationCount = nonNegative(record.citationCount(), "citationCount");

@@ -125,6 +125,16 @@ class ProviderQualityRawCandidateTests {
 				"europe-pmc-live-queries-v1", "cancer-ml-diagnosis", 1, paddedIdentity))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("providerRecordId");
+
+		ProviderPaperRecord controlIdentity = record(
+				DocumentType.ARTICLE,
+				"Synthetic abstract",
+				URI.create("https://source.test/work/W123"),
+				"W123\nforged");
+		assertThatThrownBy(() -> ProviderQualityRawCandidate.from(
+				"europe-pmc-live-queries-v1", "cancer-ml-diagnosis", 1, controlIdentity))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("control characters");
 	}
 
 	private static ProviderPaperRecord record(DocumentType documentType, String abstractText) {

@@ -21,11 +21,13 @@ class ProviderQualityLiveQuerySetTests {
 
 	@Test
 	void loadsTheFrozenEightQuerySetAndBuildsMetadataOnlyArticleCommands() throws Exception {
-		ProviderQualityLiveQuerySet querySet = ProviderQualityLiveQuerySet.load(
-				OBJECT_MAPPER, ProviderQualityLiveQuerySet.RESOURCE_PATH);
+		ProviderQualityLiveQuerySet.BoundQuerySet bound =
+				ProviderQualityLiveQuerySet.loadFrozen(OBJECT_MAPPER);
+		ProviderQualityLiveQuerySet querySet = bound.querySet();
 
 		assertThat(querySet.schemaVersion()).isEqualTo(1);
-		assertThat(querySet.querySetId()).isEqualTo("europe-pmc-live-queries-v1");
+		assertThat(querySet.querySetId()).isEqualTo(ProviderQualityLiveQuerySet.EXPECTED_QUERY_SET_ID);
+		assertThat(bound.sha256()).isEqualTo(ProviderQualityLiveQuerySet.EXPECTED_RESOURCE_SHA256);
 		assertThat(querySet.sourcePolicy())
 				.isEqualTo("AUTHOR_WRITTEN_TOPICS_WITHOUT_RELEVANCE_LABELS");
 		assertThat(querySet.pageSize()).isEqualTo(20);

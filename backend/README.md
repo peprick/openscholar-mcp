@@ -143,6 +143,22 @@ OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
 
 The comparative runner never downloads documents or serializes PDF URLs, and ordinary verification skips it before creating a Spring context. It produces unlabelled engineering evidence, not a reader feature or permission to enable Europe PMC by default. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for artifact separation, retention, holdout, and decision boundaries.
 
+Comparative payload documents use schema version `2`: ranked scenario results expose only bounded metadata-field presence bits, never canonical metadata values. The enclosing `manifest.json` remains schema version `1`. Before scoring, a read-only verifier requires exactly `manifest.json`, `summary.json`, `blinded-candidates.json`, `provenance-map.json`, and `reconciliation-trace.json`; it checks the bounded file set, sizes, SHA-256 digests, payload schemas, shared evidence identity, and review-ready status.
+
+After an independent reviewer supplies a strict judgment packet, run the separately opt-in offline scorer from this directory. Move or copy the approved capture outside `backend/target/` first: the required Maven `clean` deletes all prior captures and reports below that directory.
+
+```bash
+RUN_PROVIDER_QUALITY_COMPARATIVE_SCORING=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeOfflineScoringTests \
+  clean test
+```
+
+The packet must bind the exact evidence-manifest, query-set, and frozen-scoring-policy digests and attest that it was authored without provenance or scenario output. Eligible captures must retain the exact blinded-review instruction and evidence-scoped shuffled candidate order, deterministic review keys are recomputed, and hidden provenance values are checked against their bounded producer schema before scoring. The runner also binds the claimed query-set ID, digest, and ordered keys to the checked-in frozen resource. No real judgment packet is checked into this repository. The runner rejects a dirty checkout, a claimed revision different from `HEAD`, or scorer code at a revision different from the capture revision. It uses no Spring context, Docker, network, PDF, UI, or runtime endpoint. It computes cluster-aware Recall@20, nDCG@10, Precision@5, and MRR@20 together with per-query pairwise deduplication, must-separate violations, expected-field recovery, and Europe-PMC-unique relevant-query coverage. Queries with no relevant judged candidate and deduplication rates with a zero denominator remain in the report with explicit not-applicable rates and counts; they are not reported as perfect or silently dropped. Its digest-bound report is a private ignored artifact below `backend/target/provider-quality/`; it is not an enablement gate or a provider-default decision.
+
 ## Optional local embeddings
 
 Embedding generation is an offline maintenance workflow and is disabled during normal startup and CI. The current profile is pinned to a separately installed loopback Ollama `0.31.1` process and the exact `qwen3-embedding:0.6b` artifact. OpenScholar never pulls the model automatically.

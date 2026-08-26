@@ -6,11 +6,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,7 +31,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
@@ -70,14 +67,8 @@ class EuropePmcComparativeLiveEvaluationTests {
 	private static final String OPENALEX_BASE_URL = "https://api.openalex.org";
 	private static final String EUROPE_PMC_BASE_URL =
 			"https://www.ebi.ac.uk/europepmc/webservices/rest";
-	private static final String EXPECTED_QUERY_SET_SHA256 =
-			"125783646c293b254eaeda633e15a40fd72aeded4b45effeef2b1ecaaafe36d1";
 	private static final Pattern COMMIT_REVISION = Pattern.compile("^[0-9a-f]{40}(?:[0-9a-f]{24})?$");
 	private static final Pattern EVIDENCE_ID = Pattern.compile("^[a-z0-9][a-z0-9-]{2,127}$");
-	private static final Pattern SHA256_HEX = Pattern.compile("^[0-9a-f]{64}$");
-	private static final byte[] BLINDED_ORDER_DOMAIN =
-			"openscholar-provider-quality-blinded-order-v1"
-					.getBytes(StandardCharsets.UTF_8);
 	private static final long MAXIMUM_EVIDENCE_BYTES = 64L * 1024L * 1024L;
 	private static final int MAXIMUM_GIT_OUTPUT_BYTES = 64 * 1024;
 
@@ -110,10 +101,10 @@ class EuropePmcComparativeLiveEvaluationTests {
 		assertProviderConfigurationIsPinned();
 		assertDisposableDatabaseIsEmpty();
 
-		ProviderQualityLiveQuerySet querySet = ProviderQualityLiveQuerySet.load(
-				objectMapper, ProviderQualityLiveQuerySet.RESOURCE_PATH);
-		String querySetSha256 = classpathSha256(ProviderQualityLiveQuerySet.RESOURCE_PATH);
-		assertThat(querySetSha256).isEqualTo(EXPECTED_QUERY_SET_SHA256);
+		ProviderQualityLiveQuerySet.BoundQuerySet boundQuerySet =
+				ProviderQualityLiveQuerySet.loadFrozen(objectMapper);
+		ProviderQualityLiveQuerySet querySet = boundQuerySet.querySet();
+		String querySetSha256 = boundQuerySet.sha256();
 
 		Instant measuredAt = Instant.now();
 		ComparativeCapture capture = new ProviderQualityComparativeEvaluator(
@@ -132,7 +123,7 @@ class EuropePmcComparativeLiveEvaluationTests {
 
 		System.out.printf(
 				Locale.ROOT,
-				"provider-quality-comparative-v1 evidence=%s revision=%s queries=%d "
+				"provider-quality-comparative-v2 evidence=%s revision=%s queries=%d "
 						+ "quality-review-eligible=%s bytes=%d%n",
 				written.directory(),
 				repositoryRevision,
@@ -163,7 +154,7 @@ class EuropePmcComparativeLiveEvaluationTests {
 		}
 
 		Map<String, Object> summary = new LinkedHashMap<>();
-		summary.put("schemaVersion", 1);
+		summary.put("schemaVersion", 2);
 		summary.put("evidenceType", "LIVE_COMPARATIVE_METADATA_CAPTURE");
 		summary.put("evidenceId", evidenceId);
 		summary.put("measuredAt", measuredAt.toString());
@@ -181,17 +172,19 @@ class EuropePmcComparativeLiveEvaluationTests {
 				ProviderId.EUROPE_PMC.name(), Map.of(
 						"baseUrl", EUROPE_PMC_BASE_URL,
 						"maxResponseBytes", 8_388_608)));
-		summary.put("boundaries", Map.of(
-				"metadataOnly", true,
-				"firstPageOnly", true,
-				"providerFetchesPerProviderQuery", 1,
-				"fetchesPdf", false,
-				"fetchesFullText", false,
-				"fetchesSupplementaryFiles", false,
-				"serializesPdfUrl", false,
-				"mutatesUserCatalog", false,
-				"readerFacing", false,
-				"defaultEnablementDecision", false));
+		summary.put("boundaries", Map.ofEntries(
+				Map.entry("metadataOnly", true),
+				Map.entry("firstPageOnly", true),
+				Map.entry("providerFetchesPerProviderQuery", 1),
+				Map.entry("fetchesPdf", false),
+				Map.entry("fetchesFullText", false),
+				Map.entry("fetchesSupplementaryFiles", false),
+				Map.entry("serializesPdfUrl", false),
+				Map.entry("serializesCanonicalMetadataValues", false),
+				Map.entry("serializesCanonicalMetadataPresence", true),
+				Map.entry("mutatesUserCatalog", false),
+				Map.entry("readerFacing", false),
+				Map.entry("defaultEnablementDecision", false)));
 		summary.put("qualityReviewEligible", capture.qualityReviewEligible());
 		summary.put("providerRequests", requests);
 		summary.put("providerFailures", failures);
@@ -200,11 +193,11 @@ class EuropePmcComparativeLiveEvaluationTests {
 				.toList());
 
 		Map<String, Object> blinded = Map.of(
-				"schemaVersion", 1,
+				"schemaVersion", 2,
 				"evidenceId", evidenceId,
 				"qualityReviewEligible", capture.qualityReviewEligible(),
 				"instructions", capture.qualityReviewEligible()
-						? "Assign one integer relevanceGrade from 0 through 3 without consulting provenance-map.json or reconciliation-trace.json."
+						? ProviderQualityComparativeEvidenceBundle.ELIGIBLE_REVIEW_INSTRUCTIONS
 						: "Do not label this incomplete capture; inspect summary.json and repeat the isolated run.",
 				"candidates", capture.queries().stream()
 						.flatMap(query -> query.rawCandidates().stream()
@@ -213,14 +206,14 @@ class EuropePmcComparativeLiveEvaluationTests {
 						.map(EuropePmcComparativeLiveEvaluationTests::blindedCandidate)
 						.toList());
 		Map<String, Object> provenance = Map.of(
-				"schemaVersion", 1,
+				"schemaVersion", 2,
 				"evidenceId", evidenceId,
 				"warning", "Keep this file hidden during blinded relevance grading.",
 				"candidates", capture.queries().stream()
 						.flatMap(query -> query.rawCandidates().stream())
 						.toList());
 		Map<String, Object> reconciliation = Map.of(
-				"schemaVersion", 1,
+				"schemaVersion", 2,
 				"evidenceId", evidenceId,
 				"warning", "These are candidate merge decisions, not duplicate ground truth.",
 				"queries", capture.queries().stream()
@@ -271,24 +264,8 @@ class EuropePmcComparativeLiveEvaluationTests {
 	}
 
 	static String blindedOrderingKey(String evidenceId, String reviewKey) {
-		if (evidenceId == null || !EVIDENCE_ID.matcher(evidenceId).matches()) {
-			throw new IllegalArgumentException("evidenceId is not a bounded safe identifier");
-		}
-		if (reviewKey == null || !SHA256_HEX.matcher(reviewKey).matches()) {
-			throw new IllegalArgumentException("reviewKey is not a SHA-256 identifier");
-		}
-		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			digest.update(BLINDED_ORDER_DOMAIN);
-			digest.update((byte) 0);
-			digest.update(evidenceId.getBytes(StandardCharsets.UTF_8));
-			digest.update((byte) 0);
-			digest.update(reviewKey.getBytes(StandardCharsets.UTF_8));
-			return HexFormat.of().formatHex(digest.digest());
-		}
-		catch (java.security.NoSuchAlgorithmException exception) {
-			throw new IllegalStateException("SHA-256 is unavailable", exception);
-		}
+		return ProviderQualityComparativeEvidenceBundle.blindedOrderingKey(
+				evidenceId, reviewKey);
 	}
 
 	private void assertDisposableDatabaseIsEmpty() {
@@ -306,7 +283,7 @@ class EuropePmcComparativeLiveEvaluationTests {
 		assertThat(europePmcProperties.maxResponseBytes()).isEqualTo(8_388_608);
 	}
 
-	private static String requiredRepositoryRevision(Path repositoryRoot) throws Exception {
+	static String requiredRepositoryRevision(Path repositoryRoot) throws Exception {
 		String value = System.getenv("OPENSCHOLAR_PROVIDER_QUALITY_REVISION");
 		if (value == null || !COMMIT_REVISION.matcher(value).matches()) {
 			throw new IllegalStateException(
@@ -364,7 +341,7 @@ class EuropePmcComparativeLiveEvaluationTests {
 		return new String(output, StandardCharsets.UTF_8);
 	}
 
-	private static Path repositoryRoot() {
+	static Path repositoryRoot() {
 		Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
 		for (Path candidate = current; candidate != null; candidate = candidate.getParent()) {
 			if (Files.isRegularFile(candidate.resolve("backend/pom.xml"))
@@ -375,11 +352,4 @@ class EuropePmcComparativeLiveEvaluationTests {
 		throw new IllegalStateException("Could not locate the OpenScholar repository root");
 	}
 
-	private static String classpathSha256(String resourcePath) throws Exception {
-		ClassPathResource resource = new ClassPathResource(resourcePath);
-		try (InputStream input = resource.getInputStream()) {
-			return HexFormat.of().formatHex(
-					MessageDigest.getInstance("SHA-256").digest(input.readAllBytes()));
-		}
-	}
 }

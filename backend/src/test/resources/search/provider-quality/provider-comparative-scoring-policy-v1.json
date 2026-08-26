@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "policyId": "provider-comparative-scoring-policy-v1",
+  "status": "EVALUATION_ONLY",
+  "scenarios": ["OPENALEX_ONLY", "EUROPE_PMC_ONLY", "FUSED"],
+  "ranking": {
+    "recallAt": 20,
+    "ndcgAt": 10,
+    "precisionAt": 5,
+    "reciprocalRankAt": 20,
+    "clusterCredit": "ONE_HIGHEST_GRADE_UNCREDITED_GOLD_WORK_PER_RESULT",
+    "creditTieBreak": "GOLD_PAPER_KEY_ASCENDING",
+    "noRelevantJudgments": {
+      "recall": "UNDEFINED_EXCLUDE_FROM_MACRO",
+      "ndcg": "UNDEFINED_EXCLUDE_FROM_MACRO",
+      "precision": "ZERO_INCLUDE_IN_MACRO",
+      "reciprocalRank": "UNDEFINED_EXCLUDE_FROM_MACRO"
+    }
+  },
+  "deduplication": {
+    "method": "PAIRWISE_PRECISION_RECALL_F1",
+    "undefinedHandling": {
+      "precisionWhen": "TRUE_POSITIVE_PLUS_FALSE_POSITIVE_IS_ZERO",
+      "recallWhen": "TRUE_POSITIVE_PLUS_FALSE_NEGATIVE_IS_ZERO",
+      "f1When": "PRECISION_OR_RECALL_IS_UNDEFINED",
+      "counts": "ALWAYS_PRESERVED"
+    }
+  },
+  "metadata": {
+    "method": "EXPECTED_FIELD_RECOVERY"
+  },
+  "limits": {
+    "maximumInputBytes": 1048576,
+    "maximumQueries": 50,
+    "maximumCandidatesPerQuery": 40
+  },
+  "defaultEnablementGates": []
+}

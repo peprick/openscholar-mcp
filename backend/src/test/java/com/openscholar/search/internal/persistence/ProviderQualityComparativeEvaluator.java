@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -19,6 +20,8 @@ import java.util.UUID;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
+import com.openscholar.paper.PaperIdentifier;
+import com.openscholar.paper.PaperView;
 import com.openscholar.provider.ProviderException;
 import com.openscholar.provider.ProviderId;
 import com.openscholar.provider.ProviderPaperRecord;
@@ -281,7 +284,58 @@ final class ProviderQualityComparativeEvaluator {
 				requireReviewKey(reviewKeys, result.provider(), result.providerRecordId()),
 				Objects.requireNonNull(clusters.get(result.paper().id())),
 				result.provider(),
-				result.providerRecordId());
+				result.providerRecordId(),
+				presentFields(result));
+	}
+
+	private static List<ProviderQualityMetrics.MetadataField> presentFields(
+			SearchResultView result) {
+		PaperView paper = result.paper();
+		EnumSet<ProviderQualityMetrics.MetadataField> fields = EnumSet.of(
+				ProviderQualityMetrics.MetadataField.TITLE,
+				ProviderQualityMetrics.MetadataField.DOCUMENT_TYPE);
+		if (result.landingPageUrl() != null) {
+			fields.add(ProviderQualityMetrics.MetadataField.SOURCE_URL);
+		}
+		for (PaperIdentifier identifier : paper.identifiers()) {
+			try {
+				fields.add(ProviderQualityMetrics.MetadataField.valueOf(identifier.type().name()));
+			}
+			catch (IllegalArgumentException ignored) {
+				// Only the frozen bibliographic fields are retained as presence bits.
+			}
+		}
+		if (hasText(paper.abstractText())) {
+			fields.add(ProviderQualityMetrics.MetadataField.ABSTRACT);
+		}
+		if (!paper.authors().isEmpty()) {
+			fields.add(ProviderQualityMetrics.MetadataField.AUTHORS);
+		}
+		if (paper.authors().stream().anyMatch(author -> hasText(author.orcid()))) {
+			fields.add(ProviderQualityMetrics.MetadataField.ORCID);
+		}
+		if (paper.publicationYear() != null) {
+			fields.add(ProviderQualityMetrics.MetadataField.PUBLICATION_YEAR);
+		}
+		if (hasText(paper.venueName())) {
+			fields.add(ProviderQualityMetrics.MetadataField.VENUE);
+		}
+		if (hasText(paper.language())) {
+			fields.add(ProviderQualityMetrics.MetadataField.LANGUAGE);
+		}
+		if (!paper.issn().isEmpty()) {
+			fields.add(ProviderQualityMetrics.MetadataField.ISSN);
+		}
+		if (paper.citationCount() != null) {
+			fields.add(ProviderQualityMetrics.MetadataField.CITATION_COUNT);
+		}
+		return fields.stream()
+				.sorted(Comparator.comparing(Enum::name))
+				.toList();
+	}
+
+	private static boolean hasText(String value) {
+		return value != null && !value.isBlank();
 	}
 
 	private static String requireReviewKey(
@@ -476,7 +530,12 @@ final class ProviderQualityComparativeEvaluator {
 			String primaryReviewKey,
 			String clusterKey,
 			ProviderId primaryProvider,
-			String primaryProviderRecordId) {
+			String primaryProviderRecordId,
+			List<ProviderQualityMetrics.MetadataField> presentFields) {
+
+		RankedScenarioResult {
+			presentFields = List.copyOf(presentFields);
+		}
 	}
 
 	record ReconciliationTrace(

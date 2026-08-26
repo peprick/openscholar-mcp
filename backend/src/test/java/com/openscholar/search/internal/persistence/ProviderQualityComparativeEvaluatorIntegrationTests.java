@@ -208,6 +208,19 @@ class ProviderQualityComparativeEvaluatorIntegrationTests {
 					4);
 
 			ScenarioCapture fused = query.scenarios().get(ScenarioId.FUSED);
+			assertThat(fused.rankedResults()).allSatisfy(result ->
+					assertThat(result.presentFields())
+							.extracting(Enum::name)
+							.containsExactly(
+									"ABSTRACT",
+									"CITATION_COUNT",
+									"DOCUMENT_TYPE",
+									"DOI",
+									"LANGUAGE",
+									"PUBLICATION_YEAR",
+									"SOURCE_URL",
+									"TITLE",
+									"VENUE"));
 			Map<String, List<ReconciliationTrace>> byCluster = fused.reconciliation().stream()
 					.collect(Collectors.groupingBy(
 							ReconciliationTrace::clusterKey,

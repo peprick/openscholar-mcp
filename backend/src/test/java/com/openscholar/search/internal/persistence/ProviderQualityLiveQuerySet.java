@@ -2,7 +2,10 @@ package com.openscholar.search.internal.persistence;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -27,7 +30,9 @@ record ProviderQualityLiveQuerySet(
 
 	static final String RESOURCE_PATH =
 			"search/provider-quality/europe-pmc-live-queries-v1.json";
-	private static final String EXPECTED_QUERY_SET_ID = "europe-pmc-live-queries-v1";
+	static final String EXPECTED_QUERY_SET_ID = "europe-pmc-live-queries-v1";
+	static final String EXPECTED_RESOURCE_SHA256 =
+			"125783646c293b254eaeda633e15a40fd72aeded4b45effeef2b1ecaaafe36d1";
 	private static final String EXPECTED_SOURCE_POLICY =
 			"AUTHOR_WRITTEN_TOPICS_WITHOUT_RELEVANCE_LABELS";
 	private static final int EXPECTED_QUERY_COUNT = 8;
@@ -44,11 +49,34 @@ record ProviderQualityLiveQuerySet(
 	static ProviderQualityLiveQuerySet load(ObjectMapper objectMapper, String resourcePath)
 			throws IOException {
 		Objects.requireNonNull(objectMapper, "objectMapper");
+		return parse(objectMapper, readResource(resourcePath));
+	}
+
+	static BoundQuerySet loadFrozen(ObjectMapper objectMapper) throws IOException {
+		Objects.requireNonNull(objectMapper, "objectMapper");
+		byte[] bytes = readResource(RESOURCE_PATH);
+		String sha256 = sha256(bytes);
+		if (!EXPECTED_RESOURCE_SHA256.equals(sha256)) {
+			throw new IllegalStateException("frozen query-set resource SHA-256 does not match");
+		}
+		return new BoundQuerySet(parse(objectMapper, bytes), sha256);
+	}
+
+	private static byte[] readResource(String resourcePath) throws IOException {
 		ClassPathResource resource = new ClassPathResource(
 				requireNonBlank(resourcePath, "resourcePath", 1, 500));
 		try (InputStream input = resource.getInputStream()) {
-			byte[] bytes = input.readNBytes(MAX_RESOURCE_BYTES + 1);
-			return parse(objectMapper, bytes);
+			return input.readNBytes(MAX_RESOURCE_BYTES + 1);
+		}
+	}
+
+	private static String sha256(byte[] bytes) {
+		try {
+			return HexFormat.of().formatHex(
+					MessageDigest.getInstance("SHA-256").digest(bytes));
+		}
+		catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("SHA-256 is unavailable", exception);
 		}
 	}
 
@@ -189,6 +217,14 @@ record ProviderQualityLiveQuerySet(
 	}
 
 	record Query(String key, String text) {
+	}
+
+	record BoundQuerySet(ProviderQualityLiveQuerySet querySet, String sha256) {
+
+		BoundQuerySet {
+			Objects.requireNonNull(querySet, "querySet");
+			Objects.requireNonNull(sha256, "sha256");
+		}
 	}
 
 	record QueryCommand(String key, ProviderSearchQuery command) {

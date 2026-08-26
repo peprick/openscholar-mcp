@@ -4,13 +4,14 @@
 
 Provider-quality evaluation is engineering evidence for deciding whether an optional discovery adapter improves OpenScholar's search mechanics and coverage. It is not a product analytics feature: no quality scores, evaluation controls, or operational metrics are shown in the reader UI or exposed through REST or MCP.
 
-Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has three deliberately separate evidence layers:
+Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has four deliberately separate evidence layers:
 
 | Layer | Execution | What it can show | What it cannot show |
 |---|---|---|---|
 | Synthetic mechanics gate | Deterministic, PR-gated Spring Boot/Testcontainers test with no live scholarly-provider or external API calls | Real catalog/snapshot persistence, exact-signal reconciliation, fusion, metric calculation, and regression stability | Live relevance, current provider coverage, schema stability, quota behavior, or audience usefulness |
 | Fused-page live diagnostic | Explicit operator opt-in against a running backend | Time-stamped fused first-page metadata and provider-request diagnostics for a reviewed query set | Isolated provider quality, raw pre-reconciliation false-merge auditing, durable quality, or permission to enable the provider by default |
 | Comparative raw-candidate capture | Explicit operator opt-in in an isolated Testcontainers evaluation context | One live metadata fetch per provider/query, identical-result replay through isolated and fused production persistence, and every raw-to-canonical decision before page truncation | Ground-truth relevance or identity, representative audience usefulness, document access, reuse rights, durable quality, or permission to enable the provider by default |
+| Offline comparative scoring | Explicit operator opt-in over a verified capture and independently supplied judgments | Frozen cluster-aware ranking, reconciliation, expected-field, and provider-unique-coverage measurements bound to exact input digests | Representative judgments when the packet is not a disjoint holdout, durable quality, a product metric, or permission to enable the provider by default |
 
 ## Deterministic pull-request gate
 
@@ -97,9 +98,42 @@ The gated test starts a disposable PostgreSQL container, explicitly enables Euro
 
 The runner uses only the provider adapters' bounded first-page search methods. It never invokes legal-access verification, dereferences source or PDF links, downloads documents, requests Europe PMC `fullTextXML`, fetches supplementary material, or calls bulk routes. The retained raw projection is a closed bibliographic allowlist: it omits PDF URLs, the untrusted landing-page field, raw provider fragments, credentials, exception causes, and database UUIDs. It retains a bounded, absolute, host-bearing provider source URL only when it uses HTTP(S) without credentials, query, or fragment; that provenance URL may be the same public article page a provider also reports as its landing page. The live test pins both official HTTPS provider endpoints, disables the OpenAlex API key, and records the non-secret endpoint/cap configuration in `summary.json`. Output is capped at 64 MiB and written with create-new semantics below ignored `backend/target/provider-quality/`; directories use mode `0700` and files `0600` where POSIX permissions are available.
 
-Each successful run writes `summary.json`, `blinded-candidates.json`, `provenance-map.json`, `reconciliation-trace.json`, and a per-file SHA-256 `manifest.json`. Relevance reviewers receive only the blinded candidates first; provider, source-rank, identifier, citation, open-access, and reconciliation fields remain outside that packet. A provider failure still produces a diagnostic artifact with `qualityReviewEligible=false`, after which the test fails so it cannot be mistaken for review-ready evidence.
+Each successful run writes `summary.json`, `blinded-candidates.json`, `provenance-map.json`, `reconciliation-trace.json`, and a per-file SHA-256 `manifest.json`. The four payload documents use schema version `2`; ranked scenario results contain only the presence or absence of bounded canonical metadata fields, never the corresponding canonical values. The manifest envelope remains schema version `1`. An earlier payload shape is not silently upgraded for scoring. Relevance reviewers receive only the blinded candidates first; provider, source-rank, identifier, citation, open-access, and reconciliation fields remain outside that packet. A provider failure still produces a diagnostic artifact with `qualityReviewEligible=false`, after which the test fails so it cannot be mistaken for review-ready evidence.
 
-The comparative capture supplies candidates and candidate decisions, not labels or scores. An independent reviewer must grade relevance and separately adjudicate duplicate clusters, must-separate pairs, and metadata expectations before offline Recall@20, nDCG@10, Precision@5, MRR@20, deduplication, and completeness comparisons can be computed. The repository does not yet contain or claim that independent provider holdout, and this workflow must not author it after seeing development results.
+The comparative capture supplies candidates and candidate decisions, not labels or scores. An independent reviewer must grade relevance and separately adjudicate duplicate clusters, must-separate pairs, and metadata expectations before offline comparisons can be computed. The repository contains no real judgment packet and does not claim an independent provider holdout; this workflow must not author one after seeing provenance or scenario results.
+
+## Manual offline comparative scoring
+
+`EuropePmcComparativeOfflineScoringTests` is a manual, local evaluator rather than an application test path. It does not start Spring, PostgreSQL, Testcontainers, Docker, or a web server; it makes no network call, reads no PDF, and adds no UI, REST, MCP, Actuator, or provider-default surface. Ordinary verification skips it unless the explicit scoring gate is set.
+
+The first input boundary accepts exactly five regular, non-symlink files: `manifest.json`, `summary.json`, `blinded-candidates.json`, `provenance-map.json`, and `reconciliation-trace.json`. The strict verifier enforces the 64 MiB aggregate payload bound, the bounded manifest, declared byte counts and per-file SHA-256 digests, strict JSON parsing, payload schema version `2`, the common evidence ID, the manifest's schema version `1`, and consistent review-ready status. The scorer additionally verifies the exact reviewer-visible projection and the evidence-scoped shuffled candidate order, so provider-batched ordering cannot silently unblind a review. Extra, missing, substituted, oversized, malformed, digest-mismatched, reordered, or cross-evidence files fail before scoring.
+
+The separately supplied judgment packet is also strict and bounded. It names the exact evidence ID and manifest SHA-256, query-set ID and SHA-256, and frozen scoring-policy ID and SHA-256. Its required independence attestation states that the judgments were authored without the provenance map or scenario output. Eligible evidence must carry the exact blinded-review instruction that forbids consulting the provenance map or reconciliation trace. Query keys and candidate review keys must form the expected unique partition, review keys are recomputed from their query-set/provider identity, and relevance grades, duplicate groups, must-separate pairs, expected metadata fields, and hidden provenance values must satisfy the closed bounded schema. The checked-in tests use only inline synthetic packets; the repository supplies no real labels.
+
+The frozen `provider-comparative-scoring-policy-v1` measures each OpenAlex-only, Europe-PMC-only, and fused scenario as follows:
+
+| Measurement | Frozen interpretation |
+|---|---|
+| Recall@20, nDCG@10, Precision@5, MRR@20 | A predicted cluster receives credit for at most one previously uncredited adjudicated work: the highest-grade eligible work, with ascending gold-paper key as the frozen tie-break. This prevents one false merge from earning multiple ranking credits and prevents split results from repeatedly earning the same credit. Recall, nDCG, and MRR are explicitly undefined when a query has no relevant judged candidate and are excluded from those relevance macros with the excluded-query count reported; Precision@5 remains `0` and remains in its macro. |
+| Pairwise deduplication | Precision, recall, and F1 are measured within each query from adjudicated review-key pairs and then aggregated; unrelated candidates from different queries do not become artificial true negatives. Counts are always reported. Precision is undefined when `TP + FP = 0`, recall is undefined when `TP + FN = 0`, and F1 is undefined when either input rate is undefined. This makes zero-pair and all-negative pair sets explicit rather than reporting invented perfect rates. |
+| Must-separate violations | An adjudicated must-separate pair is a violation when both candidates occur in a scenario and the scenario places them in the same predicted cluster. |
+| Expected-field recovery | For a credited work, the scorer compares the independently expected bounded fields with the capture's presence bits. It does not recover, serialize, or judge canonical metadata values. |
+| Europe-PMC-unique relevant-query coverage | Counts judged-relevant query groups with a Europe PMC candidate for an adjudicated work and no OpenAlex candidate for that work. |
+
+Retain the approved capture in its controlled external evidence location before running the command below. Maven `clean` deliberately removes all earlier ignored captures and reports under `backend/target/`:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_SCORING=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeOfflineScoringTests \
+  clean test
+```
+
+The scorer keeps successful empty queries and all-irrelevant adjudications visible through the explicit undefined/count semantics above; they are not silently discarded after labeling. The runner rejects a dirty checkout, a claimed revision different from `HEAD`, scorer code at a revision different from the capture revision, or a query-set ID, SHA-256, or ordered key list that differs from the digest-checked frozen resource at that revision. The result is a private, ignored, digest-bound artifact below `backend/target/provider-quality/`. Preserve it separately only under the approved evidence-retention policy. A score report is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision; maintainers must review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
 
 ## Default-enablement evidence
 
