@@ -129,7 +129,19 @@ With Docker running:
 
 The suite includes unit, MVC, module-boundary, migration, persistence, provider-contract, raw MCP, and PostgreSQL/pgvector Testcontainers coverage. Normal verification does not contact live research providers or Ollama.
 
-The deterministic Europe PMC quality gate can be isolated with `./mvnw --batch-mode --no-transfer-progress -Dtest=EuropePmcProviderQualityEvaluationTests test`. It uses synthetic inputs and the real catalog/search-snapshot stores; it neither enables Europe PMC nor publishes metrics to readers. Live evidence is a separate manual capture against an isolated backend with exactly OpenAlex and Europe PMC active: from the repository root, run `node scripts/capture-europe-pmc-quality.mjs --base-url http://127.0.0.1:8080`. If Actuator uses a separate private origin, also pass `--management-url http://127.0.0.1:9091`; a separately authenticated metrics endpoint may use `OPENSCHOLAR_PROVIDER_QUALITY_METRICS_BEARER_TOKEN`. Production Actuator stays private and un-published—use an approved loopback/private tunnel or evaluation endpoint, never a public proxy route. The capture requires exactly eight requests per provider, is bounded to already fused metadata/search first pages, and writes only below ignored `backend/target/provider-quality/`; it cannot compute isolated-provider quality deltas or inspect raw pre-reconciliation false merges. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for the evidence and default-enablement boundaries.
+The deterministic Europe PMC quality gate can be isolated with `./mvnw --batch-mode --no-transfer-progress -Dtest=EuropePmcProviderQualityEvaluationTests test`. It uses synthetic inputs and the real catalog/search-snapshot stores; it neither enables Europe PMC nor publishes metrics to readers. A fused-page diagnostic remains available from the repository root with `node scripts/capture-europe-pmc-quality.mjs --base-url http://127.0.0.1:8080`; a separate private Actuator origin may be supplied with `--management-url` and `OPENSCHOLAR_PROVIDER_QUALITY_METRICS_BEARER_TOKEN`. Production Actuator stays private and un-published—use an approved loopback/private tunnel or evaluation endpoint, never a public proxy route.
+
+For isolated-provider and pre-reconciliation evidence, run the separately opt-in `EuropePmcComparativeLiveEvaluationTests` from a fresh or disposable clean committed checkout. It calls OpenAlex and Europe PMC once per frozen query, replays the identical raw metadata through rollback-only OpenAlex-only, Europe-PMC-only, and fused scenarios in a disposable Testcontainers database, and writes private digest-bound artifacts below ignored `backend/target/provider-quality/`. The runner verifies the claimed revision against `HEAD`, rejects a dirty worktree, pins the official HTTPS endpoints, and disables the OpenAlex API key. Use `clean test` to exclude stale ignored bytecode; first retain any approved prior capture elsewhere because Maven `clean` removes `backend/target/`:
+
+```bash
+RUN_PROVIDER_QUALITY_COMPARATIVE_CAPTURE=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLiveEvaluationTests \
+  clean test
+```
+
+The comparative runner never downloads documents or serializes PDF URLs, and ordinary verification skips it before creating a Spring context. It produces unlabelled engineering evidence, not a reader feature or permission to enable Europe PMC by default. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for artifact separation, retention, holdout, and decision boundaries.
 
 ## Optional local embeddings
 

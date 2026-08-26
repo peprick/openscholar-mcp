@@ -4,12 +4,13 @@
 
 Provider-quality evaluation is engineering evidence for deciding whether an optional discovery adapter improves OpenScholar's search mechanics and coverage. It is not a product analytics feature: no quality scores, evaluation controls, or operational metrics are shown in the reader UI or exposed through REST or MCP.
 
-Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has two deliberately separate evidence layers:
+Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has three deliberately separate evidence layers:
 
 | Layer | Execution | What it can show | What it cannot show |
 |---|---|---|---|
 | Synthetic mechanics gate | Deterministic, PR-gated Spring Boot/Testcontainers test with no live scholarly-provider or external API calls | Real catalog/snapshot persistence, exact-signal reconciliation, fusion, metric calculation, and regression stability | Live relevance, current provider coverage, schema stability, quota behavior, or audience usefulness |
-| Live metadata capture | Explicit operator opt-in against a running backend | Time-stamped fused first-page metadata and provider-request diagnostics for a reviewed query set | Isolated OpenAlex-versus-Europe-PMC-versus-fused quality metrics, raw pre-reconciliation false-merge auditing, a representative corpus, durable quality, document access, reuse rights, or permission to enable the provider by default |
+| Fused-page live diagnostic | Explicit operator opt-in against a running backend | Time-stamped fused first-page metadata and provider-request diagnostics for a reviewed query set | Isolated provider quality, raw pre-reconciliation false-merge auditing, durable quality, or permission to enable the provider by default |
+| Comparative raw-candidate capture | Explicit operator opt-in in an isolated Testcontainers evaluation context | One live metadata fetch per provider/query, identical-result replay through isolated and fused production persistence, and every raw-to-canonical decision before page truncation | Ground-truth relevance or identity, representative audience usefulness, document access, reuse rights, durable quality, or permission to enable the provider by default |
 
 ## Deterministic pull-request gate
 
@@ -75,11 +76,36 @@ A partial provider failure still produces diagnostic evidence, sets `qualityRevi
 
 These reports are local engineering artifacts, not reader-facing product metrics or files to commit automatically. Reviewers should retain only approved, minimized evidence according to the intended deployment's provider, privacy, and retention policy.
 
+## Opt-in comparative raw-candidate capture
+
+`EuropePmcComparativeLiveEvaluationTests` closes the structural gap in the fused-page diagnostic without adding a production route or a reader-facing metric. It loads the same SHA-256-bound eight-query set, selects exactly the OpenAlex and Europe PMC provider beans, and calls each provider once per query. It then replays those same immutable metadata results—not three new live searches—through rollback-only OpenAlex-only, Europe-PMC-only, and fused `SearchSnapshotStore` transactions.
+
+The evaluation trace is recorded immediately after canonical upsert and before same-provider contribution collapse, ranking, or page-size truncation. It therefore includes every bounded raw candidate, including a record merged into another canonical paper or omitted from the displayed first page. Generated database UUIDs never become evidence identifiers: query-set/query-scoped SHA-256 review keys identify raw records consistently across time-separated captures, while stable cluster keys are derived from the sorted raw keys assigned to each scenario cluster.
+
+Run it only from a fresh or disposable clean committed checkout with Docker available. The runner resolves `HEAD`, requires the revision variable to match it exactly, and refuses any unignored worktree change. Use `clean test` so ignored output from an older checkout cannot supply evaluator bytecode; because Maven `clean` removes earlier captures below `backend/target/`, move any approved evidence to its controlled retention location before another run:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_CAPTURE=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLiveEvaluationTests \
+  clean test
+```
+
+The gated test starts a disposable PostgreSQL container, explicitly enables Europe PMC, keeps other optional discovery providers disabled, and never starts a web server. Both provider calls for a query finish before that query's persistence replay begins. Every scenario runs in a new rollback-only transaction, and the runner refuses a nonempty evaluation catalog before or after capture. Normal Maven verification skips the class before Spring context creation, so pull requests and CI make no live scholarly-provider call.
+
+The runner uses only the provider adapters' bounded first-page search methods. It never invokes legal-access verification, dereferences source or PDF links, downloads documents, requests Europe PMC `fullTextXML`, fetches supplementary material, or calls bulk routes. The retained raw projection is a closed bibliographic allowlist: it omits PDF URLs, the untrusted landing-page field, raw provider fragments, credentials, exception causes, and database UUIDs. It retains a bounded, absolute, host-bearing provider source URL only when it uses HTTP(S) without credentials, query, or fragment; that provenance URL may be the same public article page a provider also reports as its landing page. The live test pins both official HTTPS provider endpoints, disables the OpenAlex API key, and records the non-secret endpoint/cap configuration in `summary.json`. Output is capped at 64 MiB and written with create-new semantics below ignored `backend/target/provider-quality/`; directories use mode `0700` and files `0600` where POSIX permissions are available.
+
+Each successful run writes `summary.json`, `blinded-candidates.json`, `provenance-map.json`, `reconciliation-trace.json`, and a per-file SHA-256 `manifest.json`. Relevance reviewers receive only the blinded candidates first; provider, source-rank, identifier, citation, open-access, and reconciliation fields remain outside that packet. A provider failure still produces a diagnostic artifact with `qualityReviewEligible=false`, after which the test fails so it cannot be mistaken for review-ready evidence.
+
+The comparative capture supplies candidates and candidate decisions, not labels or scores. An independent reviewer must grade relevance and separately adjudicate duplicate clusters, must-separate pairs, and metadata expectations before offline Recall@20, nDCG@10, Precision@5, MRR@20, deduplication, and completeness comparisons can be computed. The repository does not yet contain or claim that independent provider holdout, and this workflow must not author it after seeing development results.
+
 ## Default-enablement evidence
 
-Neither the development fixture nor the current fused-page live capture is sufficient to enable Europe PMC by default. A default change requires all of the following before the normal configuration is reconsidered:
+Neither the development fixture, the fused-page diagnostic, nor an unlabelled comparative capture is sufficient to enable Europe PMC by default. A default change requires all of the following before the normal configuration is reconsidered:
 
-1. A future bounded evaluator that captures isolated OpenAlex, isolated Europe PMC, fused results, and the raw candidate/reconciliation evidence needed to measure comparative retrieval quality and audit false merges without fetching documents.
+1. A clean artifact from the checked-in bounded evaluator containing isolated OpenAlex, isolated Europe PMC, fused results, and complete raw candidate/reconciliation evidence without fetching documents.
 2. An independently authored, disjoint holdout with queries, relevance judgments, duplicate clusters, must-separate cases, and metadata expectations frozen before that evaluator scores it.
 3. Passing results on the holdout without tuning the candidate against its labels.
 4. Multiple time-separated clean live diagnostics over a reviewed, audience-relevant query set, with changes in returned coverage, fused-page relevance, provider contribution, latency, failures, and provider behavior reviewed rather than averaged away.

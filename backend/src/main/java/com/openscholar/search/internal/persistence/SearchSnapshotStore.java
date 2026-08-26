@@ -97,11 +97,60 @@ public class SearchSnapshotStore {
 			ProviderSearchBatchResult providerResult,
 			Instant freshUntil,
 			CacheDisposition disposition) {
+		return storeInternal(
+				ownerId,
+				command,
+				normalizedQuery,
+				fingerprint,
+				fingerprintVersion,
+				pipelineVersion,
+				providerResult,
+				freshUntil,
+				disposition,
+				false).view();
+	}
+
+	@Transactional
+	StoreTrace storeWithTrace(
+			UUID ownerId,
+			SearchCommand command,
+			String normalizedQuery,
+			String fingerprint,
+			int fingerprintVersion,
+			String pipelineVersion,
+			ProviderSearchBatchResult providerResult,
+			Instant freshUntil,
+			CacheDisposition disposition) {
+		return storeInternal(
+				ownerId,
+				command,
+				normalizedQuery,
+				fingerprint,
+				fingerprintVersion,
+				pipelineVersion,
+				providerResult,
+				freshUntil,
+				disposition,
+				true);
+	}
+
+	private StoreTrace storeInternal(
+			UUID ownerId,
+			SearchCommand command,
+			String normalizedQuery,
+			String fingerprint,
+			int fingerprintVersion,
+			String pipelineVersion,
+			ProviderSearchBatchResult providerResult,
+			Instant freshUntil,
+			CacheDisposition disposition,
+			boolean includeTrace) {
 		List<ProviderSearchResult> successfulProviders = providerResult.results().stream()
 				.sorted(Comparator.comparing(result -> result.provider().name()))
 				.toList();
 		boolean multiProvider = successfulProviders.size() + providerResult.failures().size() > 1;
 		LinkedHashMap<UUID, CandidateAccumulator> accumulated = new LinkedHashMap<>();
+		List<PendingTraceEntry> rawContributions = includeTrace ? new ArrayList<>() : null;
 		int sequence = 0;
 		for (ProviderSearchResult result : successfulProviders) {
 			int providerRank = 1;
@@ -115,7 +164,15 @@ public class SearchSnapshotStore {
 					candidate = new CandidateAccumulator(paper.id(), sequence);
 					accumulated.put(paper.id(), candidate);
 				}
-				candidate.add(new ProviderContribution(record, result.retrievedAt(), providerRank++));
+				int rawProviderRank = providerRank++;
+				if (includeTrace) {
+					rawContributions.add(new PendingTraceEntry(
+							record.provider(),
+							record.providerRecordId(),
+							rawProviderRank,
+							paper.id()));
+				}
+				candidate.add(new ProviderContribution(record, result.retrievedAt(), rawProviderRank));
 				sequence++;
 			}
 		}
@@ -125,6 +182,9 @@ public class SearchSnapshotStore {
 				.sorted(candidateOrder(multiProvider))
 				.limit(command.pageSize())
 				.toList();
+		Set<UUID> firstPagePaperIds = candidates.stream()
+				.map(candidate -> candidate.paper().id())
+				.collect(Collectors.toUnmodifiableSet());
 
 		List<Map<String, Object>> coverage = coverage(providerResult);
 		List<String> warnings = providerResult.failures().stream()
@@ -175,7 +235,17 @@ public class SearchSnapshotStore {
 					primary.retrievedAt()));
 		}
 		resultRepository.saveAllAndFlush(results);
-		return toView(snapshot, results, disposition);
+		List<RawContributionTrace> traceEntries = includeTrace
+				? rawContributions.stream()
+						.map(entry -> new RawContributionTrace(
+								entry.provider(),
+								entry.providerRecordId(),
+								entry.providerRank(),
+								entry.canonicalPaperId(),
+								firstPagePaperIds.contains(entry.canonicalPaperId())))
+						.toList()
+				: List.of();
+		return new StoreTrace(toView(snapshot, results, disposition), traceEntries);
 	}
 
 	@Transactional
@@ -611,6 +681,21 @@ public class SearchSnapshotStore {
 			UUID ownerId, SearchCommand command, SearchResultOrigin resultOrigin) {
 	}
 
+	record StoreTrace(SearchView view, List<RawContributionTrace> rawContributions) {
+
+		StoreTrace {
+			rawContributions = List.copyOf(rawContributions);
+		}
+	}
+
+	record RawContributionTrace(
+			ProviderId provider,
+			String providerRecordId,
+			int providerRank,
+			UUID canonicalPaperId,
+			boolean includedInFirstPage) {
+	}
+
 	private static final class CandidateAccumulator {
 
 		private final UUID paperId;
@@ -659,6 +744,13 @@ public class SearchSnapshotStore {
 
 	private record ProviderContribution(
 			ProviderPaperRecord record, Instant retrievedAt, int providerRank) {
+	}
+
+	private record PendingTraceEntry(
+			ProviderId provider,
+			String providerRecordId,
+			int providerRank,
+			UUID canonicalPaperId) {
 	}
 
 	private record PersistedCandidate(
