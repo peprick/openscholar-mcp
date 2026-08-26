@@ -87,7 +87,7 @@ Safe local defaults live in `src/main/resources/application.yaml`. Use environme
 | Area | Main settings |
 |---|---|
 | Database/server | `SPRING_DATASOURCE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SPRING_DOCKER_COMPOSE_ENABLED`, `SERVER_ADDRESS` |
-| Search limits | `SEARCH_COORDINATION_WAIT_TIMEOUT`, `SEARCH_EXECUTION_TIMEOUT` |
+| Search limits | `SEARCH_PROVIDER_CONCURRENCY`, `SEARCH_COORDINATION_WAIT_TIMEOUT`, `SEARCH_EXECUTION_TIMEOUT` |
 | Privacy export | `PRIVACY_EXPORT_GLOBAL_PERMITS`, `PRIVACY_EXPORT_PER_PRINCIPAL_PERMITS`, `PRIVACY_EXPORT_RETRY_AFTER` |
 | Legal access | `UNPAYWALL_EMAIL`, `UNPAYWALL_BASE_URL`, `ARXIV_BASE_URL` |
 | Local MCP | `MCP_LOCAL_API_KEY`, `MCP_ALLOWED_ORIGINS`, `MCP_RATE_LIMIT_*`, `MCP_MAX_*_BYTES` |
@@ -104,13 +104,16 @@ Privacy-export admission is fail-fast and local to each backend JVM/replica. Def
 | Provider | Purpose | Default | Configuration |
 |---|---|---:|---|
 | OpenAlex | General scholarly discovery | Enabled | `OPENALEX_API_KEY` is optional; transport limits are configurable |
+| Europe PMC | Metadata-only `SRC:MED` journal articles held in PMC | Disabled | `EUROPE_PMC_ENABLED=true`; no credential |
 | DataCite | Thesis/dissertation metadata | Disabled | `DATACITE_ENABLED=true`; optional contact email |
 | DOAJ | Open-access article metadata and reported links | Disabled | `DOAJ_ENABLED=true`; optional contact email |
 | CORE | Metadata-only work discovery | Disabled | Requires `CORE_ENABLED=true` and `CORE_LICENSE_CONFIRMED=true`; optional API key |
 | Unpaywall | Exact-DOI legal-access evidence | Needs configuration | Requires a backend-owned `UNPAYWALL_EMAIL` |
 | arXiv | Exact-arXiv-ID legal-access evidence | Enabled | No credential |
 
-Optional providers are isolated during concurrent fan-out, so an applicable provider failure can be reported alongside useful results from another provider. Enabling CORE records an operator configuration decision; it does not replace the required terms, licence, and attribution review. Provider policy and document-handling boundaries are documented in [Security and legal](../docs/SECURITY_AND_LEGAL.md).
+The five discovery adapters are isolated during concurrent fan-out, so an applicable provider failure can be reported alongside useful results from another provider. `SEARCH_PROVIDER_CONCURRENCY` defaults to five, matching the current adapter count, and may be tuned within its validated bounds for the deployment. Enabling CORE records an operator configuration decision; it does not replace the required terms, licence, and attribution review.
+
+Europe PMC is default-off and keyless. It uses only the Articles REST `/search` route, structurally limits discovery to `SRC:MED` journal articles held in PMC, and maps DOI, PMID, PMCID, abstracts, and bounded bibliographic metadata. It ignores `fullTextUrlList`, never calls `fullTextXML`, supplementary-file, PDF, or bulk-download routes, and always leaves the discovery `pdfUrl` null. A Europe PMC open-access value is stored only as an unverified provider hint because rights vary by article; the exact-identifier legal-access pipeline remains separate. Provider policy and document-handling boundaries are documented in [Security and legal](../docs/SECURITY_AND_LEGAL.md).
 
 ### MCP
 

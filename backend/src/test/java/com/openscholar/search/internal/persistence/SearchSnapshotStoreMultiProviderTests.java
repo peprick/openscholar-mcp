@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import com.openscholar.TestcontainersConfiguration;
 import com.openscholar.paper.DocumentType;
+import com.openscholar.paper.PaperIdentifier;
 import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.provider.ProviderException;
 import com.openscholar.provider.ProviderId;
@@ -98,6 +99,73 @@ class SearchSnapshotStoreMultiProviderTests {
 			assertThat(reloaded.cacheDisposition()).isEqualTo(CacheDisposition.EXACT_HIT);
 			assertThat(reloaded.results()).isEqualTo(stored.results());
 		});
+	}
+
+	@Test
+	void mergesEuropePmcAndOpenAlexProvenanceAcrossDoiPmidAndPmcidBridges() {
+		ProviderSearchResult europePmc = new ProviderSearchResult(
+				ProviderId.EUROPE_PMC,
+				List.of(
+						identifiedPaper(
+								ProviderId.EUROPE_PMC, "PMC-DOI", "Europe PMC DOI bridge",
+								PaperIdentifierType.DOI, "https://doi.org/10.1000/EPMC.BRIDGE"),
+						identifiedPaper(
+								ProviderId.EUROPE_PMC, "PMC-PMID", "Europe PMC PMID bridge",
+								PaperIdentifierType.PMID, "12345678"),
+						identifiedPaper(
+								ProviderId.EUROPE_PMC, "PMC-PMCID", "Europe PMC PMCID bridge",
+								PaperIdentifierType.PMCID, "PMC87654321")),
+				3,
+				null,
+				NOW);
+		ProviderSearchResult openAlex = new ProviderSearchResult(
+				ProviderId.OPENALEX,
+				List.of(
+						identifiedPaper(
+								ProviderId.OPENALEX, "W-EPMC-DOI", "OpenAlex DOI bridge",
+								PaperIdentifierType.DOI, "doi:10.1000/epmc.bridge"),
+						identifiedPaper(
+								ProviderId.OPENALEX, "W-EPMC-PMID", "OpenAlex PMID bridge",
+								PaperIdentifierType.PMID, "12345678"),
+						identifiedPaper(
+								ProviderId.OPENALEX, "W-EPMC-PMCID", "OpenAlex PMCID bridge",
+								PaperIdentifierType.PMCID, "pmc87654321")),
+				3,
+				null,
+				NOW.plusSeconds(1));
+
+		SearchView stored = snapshotStore.store(
+				LOCAL_USER_ID,
+				command(),
+				"graph models",
+				"d".repeat(64),
+				1,
+				"provider-fanout-v1",
+				new ProviderSearchBatchResult(
+						List.of(openAlex, europePmc), List.of(), null, NOW.plusSeconds(1)),
+				NOW.plus(Duration.ofHours(1)),
+				CacheDisposition.MISS_FETCHED);
+
+		assertThat(stored.providerCoverage())
+				.extracting(coverage -> coverage.provider())
+				.containsExactly(ProviderId.EUROPE_PMC, ProviderId.OPENALEX);
+		assertThat(stored.results()).hasSize(3);
+		for (PaperIdentifierType bridgeType : List.of(
+				PaperIdentifierType.DOI, PaperIdentifierType.PMID, PaperIdentifierType.PMCID)) {
+			SearchResultView bridged = stored.results().stream()
+					.filter(result -> result.paper().identifiers().stream()
+							.anyMatch(identifier -> identifier.type() == bridgeType))
+					.findFirst()
+					.orElseThrow();
+			assertThat(bridged.paper().identifiers())
+					.extracting(identifier -> identifier.type())
+					.contains(bridgeType, PaperIdentifierType.OPENALEX);
+			assertThat(bridged.providerContributions())
+					.extracting(contribution -> contribution.provider())
+					.containsExactly(ProviderId.EUROPE_PMC, ProviderId.OPENALEX);
+		}
+		assertThat(snapshotStore.findById(LOCAL_USER_ID, stored.searchId()))
+				.hasValueSatisfying(reloaded -> assertThat(reloaded.results()).isEqualTo(stored.results()));
 	}
 
 	@Test
@@ -194,6 +262,33 @@ class SearchSnapshotStoreMultiProviderTests {
 			String title,
 			boolean openAccess,
 			Double relevanceScore) {
+		return paper(provider, providerRecordId, doi, title, openAccess, relevanceScore, List.of());
+	}
+
+	private static ProviderPaperRecord identifiedPaper(
+			ProviderId provider,
+			String providerRecordId,
+			String title,
+			PaperIdentifierType identifierType,
+			String identifierValue) {
+		return paper(
+				provider,
+				providerRecordId,
+				null,
+				title,
+				false,
+				null,
+				List.of(new PaperIdentifier(identifierType, "", identifierValue)));
+	}
+
+	private static ProviderPaperRecord paper(
+			ProviderId provider,
+			String providerRecordId,
+			String doi,
+			String title,
+			boolean openAccess,
+			Double relevanceScore,
+			List<PaperIdentifier> identifiers) {
 		String providerSlug = provider.name().toLowerCase(java.util.Locale.ROOT);
 		return new ProviderPaperRecord(
 				provider,
@@ -215,7 +310,7 @@ class SearchSnapshotStoreMultiProviderTests {
 				relevanceScore,
 				NOW,
 				Map.of("provider", providerSlug),
-				List.of(),
+				identifiers,
 				URI.create("https://api.example.org/" + providerSlug + "/" + providerRecordId));
 	}
 }

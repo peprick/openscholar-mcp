@@ -55,12 +55,21 @@ class QueryFingerprinterTests {
 				new QueryNormalizer(), List.of(ProviderId.OPENALEX, ProviderId.CORE));
 		QueryFingerprinter orderedProviders = new QueryFingerprinter(
 				new QueryNormalizer(), List.of(ProviderId.CORE, ProviderId.OPENALEX));
+		QueryFingerprinter europePmcProviders = new QueryFingerprinter(
+				new QueryNormalizer(), List.of(ProviderId.EUROPE_PMC, ProviderId.OPENALEX));
+		QueryFingerprinter reversedEuropePmcProviders = new QueryFingerprinter(
+				new QueryNormalizer(), List.of(ProviderId.OPENALEX, ProviderId.EUROPE_PMC));
 
 		assertThat(reversedProviders.fingerprint(command))
 				.isEqualTo(orderedProviders.fingerprint(command))
 				.isNotEqualTo(fingerprinter.fingerprint(command));
+		assertThat(europePmcProviders.fingerprint(command))
+				.isEqualTo(reversedEuropePmcProviders.fingerprint(command))
+				.isNotEqualTo(orderedProviders.fingerprint(command))
+				.isNotEqualTo(fingerprinter.fingerprint(command));
 		assertThat(fingerprinter.pipelineVersion()).isEqualTo("openalex-v1");
 		assertThat(orderedProviders.pipelineVersion()).isEqualTo("provider-fanout-v1");
+		assertThat(europePmcProviders.pipelineVersion()).isEqualTo("provider-fanout-v1");
 	}
 
 	@Test

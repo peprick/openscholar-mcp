@@ -14,6 +14,7 @@ flowchart LR
     C --> P[("PostgreSQL + pgvector")]
     C --> S["Scholarly provider adapters"]
     S --> OA["OpenAlex"]
+    S --> EP["Europe PMC (opt-in metadata)"]
     S --> DC["DataCite (opt-in)"]
     S --> DJ["DOAJ (opt-in)"]
     S --> CO["CORE (licensed opt-in)"]
@@ -128,11 +129,13 @@ interface ResearchProvider {
 
 The default OpenAlex adapter owns authentication, pagination, bounded response handling, rate-limit metadata, response mapping, and error translation. Its abstract-inverted-index reconstruction separately caps words, position, and output characters, rejects duplicate/invalid positions, and uses bounded linear assembly; malformed indexes fail only that provider path. The disabled-by-default DataCite adapter performs keyless thesis/dissertation metadata discovery across modern controlled and legacy free-text resource types. It uses relevance page cursors owned by OpenScholar, returns canonical DOI links, and deliberately sets both PDF and open-access claims to false; `openAccessOnly` requests are skipped until the exact-DOI access pipeline can verify them. DataCite does not download a document or follow an upstream continuation URL.
 
+The disabled-by-default Europe PMC adapter is keyless and uses only the Articles REST `/search` route. Its query is structurally restricted to `SRC:MED` journal articles held in PMC, and its mapper defensively retains only that publication scope. It maps DOI, PMID, PMCID, abstracts, and bounded bibliographic metadata, ignores `fullTextUrlList`, never calls `fullTextXML`, supplementary-file, PDF, or bulk-download routes, and always emits a null discovery `pdfUrl`. Europe PMC's open-access value is retained only as an unverified provider hint because availability and reuse rights vary by record. Exact-identifier access resolution remains a separate Unpaywall/arXiv pipeline.
+
 The disabled-by-default DOAJ adapter adds keyless v4 article discovery from DOAJ's open-access index. It treats DOAJ's status as a source-reported access claim, maps only typed metadata and reported links, ignores upstream continuation URLs in favor of a locally validated opaque page cursor, and never downloads article bytes. Because DOAJ's search results do not provide citation counts and journal language is not necessarily article language, that adapter skips citation-threshold and language-filtered queries instead of silently weakening them.
 
 The disabled-by-default CORE API v3 adapter is absent unless an operator also confirms that an applicable licence and the current terms have been reviewed. An optional API key is backend-only Bearer authentication. The adapter searches work metadata with bounded paging, translates CORE rate-limit signals, and accepts both documented response naming variants. It intentionally discards full text and download URLs, never calls CORE's document-download endpoints, never emits a discovery PDF URL, and treats a provider-reported full-text signal only as unverified provenance. It does not scrape CORE or write directly to canonical paper tables.
 
-All four discovery adapters have configurable whole-exchange deadlines and streamed response limits; their 10-second and 8 MiB defaults cover request transmission, response headers, and body consumption before JSON deserialization. These deadlines are outbound-provider boundaries: they do not include local coordination waits, database/persistence work, final REST/MCP serialization, or the full request. Adapters return provider records and never write directly to canonical tables. Unpaywall and arXiv remain separate exact-identifier clients inside access resolution.
+All five discovery adapters have configurable whole-exchange deadlines and streamed response limits; their 10-second and 8 MiB defaults cover request transmission, response headers, and body consumption before JSON deserialization. Search fan-out concurrency defaults to five, matching the current adapter count, and remains a separately validated deployment setting. These deadlines are outbound-provider boundaries: they do not include local coordination waits, database/persistence work, final REST/MCP serialization, or the full request. Adapters return provider records and never write directly to canonical tables. Unpaywall and arXiv remain separate exact-identifier clients inside access resolution.
 
 Implemented resilience:
 
@@ -149,7 +152,7 @@ General automatic retries, jittered backoff, circuit breakers/bulkheads, cross-i
 
 ## Canonicalization and deduplication
 
-Current records are reconciled by normalized DOI, arXiv ID, OpenAlex ID, and provider-record identity. The planned catalog-hardening order extends that with:
+Current records are reconciled by normalized DOI, arXiv ID, OpenAlex ID, PMID, PMCID, and provider-record identity. The planned catalog-hardening order extends that with:
 
 1. Normalized DOI equality.
 2. arXiv identifier equality, ignoring version suffix where appropriate.

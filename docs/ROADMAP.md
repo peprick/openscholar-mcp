@@ -15,7 +15,8 @@ The checked-in deployment stack is a hardened template, not evidence of a public
 
 ## 2. Broaden research coverage carefully
 
-- Evaluate PubMed Central and audience-relevant institutional repositories through supported APIs.
+- Measure the default-off Europe PMC metadata adapter's incremental coverage, deduplication, latency, failure rate, and result quality before considering any default enablement.
+- Evaluate audience-relevant institutional repositories through supported APIs.
 - Add providers only after documenting terms, attribution, quotas, failure isolation, and allowed metadata/document handling.
 - Measure provider-specific usefulness before enabling additional sources by default.
 

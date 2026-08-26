@@ -1,6 +1,6 @@
 # Official References
 
-These links support version and architecture decisions reviewed through 2026-08-22. Re-check them when application scaffolding, model selection, or a dependency upgrade begins.
+These links support version and architecture decisions reviewed through 2026-08-26. Re-check them when application scaffolding, model selection, or a dependency upgrade begins.
 
 ## Java and Spring
 
@@ -34,6 +34,10 @@ These links support version and architecture decisions reviewed through 2026-08-
 - [OpenAlex authentication and rate limits](https://help.openalex.org/api/authentication/)
 - [OpenAlex search](https://help.openalex.org/api/searching/)
 - [OpenAlex error handling](https://help.openalex.org/api/errors/)
+- [Europe PMC Articles RESTful API (reviewed 2026-08-26)](https://europepmc.org/RestfulWebService)
+- [Europe PMC developer resources (reviewed 2026-08-26)](https://europepmc.org/developers)
+- [Europe PMC copyright notice (reviewed 2026-08-26)](https://europepmc.org/Copyright)
+- [Europe PMC open-access subset (reviewed 2026-08-26)](https://europepmc.org/downloads/openaccess)
 - [Unpaywall REST API, exact DOI endpoint, email, and limits](https://unpaywall.org/api)
 - [arXiv API manual, `id_list`, Atom responses, and request pacing](https://info.arxiv.org/help/api/user-manual.html)
 - [arXiv API terms of use and content restrictions](https://info.arxiv.org/help/api/tou.html)

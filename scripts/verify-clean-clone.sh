@@ -552,6 +552,7 @@ printf '%s\n' \
   "FRONTEND_PORT=${verify_frontend_port}" \
   'OIDC_SECURITY_ENABLED=false' \
   'OPENALEX_API_KEY=' \
+  'EUROPE_PMC_ENABLED=false' \
   'DOAJ_ENABLED=false' \
   'CORE_ENABLED=false' \
   'CORE_LICENSE_CONFIRMED=false' \

@@ -16,14 +16,20 @@ class ProviderCursorCodecTests {
 
 	@Test
 	void roundTripsProviderSpecificCursorsInAVersionedOpaqueEnvelope() {
+		String europePmcCursor = "epmc:/next?cursor=a+b/c==&sort=♥";
 		String cursor = codec.encode(
-				Map.of(ProviderId.OPENALEX, "oa-next", ProviderId.CORE, "core-next"),
-				List.of(ProviderId.OPENALEX, ProviderId.CORE));
+				Map.of(
+						ProviderId.OPENALEX, "oa-next",
+						ProviderId.CORE, "core-next",
+						ProviderId.EUROPE_PMC, europePmcCursor),
+				List.of(ProviderId.EUROPE_PMC, ProviderId.OPENALEX, ProviderId.CORE));
 
 		assertThat(cursor).startsWith(ProviderCursorCodec.PREFIX);
-		assertThat(codec.decode(cursor, List.of(ProviderId.CORE, ProviderId.OPENALEX)))
+		assertThat(codec.decode(cursor, List.of(
+				ProviderId.CORE, ProviderId.EUROPE_PMC, ProviderId.OPENALEX)))
 				.containsExactlyInAnyOrderEntriesOf(Map.of(
 						ProviderId.CORE, "core-next",
+						ProviderId.EUROPE_PMC, europePmcCursor,
 						ProviderId.OPENALEX, "oa-next"));
 	}
 

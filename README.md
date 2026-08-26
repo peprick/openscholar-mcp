@@ -13,10 +13,10 @@ OpenScholar stores metadata, search and library state, and verified links—not 
 
 ## What it does
 
-- Searches OpenAlex by default, with optional DataCite, DOAJ, and licence-gated CORE discovery adapters.
+- Searches OpenAlex by default, with optional Europe PMC, DataCite, DOAJ, and licence-gated CORE discovery adapters.
 - Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
 - Installs as a PWA with an account-neutral fallback and one explicit, passphrase-encrypted, metadata-only offline collection; server-backed search still requires the local or hosted OpenScholar stack.
-- Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, and provider identity.
+- Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, PMID, PMCID, and provider identity.
 - Opens an owner-visible canonical paper directly from a DOI, arXiv, or OpenAlex reference without calling a provider.
 - Stores owner-scoped, immutable search snapshots in PostgreSQL so repeated searches can reuse prior results.
 - Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
@@ -34,7 +34,7 @@ flowchart LR
     Agent["MCP client or agent"] -->|"Streamable HTTP /mcp"| App["Spring Boot modular monolith"]
     Web -->|"Server-side REST"| App
     App --> DB[("PostgreSQL + pgvector")]
-    App --> Discovery["OpenAlex · DataCite · DOAJ · CORE"]
+    App --> Discovery["OpenAlex · Europe PMC · DataCite · DOAJ · CORE"]
     App --> Access["Unpaywall · arXiv"]
 ```
 
@@ -76,11 +76,14 @@ Edit the ignored `.env` file to enable additional capabilities:
 | `OPENALEX_API_KEY` | Raises the OpenAlex allowance | No |
 | `UNPAYWALL_EMAIL` | Enables DOI-based legal-access lookup | Only for Unpaywall |
 | `MCP_LOCAL_API_KEY` | Enables the local `/mcp` endpoint | Only for MCP |
+| `EUROPE_PMC_ENABLED` | Adds metadata-only journal-article discovery for records held in PMC | No; default `false` |
 | `DATACITE_ENABLED` | Adds thesis/dissertation metadata discovery | No; default `false` |
 | `DOAJ_ENABLED` | Adds DOAJ article metadata discovery | No; default `false` |
 | `CORE_ENABLED`, `CORE_LICENSE_CONFIRMED` | Adds CORE metadata discovery | Both must be `true` after a separate licence review |
 
 Generate a local MCP key with `openssl rand -hex 32`. Never commit the generated value. The complete configuration surface is documented in [.env.example](.env.example).
+
+Europe PMC is an opt-in metadata source, not a document source. Its adapter uses only the REST `/search` route, maps DOI/PMID/PMCID and bibliographic metadata, leaves `pdfUrl` null, and never calls full-text, supplementary-file, PDF, or bulk-download routes. Any provider-reported open-access value remains an unverified hint; legal-access verification continues through the separate exact-identifier pipeline.
 
 ## Use it from an agent
 

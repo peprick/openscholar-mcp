@@ -140,6 +140,12 @@ openscholar:
       connect-timeout: 3s
       request-timeout: ${OPENALEX_REQUEST_TIMEOUT:${OPENALEX_READ_TIMEOUT:${openscholar.providers.openalex.read-timeout:10s}}}
       max-response-bytes: ${OPENALEX_MAX_RESPONSE_BYTES:8388608}
+    europe-pmc:
+      enabled: ${EUROPE_PMC_ENABLED:false}
+      base-url: ${EUROPE_PMC_BASE_URL:https://www.ebi.ac.uk/europepmc/webservices/rest}
+      connect-timeout: ${EUROPE_PMC_CONNECT_TIMEOUT:3s}
+      request-timeout: ${EUROPE_PMC_REQUEST_TIMEOUT:10s}
+      max-response-bytes: ${EUROPE_PMC_MAX_RESPONSE_BYTES:8388608}
     doaj:
       enabled: ${DOAJ_ENABLED:false}
       base-url: ${DOAJ_BASE_URL:https://doaj.org/api/v4}
@@ -166,6 +172,7 @@ openscholar:
     cache-ttl: 24h
     coordination-wait-timeout: ${SEARCH_COORDINATION_WAIT_TIMEOUT:12s}
     execution-timeout: ${SEARCH_EXECUTION_TIMEOUT:18s}
+    provider-concurrency: ${SEARCH_PROVIDER_CONCURRENCY:5}
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}

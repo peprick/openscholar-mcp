@@ -7,6 +7,7 @@ import {
   formatInteger,
   formatPublicationDate,
   humanizeEnum,
+  providerDisplayName,
 } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 
@@ -113,7 +114,9 @@ export function PaperResultCard({
               </ul>
             ) : null}
             <p>
-              Metadata from {result.provenance.map((item) => item.provider).join(", ")}.
+              Metadata from {result.provenance
+                .map((item) => providerDisplayName(item.provider))
+                .join(", ")}.
               Open-access labels come from those sources; OpenScholar checks links
               on the paper page.
             </p>

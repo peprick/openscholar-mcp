@@ -9,8 +9,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
@@ -129,11 +132,81 @@ class ResearchProviderFanoutTests {
 		assertThat(result.nextCursor()).isEqualTo("oa-next");
 	}
 
+	@Test
+	void runsFiveProvidersWithinTheDefaultConcurrencyBudgetAndIsolatesOneFailure() throws Exception {
+		List<ProviderId> providerIds = List.of(
+				ProviderId.CORE,
+				ProviderId.DATACITE,
+				ProviderId.DOAJ,
+				ProviderId.EUROPE_PMC,
+				ProviderId.OPENALEX);
+		SearchProperties properties = new SearchProperties();
+		assertThat(properties.getProviderConcurrency()).isEqualTo(providerIds.size());
+
+		CountDownLatch entered = new CountDownLatch(providerIds.size());
+		CountDownLatch release = new CountDownLatch(1);
+		AtomicInteger active = new AtomicInteger();
+		AtomicInteger maximumActive = new AtomicInteger();
+		List<ResearchProvider> providers = providerIds.stream()
+				.map(providerId -> new TrackingProvider(providerId, query -> {
+					int current = active.incrementAndGet();
+					maximumActive.accumulateAndGet(current, Math::max);
+					entered.countDown();
+					try {
+						awaitRelease(release);
+						if (providerId == ProviderId.DOAJ) {
+							throw failure(providerId, "DOAJ_SYNTHETIC_FAILURE", true, Duration.ofSeconds(2));
+						}
+						return new ProviderSearchResult(
+								providerId, List.of(), 1, providerId.name() + "-next", NOW);
+					}
+					finally {
+						active.decrementAndGet();
+					}
+				}))
+				.map(ResearchProvider.class::cast)
+				.toList();
+
+		try (ExecutorService providerExecutor = Executors.newFixedThreadPool(properties.getProviderConcurrency());
+				ExecutorService requester = Executors.newSingleThreadExecutor()) {
+			ResearchProviderFanout fanout = fanout(providers, providerExecutor);
+			Future<ProviderSearchBatchResult> pending = requester.submit(() -> fanout.search(query("*")));
+			try {
+				assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+				assertThat(maximumActive).hasValue(providerIds.size());
+			}
+			finally {
+				release.countDown();
+			}
+
+			ProviderSearchBatchResult result = pending.get(5, TimeUnit.SECONDS);
+			assertThat(result.results()).extracting(ProviderSearchResult::provider)
+					.containsExactly(
+							ProviderId.CORE,
+							ProviderId.DATACITE,
+							ProviderId.EUROPE_PMC,
+							ProviderId.OPENALEX);
+			assertThat(result.failures()).extracting(ProviderException::provider)
+					.containsExactly(ProviderId.DOAJ);
+			assertThat(cursorCodec.decode(result.nextCursor(), fanout.providerIds()).keySet())
+					.containsExactlyInAnyOrder(
+							ProviderId.CORE,
+							ProviderId.DATACITE,
+							ProviderId.EUROPE_PMC,
+							ProviderId.OPENALEX);
+		}
+	}
+
 	private ResearchProviderFanout fanout(List<ResearchProvider> providers) {
+		return fanout(providers, executor);
+	}
+
+	private ResearchProviderFanout fanout(
+			List<ResearchProvider> providers, ExecutorService selectedExecutor) {
 		return new ResearchProviderFanout(
 				providers,
 				cursorCodec,
-				executor,
+				selectedExecutor,
 				Clock.fixed(NOW, ZoneOffset.UTC),
 				new ResearchProviderMetrics(new SimpleMeterRegistry()));
 	}
@@ -145,6 +218,18 @@ class ResearchProviderFanoutTests {
 	private static ProviderException failure(
 			ProviderId provider, String code, boolean retryable, Duration retryAfter) {
 		return new ProviderException(provider, code, code, retryable, retryAfter, null);
+	}
+
+	private static void awaitRelease(CountDownLatch release) {
+		try {
+			if (!release.await(5, TimeUnit.SECONDS)) {
+				throw new IllegalStateException("Provider fan-out test release timed out");
+			}
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Provider fan-out test was interrupted", exception);
+		}
 	}
 
 	private static final class TrackingProvider implements ResearchProvider {

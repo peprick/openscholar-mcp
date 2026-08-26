@@ -7,6 +7,7 @@ import {
   formatPublicationDate,
   humanizeEnum,
   identifierHref,
+  providerDisplayName,
 } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 import { ExternalLink } from "@/shared/ui/external-link";
@@ -92,7 +93,7 @@ export function PaperDetails({
               {paper.provenance.map((record) => (
                 <article key={`${record.provider}-${record.providerRecordId}`}>
                   <div>
-                    <strong>{record.provider}</strong>
+                    <strong>{providerDisplayName(record.provider)}</strong>
                     {record.authorshipSource ? (
                       <Badge tone="info">Author details</Badge>
                     ) : null}

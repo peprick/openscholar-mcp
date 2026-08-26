@@ -121,6 +121,10 @@ Optional provider secrets are not wired into the template. Add each as a backend
 
 Unpaywall, DataCite, and DOAJ contact emails are non-credential backend identification fields in the ignored production environment file. Prefer a role address with an approved privacy/retention policy. Leaving `UNPAYWALL_EMAIL` blank disables that access source; do not invent or borrow an identity merely to avoid the provider requirement. DataCite and DOAJ remain disabled until their provider flags are enabled.
 
+Europe PMC is keyless and remains disabled unless `EUROPE_PMC_ENABLED=true`. Direct-development configuration also exposes its fixed base URL, 3-second connect timeout, 10-second whole-exchange deadline, and 8 MiB streamed-response limit; preserve those bounded values unless a measured deployment requires a reviewed change. The adapter uses only REST `/search`, restricts discovery to `SRC:MED` journal articles held in PMC, maps metadata/abstracts and DOI/PMID/PMCID, ignores `fullTextUrlList`, leaves `pdfUrl` null, and never calls full-text, supplementary-file, PDF, or bulk-download routes. Its open-access value is an unverified hint and does not replace the separate legal-access pipeline or article-specific rights review.
+
+`SEARCH_PROVIDER_CONCURRENCY` defaults to five, matching the five discovery adapters. Tune it only with provider-quota, outbound-connection, application-deadline, and load evidence; enabling an optional adapter does not authorize a higher value by itself.
+
 Before enabling CORE, record the applicable licence/authorization review and retain `CORE_LICENSE_CONFIRMED=false` until it is complete. Enabling a flag is not itself legal permission.
 
 ## Validate and start

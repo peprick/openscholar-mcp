@@ -135,7 +135,7 @@ public record ProviderPaperRecord(
 		switch (provider) {
 			case OPENALEX -> addIdentifier(values, PaperIdentifierType.OPENALEX, "", providerRecordId);
 			case CORE -> addIdentifier(values, PaperIdentifierType.CORE, "", providerRecordId);
-			case DATACITE, DOAJ -> {
+			case DATACITE, DOAJ, EUROPE_PMC -> {
 				// These adapters retain their provider ID in record provenance. Their DOI,
 				// when present, is already represented by the canonical DOI identifier.
 			}

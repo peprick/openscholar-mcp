@@ -23,6 +23,23 @@ export function humanizeEnum(value: string): string {
     .join(" ");
 }
 
+export function providerDisplayName(value: string): string {
+  switch (value) {
+    case "OPENALEX":
+      return "OpenAlex";
+    case "DATACITE":
+      return "DataCite";
+    case "DOAJ":
+      return "DOAJ";
+    case "CORE":
+      return "CORE";
+    case "EUROPE_PMC":
+      return "Europe PMC";
+    default:
+      return humanizeEnum(value);
+  }
+}
+
 export function formatInteger(value: number | null): string {
   return value === null ? "Not available" : integerFormatter.format(value);
 }

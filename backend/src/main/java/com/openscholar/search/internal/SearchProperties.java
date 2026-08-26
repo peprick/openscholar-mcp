@@ -10,7 +10,7 @@ class SearchProperties {
 	private Duration cacheTtl = Duration.ofHours(24);
 	private Duration coordinationWaitTimeout = Duration.ofSeconds(12);
 	private Duration executionTimeout = Duration.ofSeconds(18);
-	private int providerConcurrency = 4;
+	private int providerConcurrency = 5;
 
 	public Duration getCacheTtl() {
 		return cacheTtl;

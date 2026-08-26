@@ -71,7 +71,7 @@ class SearchPropertiesTests {
 	void boundsProviderConcurrency() {
 		SearchProperties properties = new SearchProperties();
 
-		assertThat(properties.getProviderConcurrency()).isEqualTo(4);
+		assertThat(properties.getProviderConcurrency()).isEqualTo(5);
 		properties.setProviderConcurrency(8);
 		assertThat(properties.getProviderConcurrency()).isEqualTo(8);
 		assertThatIllegalArgumentException()

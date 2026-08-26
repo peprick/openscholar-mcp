@@ -1178,7 +1178,7 @@ components:
       enum: [DOI, ARXIV, OPENALEX, PMID, PMCID, CORE, REPOSITORY]
     ProviderId:
       type: string
-      enum: [CORE, DATACITE, DOAJ, OPENALEX]
+      enum: [CORE, DATACITE, DOAJ, EUROPE_PMC, OPENALEX]
     CacheDisposition:
       type: string
       enum: [EXACT_HIT, MISS_FETCHED, STALE_REFRESHED, FORCED_REFRESH, STALE_FALLBACK, LOCAL_RESULT]

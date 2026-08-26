@@ -71,6 +71,11 @@ OPENALEX_API_KEY
 OPENALEX_BASE_URL
 OPENALEX_REQUEST_TIMEOUT
 OPENALEX_MAX_RESPONSE_BYTES
+EUROPE_PMC_ENABLED
+EUROPE_PMC_BASE_URL
+EUROPE_PMC_CONNECT_TIMEOUT
+EUROPE_PMC_REQUEST_TIMEOUT
+EUROPE_PMC_MAX_RESPONSE_BYTES
 DOAJ_ENABLED
 DOAJ_BASE_URL
 DOAJ_CONTACT_EMAIL
@@ -90,6 +95,7 @@ DATACITE_CONTACT_EMAIL
 DATACITE_CONNECT_TIMEOUT
 DATACITE_REQUEST_TIMEOUT
 DATACITE_MAX_RESPONSE_BYTES
+SEARCH_PROVIDER_CONCURRENCY
 SEARCH_COORDINATION_WAIT_TIMEOUT
 SEARCH_EXECUTION_TIMEOUT
 PRIVACY_EXPORT_GLOBAL_PERMITS
@@ -151,6 +157,8 @@ OPENSCHOLAR_OIDC_ID_TOKEN_ALGS
 
 `SEARCH_EXECUTION_TIMEOUT` defaults to `18s`, accepts values of at least one millisecond, and bounds each `SearchResearchUseCase` `search`, `next`, or `get` execution shared by REST and MCP. A dedicated virtual-thread worker and cooperative checkpoints cover application dispatch through `SearchView` construction. Parsing/schema validation, transport DTO/framework serialization, socket lifetime, client disconnects, and MCP cancellation notifications are outside this setting.
 
+`SEARCH_PROVIDER_CONCURRENCY` defaults to `5`, matching the five discovery adapters, and is validated between 1 and 16. It bounds simultaneous discovery-provider calls in the backend's shared provider executor; it does not enable a provider or change that provider's route, rights, timeout, response-size, or failure-isolation policy. Europe PMC remains default-off and metadata-only even when this value is increased.
+
 Privacy-export admission defaults to four global permits and one permit per authenticated principal for each backend JVM/replica, with a `10s` retry hint. Global permits must be between 1 and 16, per-principal permits between 1 and 4 and no greater than the global value, and the retry hint between one second and five minutes. Keep the instance-global value below Hikari's `maximum-pool-size` with spare connections for normal traffic; backend replicas multiply the effective cluster capacity.
 
 The embedding variables apply to direct backend development only; the root container stack intentionally leaves local inference disabled. Local auth mode is the default. To exercise hosted mode, backend OIDC and frontend BFF settings must describe the same issuer/audience/client and use explicit loopback or HTTPS endpoints; never expose these values through `NEXT_PUBLIC_*`. Optional discovery providers and durable workers/scheduling remain default-off. Object storage does not exist, and monitoring-specific variables live under `deploy/`. `.env.example` contains placeholders; `.env` is ignored.
@@ -204,6 +212,8 @@ The embedding variables apply to direct backend development only; the root conta
 5. Add contract/resilience tests.
 6. Add metrics and request budgets.
 7. Enable behind configuration until verified.
+
+For a metadata-only adapter, enumerate every intentionally ignored response field and forbidden document/bulk route, then cover those boundaries with negative request tests. Europe PMC is the current example: REST `/search` only, `SRC:MED` journal articles held in PMC, DOI/PMID/PMCID plus abstract/metadata mapping, ignored `fullTextUrlList`, null `pdfUrl`, no full-text/supplement/PDF/bulk calls, and a provider-reported open-access hint that remains separate from legal-access verification.
 
 ## Feature definition of done
 
