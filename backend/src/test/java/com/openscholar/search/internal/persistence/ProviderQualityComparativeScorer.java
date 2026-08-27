@@ -1,5 +1,6 @@
 package com.openscholar.search.internal.persistence;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -22,6 +23,7 @@ import java.util.regex.Pattern;
 
 import com.openscholar.paper.PaperIdentifierType;
 import com.openscholar.provider.ProviderId;
+import com.openscholar.search.internal.persistence.ProviderQualityLiveQuerySet.BoundQuerySet;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeJudgments.GoldPaper;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeJudgments.MustSeparatePair;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeJudgments.QueryJudgments;
@@ -33,6 +35,7 @@ import com.openscholar.search.internal.persistence.ProviderQualityMetrics.Pairwi
 import com.openscholar.search.internal.persistence.ProviderQualityMetrics.RankingCutoffs;
 import com.openscholar.search.internal.persistence.ProviderQualityMetrics.RankingMeasurement;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pure offline scorer for a verified comparative capture and independently
@@ -107,18 +110,73 @@ final class ProviderQualityComparativeScorer {
 	private ProviderQualityComparativeScorer() {
 	}
 
+	/**
+	 * Runs the scorer's complete evidence parser before anything is exposed for review.
+	 * The supplied query set and policy must be the exact frozen resources, and the
+	 * evidence must retain their ID, digest, and ordered query-key bindings.
+	 */
+	static void preflightForReview(
+			ObjectMapper objectMapper,
+			ProviderQualityComparativeEvidenceBundle bundle,
+			BoundQuerySet boundQuerySet,
+			BoundPolicy boundPolicy) throws IOException {
+		Objects.requireNonNull(objectMapper, "objectMapper");
+		Objects.requireNonNull(bundle, "bundle");
+		Objects.requireNonNull(boundQuerySet, "boundQuerySet");
+		Objects.requireNonNull(boundPolicy, "boundPolicy");
+
+		BoundQuerySet frozenQuerySet = ProviderQualityLiveQuerySet.loadFrozen(objectMapper);
+		if (!boundQuerySet.querySet().equals(frozenQuerySet.querySet())
+				|| !sameDigest(boundQuerySet.sha256(), frozenQuerySet.sha256())) {
+			throw invalid("review preflight requires the exact frozen query set");
+		}
+		BoundPolicy frozenPolicy = ProviderQualityComparativeScoringPolicy.loadBound(
+				objectMapper, ProviderQualityComparativeScoringPolicy.RESOURCE_PATH);
+		frozenPolicy.validateReference(
+				ProviderQualityComparativeScoringPolicy.POLICY_ID,
+				ProviderQualityComparativeScoringPolicy.POLICY_SHA256);
+		if (!boundPolicy.policy().equals(frozenPolicy.policy())
+				|| !sameDigest(boundPolicy.sha256(), frozenPolicy.sha256())) {
+			throw invalid("review preflight requires the exact frozen scoring policy");
+		}
+		if (!bundle.reviewReady()) {
+			throw invalid("comparative evidence is not review-ready");
+		}
+
+		Evidence evidence = parseEvidence(bundle, boundPolicy.policy());
+		List<String> evidenceKeys = evidence.queries().stream()
+				.map(EvidenceQuery::queryKey)
+				.toList();
+		List<String> frozenKeys = boundQuerySet.querySet().queries().stream()
+				.map(ProviderQualityLiveQuerySet.Query::key)
+				.toList();
+		if (!evidence.querySetId().equals(boundQuerySet.querySet().querySetId())
+				|| !sameDigest(evidence.querySetSha256(), boundQuerySet.sha256())
+				|| !evidenceKeys.equals(frozenKeys)) {
+			throw invalid(
+					"review evidence does not match the exact frozen ordered query set");
+		}
+	}
+
 	static ScoringResult score(
 			ProviderQualityComparativeEvidenceBundle bundle,
 			ProviderQualityComparativeJudgments.BoundJudgments boundJudgments,
-			BoundPolicy boundPolicy) {
+			BoundPolicy boundPolicy,
+			String verifiedReviewPacketSha256) {
 		Objects.requireNonNull(bundle, "bundle");
 		Objects.requireNonNull(boundJudgments, "boundJudgments");
 		Objects.requireNonNull(boundPolicy, "boundPolicy");
+		Objects.requireNonNull(verifiedReviewPacketSha256, "verifiedReviewPacketSha256");
 		if (!bundle.reviewReady()) {
 			throw invalid("comparative evidence is not review-ready");
 		}
 
 		ProviderQualityComparativeJudgments judgments = boundJudgments.judgments();
+		if (!sameDigest(
+				judgments.reviewPacketSha256(), verifiedReviewPacketSha256)) {
+			throw invalid(
+					"judgment review-packet SHA-256 does not match the verified packet");
+		}
 		if (!bundle.evidenceId().equals(judgments.evidenceId())) {
 			throw invalid("judgment evidence ID does not match the verified bundle");
 		}
@@ -187,6 +245,7 @@ final class ProviderQualityComparativeScorer {
 				bundle.manifestSha256(),
 				evidence.captureRepositoryRevision(),
 				boundJudgments.sha256(),
+				judgments.reviewPacketSha256(),
 				evidence.querySetId(),
 				evidence.querySetSha256(),
 				boundPolicy.policy().policyId(),
@@ -209,7 +268,9 @@ final class ProviderQualityComparativeScorer {
 				"evidenceId", result.evidenceId(),
 				"manifestSha256", result.evidenceManifestSha256(),
 				"captureRepositoryRevision", result.captureRepositoryRevision()));
-		summary.put("judgments", Map.of("sha256", result.judgmentPacketSha256()));
+		summary.put("judgments", Map.of(
+				"sha256", result.judgmentPacketSha256(),
+				"reviewPacketSha256", result.reviewPacketSha256()));
 		summary.put("querySet", Map.of(
 				"id", result.querySetId(), "sha256", result.querySetSha256()));
 		summary.put("scoringPolicy", Map.of(
@@ -1251,6 +1312,7 @@ final class ProviderQualityComparativeScorer {
 			String evidenceManifestSha256,
 			String captureRepositoryRevision,
 			String judgmentPacketSha256,
+			String reviewPacketSha256,
 			String querySetId,
 			String querySetSha256,
 			String scoringPolicyId,

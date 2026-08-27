@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeJudgments.BoundJudgments;
+import com.openscholar.search.internal.persistence.ProviderQualityComparativeReviewPacket.Generated;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeScorer.ScoringResult;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeScoringPolicy.BoundPolicy;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,8 @@ class EuropePmcComparativeOfflineScoringTests {
 			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE";
 	private static final String JUDGMENT_PACKET_ENV =
 			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS";
+	private static final String REVIEW_PACKET_ENV =
+			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET";
 	private static final long MAXIMUM_REPORT_BYTES = 8L * 1024L * 1024L;
 
 	@Test
@@ -35,6 +38,7 @@ class EuropePmcComparativeOfflineScoringTests {
 				EuropePmcComparativeLiveEvaluationTests.requiredRepositoryRevision(repositoryRoot);
 		Path evidenceDirectory = requiredAbsolutePath(EVIDENCE_DIRECTORY_ENV);
 		Path judgmentPacket = requiredAbsolutePath(JUDGMENT_PACKET_ENV);
+		Path reviewPacket = requiredAbsolutePath(REVIEW_PACKET_ENV);
 		ObjectMapper objectMapper = JsonMapper.builder().build();
 
 		ProviderQualityComparativeEvidenceBundle evidence =
@@ -46,11 +50,17 @@ class EuropePmcComparativeOfflineScoringTests {
 		policy.validateReference(
 				ProviderQualityComparativeScoringPolicy.POLICY_ID,
 				ProviderQualityComparativeScoringPolicy.POLICY_SHA256);
-
-		ScoringResult result = ProviderQualityComparativeScorer.score(
-				evidence, judgments, policy);
 		ProviderQualityLiveQuerySet.BoundQuerySet frozenQuerySet =
 				ProviderQualityLiveQuerySet.loadFrozen(objectMapper);
+		ProviderQualityComparativeScorer.preflightForReview(
+				objectMapper, evidence, frozenQuerySet, policy);
+		Generated expectedReviewPacket = ProviderQualityComparativeReviewPacket.generate(
+				objectMapper, evidence, frozenQuerySet, policy);
+		ProviderQualityComparativeReviewPacket.verifyReviewedPacket(
+				reviewPacket, expectedReviewPacket);
+
+		ScoringResult result = ProviderQualityComparativeScorer.score(
+				evidence, judgments, policy, expectedReviewPacket.reviewPacketSha256());
 		assertThat(result.querySetId()).isEqualTo(frozenQuerySet.querySet().querySetId());
 		assertThat(result.querySetSha256()).isEqualTo(frozenQuerySet.sha256());
 		assertThat(result.queries())

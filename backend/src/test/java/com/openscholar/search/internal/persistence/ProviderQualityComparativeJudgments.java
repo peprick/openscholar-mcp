@@ -44,13 +44,14 @@ record ProviderQualityComparativeJudgments(
 		String querySetSha256,
 		String scoringPolicyId,
 		String scoringPolicySha256,
+		String reviewPacketSha256,
 		String independenceAttestation,
 		List<QueryJudgments> queries) {
 
 	static final int MAX_INPUT_BYTES = 1024 * 1024;
 	static final int MAX_QUERIES = 50;
 	static final int MAX_CANDIDATES_PER_QUERY = 40;
-	static final String PROTOCOL_ID = "provider-quality-independent-judgments-v1";
+	static final String PROTOCOL_ID = "provider-quality-independent-judgments-v2";
 	static final String INDEPENDENCE_ATTESTATION =
 			"AUTHORED_WITHOUT_PROVENANCE_OR_SCENARIO_OUTPUT";
 
@@ -71,6 +72,7 @@ record ProviderQualityComparativeJudgments(
 			"querySetSha256",
 			"scoringPolicyId",
 			"scoringPolicySha256",
+			"reviewPacketSha256",
 			"independenceAttestation",
 			"queries");
 	private static final Set<String> QUERY_FIELDS = Set.of(
@@ -91,6 +93,7 @@ record ProviderQualityComparativeJudgments(
 				querySetSha256,
 				scoringPolicyId,
 				scoringPolicySha256,
+				reviewPacketSha256,
 				independenceAttestation,
 				queries);
 	}
@@ -159,6 +162,7 @@ record ProviderQualityComparativeJudgments(
 				requireString(root.required("querySetSha256"), "$.querySetSha256"),
 				requireString(root.required("scoringPolicyId"), "$.scoringPolicyId"),
 				requireString(root.required("scoringPolicySha256"), "$.scoringPolicySha256"),
+				requireString(root.required("reviewPacketSha256"), "$.reviewPacketSha256"),
 				requireString(
 						root.required("independenceAttestation"), "$.independenceAttestation"),
 				queries);
@@ -238,10 +242,11 @@ record ProviderQualityComparativeJudgments(
 			String querySetSha256,
 			String scoringPolicyId,
 			String scoringPolicySha256,
+			String reviewPacketSha256,
 			String independenceAttestation,
 			List<QueryJudgments> queries) {
-		if (schemaVersion != 1) {
-			throw new IllegalArgumentException("schemaVersion must be 1");
+		if (schemaVersion != 2) {
+			throw new IllegalArgumentException("schemaVersion must be 2");
 		}
 		if (!PROTOCOL_ID.equals(protocolId)) {
 			throw new IllegalArgumentException("protocolId must be " + PROTOCOL_ID);
@@ -252,6 +257,7 @@ record ProviderQualityComparativeJudgments(
 		requireSha256(querySetSha256, "querySetSha256");
 		requireSlug(scoringPolicyId, "scoringPolicyId", SAFE_SLUG);
 		requireSha256(scoringPolicySha256, "scoringPolicySha256");
+		requireSha256(reviewPacketSha256, "reviewPacketSha256");
 		if (!INDEPENDENCE_ATTESTATION.equals(independenceAttestation)) {
 			throw new IllegalArgumentException(
 					"independenceAttestation must be " + INDEPENDENCE_ATTESTATION);

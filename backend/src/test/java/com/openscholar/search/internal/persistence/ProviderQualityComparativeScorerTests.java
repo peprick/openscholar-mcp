@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import com.openscholar.provider.ProviderId;
+import com.openscholar.search.internal.persistence.ProviderQualityLiveQuerySet.BoundQuerySet;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeScorer.QueryScenarioScore;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeScorer.QueryScore;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeScorer.DeduplicationScore;
@@ -40,6 +41,7 @@ class ProviderQualityComparativeScorerTests {
 	private static final long MAXIMUM_EVIDENCE_BYTES = 64L * 1024L * 1024L;
 	private static final String QUERY_SET_ID = "synthetic-comparative-queries-v1";
 	private static final String QUERY_SET_SHA256 = "9".repeat(64);
+	private static final String REVIEW_PACKET_SHA256 = "8".repeat(64);
 
 	private static final CandidateSpec ALPHA_OPENALEX_SHARED = new CandidateSpec(
 			reviewKey("query-alpha", "OPENALEX", "OA-ALPHA-SHARED"),
@@ -75,7 +77,7 @@ class ProviderQualityComparativeScorerTests {
 			throws Exception {
 		ScoringFixture fixture = readyFixture("synthetic-comparative-score-main");
 		ScoringResult result = ProviderQualityComparativeScorer.score(
-				fixture.bundle(), fixture.judgments(), fixture.policy());
+				fixture.bundle(), fixture.judgments(), fixture.policy(), REVIEW_PACKET_SHA256);
 		Map<String, QueryScore> queries = queriesByKey(result);
 
 		assertThat(result.queryCount()).isEqualTo(2);
@@ -144,9 +146,9 @@ class ProviderQualityComparativeScorerTests {
 			throws Exception {
 		ScoringFixture fixture = readyFixture("synthetic-comparative-score-stable");
 		ScoringResult first = ProviderQualityComparativeScorer.score(
-				fixture.bundle(), fixture.judgments(), fixture.policy());
+				fixture.bundle(), fixture.judgments(), fixture.policy(), REVIEW_PACKET_SHA256);
 		ScoringResult second = ProviderQualityComparativeScorer.score(
-				fixture.bundle(), fixture.judgments(), fixture.policy());
+				fixture.bundle(), fixture.judgments(), fixture.policy(), REVIEW_PACKET_SHA256);
 
 		DeduplicationScore fused = first.scenarios().get(Scenario.FUSED).deduplication();
 		assertThat(fused.truePositives()).isZero();
@@ -186,12 +188,17 @@ class ProviderQualityComparativeScorerTests {
 				.hasSize("provider-comparative-score-".length() + 64);
 		assertThat(first.readerFacing()).isFalse();
 		assertThat(first.defaultEnablementDecision()).isFalse();
+		assertThat(first.reviewPacketSha256()).isEqualTo(REVIEW_PACKET_SHA256);
 		assertThat(firstArtifacts).containsOnlyKeys("query-scores.json", "score-summary.json");
 		assertThat(firstArtifacts).isEqualTo(secondArtifacts);
 		assertThat(CANONICAL_WRITER.writeValueAsBytes(firstArtifacts))
 				.isEqualTo(CANONICAL_WRITER.writeValueAsBytes(secondArtifacts));
 		assertThat(firstArtifacts.toString())
 				.doesNotContain("alpha-shared-work", "beta-openalex-relevant");
+		JsonNode scoreSummary = OBJECT_MAPPER.valueToTree(
+				firstArtifacts.get("score-summary.json"));
+		assertThat(scoreSummary.required("judgments").required("reviewPacketSha256").asString())
+				.isEqualTo(REVIEW_PACKET_SHA256);
 		ProviderQualityEvidenceWriter.WriteResult written =
 				ProviderQualityEvidenceWriter.forRepository(
 						OBJECT_MAPPER, temporaryDirectory, 8L * 1024L * 1024L)
@@ -210,7 +217,7 @@ class ProviderQualityComparativeScorerTests {
 								((ObjectNode) gold).put("relevanceGrade", 0))));
 
 		ScoringResult result = ProviderQualityComparativeScorer.score(
-				bundle, judgments, policy);
+				bundle, judgments, policy, REVIEW_PACKET_SHA256);
 		QueryScenarioScore betaOpenAlex = queriesByKey(result).get("query-beta")
 				.scenarios().get(Scenario.OPENALEX_ONLY);
 
@@ -263,7 +270,7 @@ class ProviderQualityComparativeScorerTests {
 				}));
 
 		ScoringResult result = ProviderQualityComparativeScorer.score(
-				bundle, judgments, policy);
+				bundle, judgments, policy, REVIEW_PACKET_SHA256);
 		assertThat(result.queries()).allSatisfy(query ->
 				assertThat(query.scenarios().values()).allSatisfy(scenario -> {
 					assertThat(scenario.rankedResultCount()).isZero();
@@ -288,23 +295,31 @@ class ProviderQualityComparativeScorerTests {
 		var manifestMismatch = boundJudgments(bundle, policy,
 				root -> root.put("evidenceManifestSha256", "0".repeat(64)));
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				bundle, manifestMismatch, policy))
+				bundle, manifestMismatch, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("judgment evidence manifest SHA-256 does not match");
 
 		var querySetMismatch = boundJudgments(bundle, policy,
 				root -> root.put("querySetSha256", "0".repeat(64)));
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				bundle, querySetMismatch, policy))
+				bundle, querySetMismatch, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("judgment query-set reference does not match the evidence");
 
 		var policyMismatch = boundJudgments(bundle, policy,
 				root -> root.put("scoringPolicySha256", "0".repeat(64)));
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				bundle, policyMismatch, policy))
+				bundle, policyMismatch, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("referenced scoring policy SHA-256 does not match");
+
+		var reviewPacketMismatch = boundJudgments(bundle, policy,
+				root -> root.put("reviewPacketSha256", "0".repeat(64)));
+		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
+				bundle, reviewPacketMismatch, policy, REVIEW_PACKET_SHA256))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage(
+						"judgment review-packet SHA-256 does not match the verified packet");
 	}
 
 	@Test
@@ -316,7 +331,7 @@ class ProviderQualityComparativeScorerTests {
 
 		assertThat(incomplete.reviewReady()).isFalse();
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				incomplete, incompleteJudgments, policy))
+				incomplete, incompleteJudgments, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("comparative evidence is not review-ready");
 
@@ -329,7 +344,7 @@ class ProviderQualityComparativeScorerTests {
 
 		assertThat(inconsistent.reviewReady()).isTrue();
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				inconsistent, inconsistentJudgments, policy))
+				inconsistent, inconsistentJudgments, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("summary candidate count does not match provenance");
 
@@ -340,7 +355,7 @@ class ProviderQualityComparativeScorerTests {
 						.required("candidates").get(0)).put("title", "A different synthetic work"));
 		var reboundJudgments = boundJudgments(rebound, policy, ignored -> { });
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				rebound, reboundJudgments, policy))
+				rebound, reboundJudgments, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("blinded and provenance reviewer projections do not match");
 
@@ -352,7 +367,7 @@ class ProviderQualityComparativeScorerTests {
 						.required("scenarioResultCounts")).put("FUSED", 4));
 		var countMismatchJudgments = boundJudgments(countMismatch, policy, ignored -> { });
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				countMismatch, countMismatchJudgments, policy))
+				countMismatch, countMismatchJudgments, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("summary scenario result count does not match reconciliation");
 
@@ -368,7 +383,7 @@ class ProviderQualityComparativeScorerTests {
 				});
 		var orderedLeakJudgments = boundJudgments(orderedLeak, policy, ignored -> { });
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				orderedLeak, orderedLeakJudgments, policy))
+				orderedLeak, orderedLeakJudgments, policy, REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("blinded candidates do not follow");
 
@@ -380,7 +395,8 @@ class ProviderQualityComparativeScorerTests {
 		var malformedProvenanceJudgments = boundJudgments(
 				malformedProvenance, policy, ignored -> { });
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				malformedProvenance, malformedProvenanceJudgments, policy))
+				malformedProvenance, malformedProvenanceJudgments, policy,
+				REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("citationCount");
 
@@ -392,9 +408,49 @@ class ProviderQualityComparativeScorerTests {
 		var forgedReviewKeyJudgments = boundJudgments(
 				forgedReviewKey, policy, ignored -> { });
 		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
-				forgedReviewKey, forgedReviewKeyJudgments, policy))
+				forgedReviewKey, forgedReviewKeyJudgments, policy,
+				REVIEW_PACKET_SHA256))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("provenance review key does not match its deterministic identity");
+	}
+
+	@Test
+	void preflightsFullScorerEvidenceAgainstExactFrozenReviewInputs() throws Exception {
+		BoundQuerySet querySet = ProviderQualityLiveQuerySet.loadFrozen(OBJECT_MAPPER);
+		BoundPolicy policy = frozenPolicy();
+		ProviderQualityComparativeEvidenceBundle ready = writeAndVerifyEvidence(
+				"synthetic-comparative-review-preflight",
+				true,
+				documents -> bindEmptyEvidenceToFrozenQuerySet(documents, querySet));
+
+		ProviderQualityComparativeScorer.preflightForReview(
+				OBJECT_MAPPER, ready, querySet, policy);
+
+		BoundQuerySet reboundQuerySet = new BoundQuerySet(
+				querySet.querySet(), "0".repeat(64));
+		assertThatThrownBy(() -> ProviderQualityComparativeScorer.preflightForReview(
+				OBJECT_MAPPER, ready, reboundQuerySet, policy))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("review preflight requires the exact frozen query set");
+
+		BoundPolicy reboundPolicy = new BoundPolicy(policy.policy(), "0".repeat(64));
+		assertThatThrownBy(() -> ProviderQualityComparativeScorer.preflightForReview(
+				OBJECT_MAPPER, ready, querySet, reboundPolicy))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("review preflight requires the exact frozen scoring policy");
+
+		ProviderQualityComparativeEvidenceBundle scorerIncompatible = writeAndVerifyEvidence(
+				"synthetic-comparative-review-preflight-invalid",
+				true,
+				documents -> {
+					bindEmptyEvidenceToFrozenQuerySet(documents, querySet);
+					((ObjectNode) documents.summary().required("queries").get(0))
+							.put("rawCandidateCount", 1);
+				});
+		assertThatThrownBy(() -> ProviderQualityComparativeScorer.preflightForReview(
+				OBJECT_MAPPER, scorerIncompatible, querySet, policy))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("summary candidate count does not match provenance");
 	}
 
 	private ScoringFixture readyFixture(String evidenceId) throws Exception {
@@ -439,7 +495,7 @@ class ProviderQualityComparativeScorerTests {
 	private static ObjectNode judgmentPacket(
 			ProviderQualityComparativeEvidenceBundle bundle, BoundPolicy policy) {
 		Map<String, Object> root = new LinkedHashMap<>();
-		root.put("schemaVersion", 1);
+		root.put("schemaVersion", 2);
 		root.put("protocolId", ProviderQualityComparativeJudgments.PROTOCOL_ID);
 		root.put("evidenceId", bundle.evidenceId());
 		root.put("evidenceManifestSha256", bundle.manifestSha256());
@@ -447,6 +503,7 @@ class ProviderQualityComparativeScorerTests {
 		root.put("querySetSha256", QUERY_SET_SHA256);
 		root.put("scoringPolicyId", policy.policy().policyId());
 		root.put("scoringPolicySha256", policy.sha256());
+		root.put("reviewPacketSha256", REVIEW_PACKET_SHA256);
 		root.put(
 				"independenceAttestation",
 				ProviderQualityComparativeJudgments.INDEPENDENCE_ATTESTATION);
@@ -564,6 +621,41 @@ class ProviderQualityComparativeScorerTests {
 					((ArrayNode) scenario.required("rankedResults")).removeAll();
 					((ArrayNode) scenario.required("reconciliation")).removeAll();
 				}));
+	}
+
+	private static void bindEmptyEvidenceToFrozenQuerySet(
+			EvidenceDocuments documents, BoundQuerySet querySet) {
+		clearAllCandidates(documents);
+		ObjectNode querySetNode = (ObjectNode) documents.summary().required("querySet");
+		querySetNode.put("id", querySet.querySet().querySetId());
+		querySetNode.put("sha256", querySet.sha256());
+		querySetNode.put("sourcePolicy", querySet.querySet().sourcePolicy());
+		querySetNode.put("pageSize", querySet.querySet().pageSize());
+		ObjectNode requests = (ObjectNode) documents.summary().required("providerRequests");
+		requests.put("OPENALEX", querySet.querySet().queries().size());
+		requests.put("EUROPE_PMC", querySet.querySet().queries().size());
+
+		ArrayNode summaryQueries = (ArrayNode) documents.summary().required("queries");
+		summaryQueries.removeAll();
+		ArrayNode reconciliationQueries =
+				(ArrayNode) documents.reconciliation().required("queries");
+		reconciliationQueries.removeAll();
+		for (ProviderQualityLiveQuerySet.Query query : querySet.querySet().queries()) {
+			summaryQueries.add(OBJECT_MAPPER.valueToTree(
+					summaryQuery(query.key(), 0, 0, 0, 0)));
+			Map<String, Object> scenarios = new LinkedHashMap<>();
+			for (Scenario scenario : querySetScenarios()) {
+				scenarios.put(scenario.name(), scenario(scenario.name(), List.of(), List.of()));
+			}
+			reconciliationQueries.add(OBJECT_MAPPER.valueToTree(Map.of(
+					"queryKey", query.key(),
+					"complete", true,
+					"scenarios", scenarios)));
+		}
+	}
+
+	private static List<Scenario> querySetScenarios() {
+		return List.of(Scenario.OPENALEX_ONLY, Scenario.EUROPE_PMC_ONLY, Scenario.FUSED);
 	}
 
 	private static Map<String, Object> summary(String evidenceId, boolean eligible) {

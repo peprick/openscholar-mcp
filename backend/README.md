@@ -145,19 +145,48 @@ The comparative runner never downloads documents or serializes PDF URLs, and ord
 
 Comparative payload documents use schema version `2`: ranked scenario results expose only bounded metadata-field presence bits, never canonical metadata values. The enclosing `manifest.json` remains schema version `1`. Before scoring, a read-only verifier requires exactly `manifest.json`, `summary.json`, `blinded-candidates.json`, `provenance-map.json`, and `reconciliation-trace.json`; it checks the bounded file set, sizes, SHA-256 digests, payload schemas, shared evidence identity, and review-ready status.
 
-After an independent reviewer supplies a strict judgment packet, run the separately opt-in offline scorer from this directory. Move or copy the approved capture outside `backend/target/` first: the required Maven `clean` deletes all prior captures and reports below that directory.
+Generate a provenance-free packet and incomplete worksheet from an approved capture. Keep the capture outside `backend/target/`: every command below uses Maven `clean`, which deletes prior captures, review files, judgments, and reports there.
+
+```bash
+RUN_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeReviewPacketGenerationTests \
+  clean test
+```
+
+Give the independent reviewer only the generated `review-packet.json` and `review-worksheet.json`. Preserve the packet's exact immutable bytes for compilation and scoring. It contains an opaque session binding, safe query text, neutral packet-local candidate keys, and blinded bibliographic metadata; author entries expose only display names, and language values use a canonical ISO-639-3 form. It exposes no raw internal review key, campaign-bearing binding, provider-specific author-position semantics, or corresponding-author flag and never includes provenance, reconciliation, or scenario results. In the worksheet, complete every null candidate value without changing `candidateKey` order, use the same safe `goldPaperKey` for the same work, and assign consistent `0..3` grades and expected fields within each work. `expectedFields` is a lexicographically sorted unique array of `ABSTRACT`, `AUTHORS`, `CITATION_COUNT`, `DOCUMENT_TYPE`, `DOI`, `ISSN`, `LANGUAGE`, `ORCID`, `PMCID`, `PMID`, `PUBLICATION_YEAR`, `SOURCE_URL`, `TITLE`, or `VENUE`; `[]` explicitly records that none are expected. Must-separate `leftCandidateKey`/`rightCandidateKey` values and the pair array must be in canonical ascending order; `DISTINCT_WORKS` is one valid uppercase reason code. Set `mustSeparateReviewComplete=true` for every query even when there are no pairs, and enter `AUTHORED_WITHOUT_PROVENANCE_OR_SCENARIO_OUTPUT` only when it is true.
+
+Preserve the exact packet, completed worksheet, and verified capture outside `backend/target/`, then compile the strict judgment packet:
+
+```bash
+RUN_PROVIDER_QUALITY_COMPARATIVE_REVIEW_COMPILE=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET=/absolute/review-packet.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_WORKSHEET=/absolute/review-worksheet.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeReviewWorksheetCompilationTests \
+  clean test
+```
+
+The compiler reruns the full evidence preflight, verifies the exact packet bytes, rejects incomplete, reordered, duplicate, or mismatched review content, translates candidate aliases back to hidden scorer keys, and writes a private ignored `provider-quality-independent-judgments-v2` `judgments.json` below `backend/target/provider-quality/`. The judgment file binds the packet SHA-256 and exact evidence/query-set/policy values. No real worksheet, label, or judgment packet is checked in. Packet generation and compilation use no Spring context, Docker, network, PDF, UI, or runtime endpoint and do not enable Europe PMC.
+
+Pass the compiled `judgments.json` and the exact immutable reviewed packet to the separately opt-in offline scorer. Move or copy the judgments outside `backend/target/` before running the required `clean test`:
 
 ```bash
 RUN_PROVIDER_QUALITY_COMPARATIVE_SCORING=true \
 OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
 OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET=/absolute/review-packet.json \
 OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
 ./mvnw --batch-mode --no-transfer-progress \
   -Dtest=EuropePmcComparativeOfflineScoringTests \
   clean test
 ```
 
-The packet must bind the exact evidence-manifest, query-set, and frozen-scoring-policy digests and attest that it was authored without provenance or scenario output. Eligible captures must retain the exact blinded-review instruction and evidence-scoped shuffled candidate order, deterministic review keys are recomputed, and hidden provenance values are checked against their bounded producer schema before scoring. The runner also binds the claimed query-set ID, digest, and ordered keys to the checked-in frozen resource. No real judgment packet is checked into this repository. The runner rejects a dirty checkout, a claimed revision different from `HEAD`, or scorer code at a revision different from the capture revision. It uses no Spring context, Docker, network, PDF, UI, or runtime endpoint. It computes cluster-aware Recall@20, nDCG@10, Precision@5, and MRR@20 together with per-query pairwise deduplication, must-separate violations, expected-field recovery, and Europe-PMC-unique relevant-query coverage. Queries with no relevant judged candidate and deduplication rates with a zero denominator remain in the report with explicit not-applicable rates and counts; they are not reported as perfect or silently dropped. Its digest-bound report is a private ignored artifact below `backend/target/provider-quality/`; it is not an enablement gate or a provider-default decision.
+Before scoring, the runner repeats the full evidence preflight, regenerates the expected review projection, verifies the supplied packet's exact bytes, and requires its SHA-256 to equal the compiled judgment binding. The judgment file also binds the exact evidence-manifest, query-set, and frozen-scoring-policy digests and attests that it was authored without provenance or scenario output. Eligible captures must retain the exact blinded-review instruction and evidence-scoped shuffled candidate order, deterministic review keys are recomputed, and hidden provenance values are checked against their bounded producer schema. The runner binds the claimed query-set ID, digest, and ordered keys to the checked-in frozen resource. It rejects a dirty checkout, a claimed revision different from `HEAD`, or scorer code at a revision different from the capture revision. It uses no Spring context, Docker, network, PDF, UI, or runtime endpoint. It computes cluster-aware Recall@20, nDCG@10, Precision@5, and MRR@20 together with per-query pairwise deduplication, must-separate violations, expected-field recovery, and Europe-PMC-unique relevant-query coverage. Queries with no relevant judged candidate and deduplication rates with a zero denominator remain in the report with explicit not-applicable rates and counts; they are not reported as perfect or silently dropped. Its digest-bound report is a private ignored artifact below `backend/target/provider-quality/`; it is not an enablement gate or a provider-default decision.
 
 ## Optional local embeddings
 

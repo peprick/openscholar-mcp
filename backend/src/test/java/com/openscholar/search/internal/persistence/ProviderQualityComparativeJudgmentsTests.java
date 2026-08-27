@@ -49,11 +49,12 @@ class ProviderQualityComparativeJudgmentsTests {
 				MessageDigest.getInstance("SHA-256").digest(packetBytes)));
 		assertThat(ProviderQualityComparativeJudgments.load(OBJECT_MAPPER, packet))
 				.isEqualTo(parsed);
-		assertThat(parsed.schemaVersion()).isEqualTo(1);
+		assertThat(parsed.schemaVersion()).isEqualTo(2);
 		assertThat(parsed.protocolId())
 				.isEqualTo(ProviderQualityComparativeJudgments.PROTOCOL_ID);
 		assertThat(parsed.independenceAttestation())
 				.isEqualTo(ProviderQualityComparativeJudgments.INDEPENDENCE_ATTESTATION);
+		assertThat(parsed.reviewPacketSha256()).isEqualTo("4".repeat(64));
 		assertThat(parsed.queriesByKey()).containsOnlyKeys("cancer-ml-diagnosis");
 		ProviderQualityComparativeJudgments.QueryJudgments query =
 				parsed.queriesByKey().get("cancer-ml-diagnosis");
@@ -84,8 +85,8 @@ class ProviderQualityComparativeJudgmentsTests {
 	@Test
 	void rejectsDuplicateFieldsTrailingDocumentsAndUnknownOrMissingKeys() throws Exception {
 		String duplicateField = validJson().replaceFirst(
-				"\\\"schemaVersion\\\"\\s*:\\s*1,",
-				"\"schemaVersion\": 1, \"schemaVersion\": 1,");
+				"\\\"schemaVersion\\\"\\s*:\\s*2,",
+				"\"schemaVersion\": 2, \"schemaVersion\": 2,");
 		assertThatThrownBy(() -> ProviderQualityComparativeJudgments.parse(
 				OBJECT_MAPPER, duplicateField.getBytes(StandardCharsets.UTF_8)))
 				.isInstanceOf(JacksonException.class);
@@ -100,16 +101,20 @@ class ProviderQualityComparativeJudgmentsTests {
 		ObjectNode missing = validTree();
 		query(missing, 0).remove("mustSeparatePairs");
 		assertInvalid(missing, "Missing keys");
+
+		ObjectNode missingReviewPacketBinding = validTree();
+		missingReviewPacketBinding.remove("reviewPacketSha256");
+		assertInvalid(missingReviewPacketBinding, "Missing keys");
 	}
 
 	@Test
 	void rejectsIncorrectProtocolBindingSyntaxAndAttestation() throws Exception {
 		ObjectNode wrongSchema = validTree();
-		wrongSchema.put("schemaVersion", 2);
-		assertInvalid(wrongSchema, "schemaVersion must be 1");
+		wrongSchema.put("schemaVersion", 1);
+		assertInvalid(wrongSchema, "schemaVersion must be 2");
 
 		ObjectNode wrongProtocol = validTree();
-		wrongProtocol.put("protocolId", "provider-quality-independent-judgments-v2");
+		wrongProtocol.put("protocolId", "provider-quality-independent-judgments-v1");
 		assertInvalid(wrongProtocol, "protocolId must be");
 
 		ObjectNode unsafeEvidence = validTree();
@@ -127,6 +132,10 @@ class ProviderQualityComparativeJudgmentsTests {
 		ObjectNode invalidPolicyDigest = validTree();
 		invalidPolicyDigest.put("scoringPolicySha256", "not-a-digest");
 		assertInvalid(invalidPolicyDigest, "scoringPolicySha256");
+
+		ObjectNode invalidReviewPacketDigest = validTree();
+		invalidReviewPacketDigest.put("reviewPacketSha256", "A".repeat(64));
+		assertInvalid(invalidReviewPacketDigest, "reviewPacketSha256");
 
 		ObjectNode wrongAttestation = validTree();
 		wrongAttestation.put("independenceAttestation", "AUTHORED_AFTER_REVIEWING_RESULTS");
@@ -320,14 +329,15 @@ class ProviderQualityComparativeJudgmentsTests {
 	private static String validJson() {
 		return """
 				{
-				  "schemaVersion": 1,
-				  "protocolId": "provider-quality-independent-judgments-v1",
+				  "schemaVersion": 2,
+				  "protocolId": "provider-quality-independent-judgments-v2",
 				  "evidenceId": "europe-pmc-comparative-contract",
 				  "evidenceManifestSha256": "%s",
 				  "querySetId": "europe-pmc-live-queries-v1",
 				  "querySetSha256": "%s",
 				  "scoringPolicyId": "provider-comparative-scoring-policy-v1",
 				  "scoringPolicySha256": "%s",
+				  "reviewPacketSha256": "%s",
 				  "independenceAttestation": "AUTHORED_WITHOUT_PROVENANCE_OR_SCENARIO_OUTPUT",
 				  "queries": [
 				    {
@@ -360,6 +370,7 @@ class ProviderQualityComparativeJudgmentsTests {
 				"1".repeat(64),
 				"2".repeat(64),
 				"3".repeat(64),
+				"4".repeat(64),
 				REVIEW_A,
 				REVIEW_B,
 				REVIEW_A,
