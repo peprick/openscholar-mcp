@@ -145,7 +145,7 @@ OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_WORKSHEET=/absolute/review-worksheet.js
 
 ## Manual offline comparative scoring
 
-`EuropePmcComparativeOfflineScoringTests` is a manual, local evaluator rather than an application test path. It does not start Spring, PostgreSQL, Testcontainers, Docker, or a web server; it makes no network call, reads no PDF, and adds no UI, REST, MCP, Actuator, or provider-default surface. Ordinary verification skips it unless the explicit scoring gate is set.
+`EuropePmcComparativeOfflineScoringTests` is a manual, local evaluator rather than an application test path. It does not start Spring, PostgreSQL, Testcontainers, Docker, or a web server; it makes no network call, reads no PDF, and adds no UI, REST, MCP, Actuator, or provider-default surface. Ordinary verification skips it unless the explicit scoring gate is set. Its score-report protocol is version `2`: the report identity uses a versioned derivation domain, and `score-summary.json` carries the capture's canonical `captureMeasuredAt` value alongside the capture manifest and repository revision.
 
 The first input boundary accepts exactly five regular, non-symlink files: `manifest.json`, `summary.json`, `blinded-candidates.json`, `provenance-map.json`, and `reconciliation-trace.json`. The strict verifier enforces the 64 MiB aggregate payload bound, the bounded manifest, declared byte counts and per-file SHA-256 digests, strict JSON parsing, payload schema version `2`, the common evidence ID, the manifest's schema version `1`, and consistent review-ready status. The scorer additionally verifies the exact reviewer-visible projection and the evidence-scoped shuffled candidate order, so provider-batched ordering cannot silently unblind a review. Extra, missing, substituted, oversized, malformed, digest-mismatched, reordered, or cross-evidence files fail before scoring.
 
@@ -175,7 +175,28 @@ OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
   clean test
 ```
 
-The scorer keeps successful empty queries and all-irrelevant adjudications visible through the explicit undefined/count semantics above; they are not silently discarded after labeling. Before scoring it repeats the full evidence preflight, regenerates the expected review projection, verifies the supplied packet's exact bytes, and rejects a judgment whose `reviewPacketSha256` does not match that verified packet. The runner also rejects a dirty checkout, a claimed revision different from `HEAD`, scorer code at a revision different from the capture revision, or a query-set ID, SHA-256, or ordered key list that differs from the digest-checked frozen resource at that revision. The result is a private, ignored, digest-bound artifact below `backend/target/provider-quality/`. Preserve it separately only under the approved evidence-retention policy. A score report is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision; maintainers must review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
+With the same required inputs, set `OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_SCORE_REPORT` to replay-verify a retained report without creating another one. The runner rejects lexical and resolved aliases into `backend/target/`; the report directory must be an existing absolute path outside that tree because the required `clean` removes it before the test starts:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_SCORING=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET=/absolute/review-packet.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_SCORE_REPORT=/absolute/external/report-directory \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeOfflineScoringTests \
+  clean test
+```
+
+The scorer keeps successful empty queries and all-irrelevant adjudications visible through the explicit undefined/count semantics above; they are not silently discarded after labeling. Before scoring it repeats the full evidence preflight, regenerates the expected review projection, verifies the supplied packet's exact bytes, and rejects a judgment whose `reviewPacketSha256` does not match that verified packet. The runner also rejects a dirty checkout, a claimed revision different from `HEAD`, scorer code at a revision different from the capture revision, or a query-set ID, SHA-256, or ordered key list that differs from the digest-checked frozen resource at that revision.
+
+Generation publishes a private ignored report from a create-new staging directory below `backend/target/provider-quality/`, using an atomic move where the filesystem supports one, and then reopens it through the same verifier used for replay before printing success. The verifier accepts exactly three real, non-symlink files—`manifest.json`, `query-scores.json`, and `score-summary.json`—within the 8 MiB total bound. It requires the canonical manifest schema and bytes, exact sizes and SHA-256 digests, strict JSON without duplicate or trailing content, the recomputed v2 report identity, and byte-for-byte equality with freshly regenerated score artifacts. Replay performs that same no-write check on a separately retained directory. A failed post-publication verification leaves the ignored directory available for diagnosis and prints no success record.
+
+Replay is a local integrity check, not a hostile-filesystem isolation boundary. Use only an operator-controlled directory whose files and ancestors cannot be replaced or modified concurrently; the verifier rereads accepted bytes but cannot lock an entire path against an adversarial rename race. The success record deliberately omits the environment-supplied path and includes only bounded integrity handles.
+
+This boundary verifies a score-report bundle; it does not yet provide external promotion or custody, bind the completed worksheet bytes into a run seal, record retention or access-control history, compare time-separated runs, or make an enablement decision. Replay remains possible only while the separately governed evidence, immutable review packet, and judgment inputs are retained. Preserve the whole report directory and its bound inputs under an approved policy; OpenScholar does not copy or delete them automatically. A score report is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision, so maintainers must still review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
 
 ## Default-enablement evidence
 

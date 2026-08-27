@@ -45,6 +45,9 @@ import tools.jackson.databind.ObjectMapper;
  */
 final class ProviderQualityComparativeScorer {
 
+	static final int REPORT_SCHEMA_VERSION = 2;
+	static final String REPORT_ID_PREFIX = "provider-comparative-score-v2-";
+
 	private static final Pattern SHA256 = Pattern.compile("^[0-9a-f]{64}$");
 	private static final Pattern GIT_REVISION =
 			Pattern.compile("^[0-9a-f]{40}(?:[0-9a-f]{24})?$");
@@ -239,11 +242,12 @@ final class ProviderQualityComparativeScorer {
 		String reportId = reportId(
 				bundle.manifestSha256(), boundJudgments.sha256(), boundPolicy.sha256());
 		return new ScoringResult(
-				1,
+				REPORT_SCHEMA_VERSION,
 				reportId,
 				bundle.evidenceId(),
 				bundle.manifestSha256(),
 				evidence.captureRepositoryRevision(),
+				evidence.captureMeasuredAt(),
 				boundJudgments.sha256(),
 				judgments.reviewPacketSha256(),
 				evidence.querySetId(),
@@ -267,7 +271,8 @@ final class ProviderQualityComparativeScorer {
 		summary.put("evidence", Map.of(
 				"evidenceId", result.evidenceId(),
 				"manifestSha256", result.evidenceManifestSha256(),
-				"captureRepositoryRevision", result.captureRepositoryRevision()));
+				"captureRepositoryRevision", result.captureRepositoryRevision(),
+				"captureMeasuredAt", result.captureMeasuredAt()));
 		summary.put("judgments", Map.of(
 				"sha256", result.judgmentPacketSha256(),
 				"reviewPacketSha256", result.reviewPacketSha256()));
@@ -521,8 +526,9 @@ final class ProviderQualityComparativeScorer {
 		requireText(summary.required("evidenceId"), "$summary.evidenceId", bundle.evidenceId());
 		requireBoolean(summary.required("qualityReviewEligible"), "$summary.qualityReviewEligible", true);
 		String measuredAt = requireText(summary.required("measuredAt"), "$summary.measuredAt");
+		String captureMeasuredAt;
 		try {
-			Instant.parse(measuredAt);
+			captureMeasuredAt = Instant.parse(measuredAt).toString();
 		}
 		catch (RuntimeException exception) {
 			throw invalid("$summary.measuredAt must be an ISO-8601 instant");
@@ -617,7 +623,12 @@ final class ProviderQualityComparativeScorer {
 				|| provenance.values().stream().anyMatch(candidate -> !seenQueries.contains(candidate.queryKey()))) {
 			throw invalid("evidence documents do not contain the same query set");
 		}
-		return new Evidence(querySetId, querySetSha256, captureRepositoryRevision, queries);
+		return new Evidence(
+				querySetId,
+				querySetSha256,
+				captureRepositoryRevision,
+				captureMeasuredAt,
+				queries);
 	}
 
 	private static List<SummaryQuery> parseSummaryQueries(
@@ -1277,15 +1288,15 @@ final class ProviderQualityComparativeScorer {
 						right.getBytes(StandardCharsets.US_ASCII));
 	}
 
-	private static String reportId(String evidence, String judgments, String policy) {
+	static String reportId(String evidence, String judgments, String policy) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			digest.update("openscholar-comparative-score-v1".getBytes(StandardCharsets.US_ASCII));
+			digest.update("openscholar-comparative-score-v2".getBytes(StandardCharsets.US_ASCII));
 			for (String value : List.of(evidence, judgments, policy)) {
 				digest.update((byte) 0);
 				digest.update(value.getBytes(StandardCharsets.US_ASCII));
 			}
-			return "provider-comparative-score-" + HexFormat.of().formatHex(digest.digest());
+			return REPORT_ID_PREFIX + HexFormat.of().formatHex(digest.digest());
 		}
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable", exception);
@@ -1311,6 +1322,7 @@ final class ProviderQualityComparativeScorer {
 			String evidenceId,
 			String evidenceManifestSha256,
 			String captureRepositoryRevision,
+			String captureMeasuredAt,
 			String judgmentPacketSha256,
 			String reviewPacketSha256,
 			String querySetId,
@@ -1414,6 +1426,7 @@ final class ProviderQualityComparativeScorer {
 			String querySetId,
 			String querySetSha256,
 			String captureRepositoryRevision,
+			String captureMeasuredAt,
 			List<EvidenceQuery> queries) {
 
 		private Evidence {

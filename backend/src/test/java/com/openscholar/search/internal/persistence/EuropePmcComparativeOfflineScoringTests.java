@@ -2,7 +2,11 @@ package com.openscholar.search.internal.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Locale;
 
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeJudgments.BoundJudgments;
@@ -29,7 +33,8 @@ class EuropePmcComparativeOfflineScoringTests {
 			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS";
 	private static final String REVIEW_PACKET_ENV =
 			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET";
-	private static final long MAXIMUM_REPORT_BYTES = 8L * 1024L * 1024L;
+	private static final String SCORE_REPORT_ENV =
+			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_SCORE_REPORT";
 
 	@Test
 	void scoresVerifiedEvidenceWithoutContactingProviders() throws Exception {
@@ -39,6 +44,10 @@ class EuropePmcComparativeOfflineScoringTests {
 		Path evidenceDirectory = requiredAbsolutePath(EVIDENCE_DIRECTORY_ENV);
 		Path judgmentPacket = requiredAbsolutePath(JUDGMENT_PACKET_ENV);
 		Path reviewPacket = requiredAbsolutePath(REVIEW_PACKET_ENV);
+		Path retainedReport = optionalAbsolutePath(SCORE_REPORT_ENV);
+		if (retainedReport != null) {
+			retainedReport = validateExternalReplayPath(repositoryRoot, retainedReport);
+		}
 		ObjectMapper objectMapper = JsonMapper.builder().build();
 
 		ProviderQualityComparativeEvidenceBundle evidence =
@@ -71,23 +80,80 @@ class EuropePmcComparativeOfflineScoringTests {
 		assertThat(result.captureRepositoryRevision())
 				.as("score only with the exact clean capture/evaluator revision")
 				.isEqualTo(repositoryRevision);
+		assertThat(result.captureMeasuredAt())
+				.as("carry the exact capture time through the score-report lineage")
+				.isEqualTo(Instant.parse(
+						evidence.summary().required("measuredAt").asString()).toString());
+		assertThat(result.schemaVersion())
+				.isEqualTo(ProviderQualityComparativeScorer.REPORT_SCHEMA_VERSION);
 		assertThat(result.readerFacing()).isFalse();
 		assertThat(result.defaultEnablementDecision()).isFalse();
 
-		ProviderQualityEvidenceWriter.WriteResult written =
-				ProviderQualityEvidenceWriter.forRepository(
-						objectMapper, repositoryRoot, MAXIMUM_REPORT_BYTES)
-						.write(result.reportId(), ProviderQualityComparativeScorer.artifacts(result));
+		String mode;
+		Path reportDirectory;
+		if (retainedReport == null) {
+			mode = "generated";
+			reportDirectory = ProviderQualityEvidenceWriter.forRepository(
+					objectMapper,
+					repositoryRoot,
+					ProviderQualityComparativeScoreReportBundle.MAXIMUM_REPORT_BYTES)
+					.write(result.reportId(), ProviderQualityComparativeScorer.artifacts(result))
+					.directory();
+		}
+		else {
+			mode = "replayed";
+			reportDirectory = retainedReport;
+		}
+		ProviderQualityComparativeScoreReportBundle verified =
+				ProviderQualityComparativeScoreReportBundle.verifyExact(
+						objectMapper, reportDirectory, result);
 		System.out.printf(
 				Locale.ROOT,
-				"provider-quality-comparative-score-v1 report=%s evidence=%s "
+				"provider-quality-comparative-score-v2 mode=%s report-id=%s "
+						+ "report-manifest-sha256=%s evidence=%s captured-at=%s "
 						+ "revision=%s queries=%d bytes=%d%n",
-				written.directory(),
+				mode,
+				verified.reportId(),
+				verified.manifestSha256(),
 				result.evidenceId(),
+				result.captureMeasuredAt(),
 				repositoryRevision,
 				result.queryCount(),
-				written.totalBytes());
-		assertThat(written.manifest().files()).hasSize(2);
+				verified.totalBytes());
+	}
+
+	private static Path optionalAbsolutePath(String environmentName) {
+		if (System.getenv(environmentName) == null) {
+			return null;
+		}
+		return requiredAbsolutePath(environmentName);
+	}
+
+	static Path validateExternalReplayPath(Path repositoryRoot, Path reportDirectory) {
+		Path repository = repositoryRoot.toAbsolutePath().normalize();
+		Path report = reportDirectory.toAbsolutePath().normalize();
+		Path target = repository.resolve("backend/target").normalize();
+		if (report.startsWith(target)) {
+			throw new IllegalStateException(
+					SCORE_REPORT_ENV + " must resolve outside backend/target");
+		}
+		if (!Files.exists(report, LinkOption.NOFOLLOW_LINKS)) {
+			throw new IllegalStateException(SCORE_REPORT_ENV + " must name an existing directory");
+		}
+		try {
+			Path resolvedReport = report.toRealPath();
+			Path resolvedTarget = target.toRealPath();
+			if (resolvedReport.startsWith(resolvedTarget)) {
+				throw new IllegalStateException(
+						SCORE_REPORT_ENV + " must resolve outside backend/target");
+			}
+		}
+		catch (IOException exception) {
+			throw new IllegalStateException(
+					SCORE_REPORT_ENV + " must name a resolvable external directory",
+					exception);
+		}
+		return report;
 	}
 
 	private static Path requiredAbsolutePath(String environmentName) {

@@ -183,9 +183,11 @@ class ProviderQualityComparativeScorerTests {
 		Map<String, Object> firstArtifacts = ProviderQualityComparativeScorer.artifacts(first);
 		Map<String, Object> secondArtifacts = ProviderQualityComparativeScorer.artifacts(second);
 		assertThat(first).isEqualTo(second);
+		assertThat(first.schemaVersion()).isEqualTo(2);
+		assertThat(first.captureMeasuredAt()).isEqualTo("2026-08-26T00:00:00Z");
 		assertThat(first.reportId())
-				.startsWith("provider-comparative-score-")
-				.hasSize("provider-comparative-score-".length() + 64);
+				.startsWith("provider-comparative-score-v2-")
+				.hasSize("provider-comparative-score-v2-".length() + 64);
 		assertThat(first.readerFacing()).isFalse();
 		assertThat(first.defaultEnablementDecision()).isFalse();
 		assertThat(first.reviewPacketSha256()).isEqualTo(REVIEW_PACKET_SHA256);
@@ -197,6 +199,8 @@ class ProviderQualityComparativeScorerTests {
 				.doesNotContain("alpha-shared-work", "beta-openalex-relevant");
 		JsonNode scoreSummary = OBJECT_MAPPER.valueToTree(
 				firstArtifacts.get("score-summary.json"));
+		assertThat(scoreSummary.required("evidence").required("captureMeasuredAt").asString())
+				.isEqualTo("2026-08-26T00:00:00Z");
 		assertThat(scoreSummary.required("judgments").required("reviewPacketSha256").asString())
 				.isEqualTo(REVIEW_PACKET_SHA256);
 		ProviderQualityEvidenceWriter.WriteResult written =
@@ -204,6 +208,48 @@ class ProviderQualityComparativeScorerTests {
 						OBJECT_MAPPER, temporaryDirectory, 8L * 1024L * 1024L)
 						.write(first.reportId(), firstArtifacts);
 		assertThat(written.manifest().files()).hasSize(2);
+	}
+
+	@Test
+	void canonicalizesCaptureTimestampAndKeepsItManifestBound() throws Exception {
+		BoundPolicy policy = frozenPolicy();
+		String evidenceId = "synthetic-comparative-score-capture-time";
+		ProviderQualityComparativeEvidenceBundle baseline = writeAndVerifyEvidence(
+				temporaryDirectory.resolve("capture-time-baseline"),
+				evidenceId,
+				true,
+				ignored -> { });
+		ProviderQualityComparativeEvidenceBundle rebound = writeAndVerifyEvidence(
+				temporaryDirectory.resolve("capture-time-rebound"),
+				evidenceId,
+				true,
+				documents -> ((ObjectNode) documents.summary()).put(
+						"measuredAt", "2026-08-27T05:30:00.1200+05:30"));
+		var baselineJudgments = boundJudgments(baseline, policy, ignored -> { });
+
+		assertThatThrownBy(() -> ProviderQualityComparativeScorer.score(
+				rebound, baselineJudgments, policy, REVIEW_PACKET_SHA256))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("judgment evidence manifest SHA-256 does not match");
+
+		var reboundJudgments = boundJudgments(rebound, policy, ignored -> { });
+		ScoringResult baselineResult = ProviderQualityComparativeScorer.score(
+				baseline, baselineJudgments, policy, REVIEW_PACKET_SHA256);
+		ScoringResult reboundResult = ProviderQualityComparativeScorer.score(
+				rebound, reboundJudgments, policy, REVIEW_PACKET_SHA256);
+
+		assertThat(baselineResult.captureMeasuredAt()).isEqualTo("2026-08-26T00:00:00Z");
+		assertThat(reboundResult.captureMeasuredAt()).isEqualTo("2026-08-27T00:00:00.120Z");
+		assertThat(rebound.manifestSha256()).isNotEqualTo(baseline.manifestSha256());
+		assertThat(reboundResult.reportId()).isNotEqualTo(baselineResult.reportId());
+
+		JsonNode reboundSummary = OBJECT_MAPPER.valueToTree(
+				ProviderQualityComparativeScorer.artifacts(reboundResult)
+						.get("score-summary.json"));
+		assertThat(reboundSummary.required("evidence").required("captureMeasuredAt").asString())
+				.isEqualTo("2026-08-27T00:00:00.120Z");
+		assertThat(CANONICAL_WRITER.writeValueAsString(reboundSummary))
+				.doesNotContain("+05:30", ".1200");
 	}
 
 	@Test
@@ -473,10 +519,19 @@ class ProviderQualityComparativeScorerTests {
 			String evidenceId,
 			boolean eligible,
 			Consumer<EvidenceDocuments> mutation) throws Exception {
+		return writeAndVerifyEvidence(
+				temporaryDirectory, evidenceId, eligible, mutation);
+	}
+
+	private static ProviderQualityComparativeEvidenceBundle writeAndVerifyEvidence(
+			Path repositoryRoot,
+			String evidenceId,
+			boolean eligible,
+			Consumer<EvidenceDocuments> mutation) throws Exception {
 		EvidenceDocuments documents = evidenceDocuments(evidenceId, eligible);
 		mutation.accept(documents);
 		Path directory = ProviderQualityEvidenceWriter.forRepository(
-				OBJECT_MAPPER, temporaryDirectory, MAXIMUM_EVIDENCE_BYTES)
+				OBJECT_MAPPER, repositoryRoot, MAXIMUM_EVIDENCE_BYTES)
 				.write(evidenceId, documents.artifacts())
 				.directory();
 		return ProviderQualityComparativeEvidenceBundle.verify(OBJECT_MAPPER, directory);
