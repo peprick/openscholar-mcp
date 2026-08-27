@@ -91,6 +91,8 @@ class ProviderQualityComparativeReviewWorksheetTests {
 				});
 		assertThat(result.sha256()).isEqualTo(HexFormat.of().formatHex(
 				MessageDigest.getInstance("SHA-256").digest(canonical)));
+		assertThat(result.worksheetSha256()).isEqualTo(HexFormat.of().formatHex(
+				MessageDigest.getInstance("SHA-256").digest(validBytes())));
 		assertThat(result.boundJudgments().sha256()).isEqualTo(result.sha256());
 		assertThat(canonical[canonical.length - 1]).isEqualTo((byte) '\n');
 
@@ -152,6 +154,11 @@ class ProviderQualityComparativeReviewWorksheetTests {
 
 		assertThat(first.canonicalBytes()).isEqualTo(second.canonicalBytes());
 		assertThat(first.sha256()).isEqualTo(second.sha256());
+		assertThat(first.worksheetSha256()).isEqualTo(HexFormat.of().formatHex(
+				MessageDigest.getInstance("SHA-256").digest(compact)));
+		assertThat(second.worksheetSha256()).isEqualTo(HexFormat.of().formatHex(
+				MessageDigest.getInstance("SHA-256").digest(pretty)));
+		assertThat(first.worksheetSha256()).isNotEqualTo(second.worksheetSha256());
 	}
 
 	@Test
@@ -165,6 +172,7 @@ class ProviderQualityComparativeReviewWorksheetTests {
 				OBJECT_MAPPER, validBytes(), expectedContext());
 		assertThat(fromFile.canonicalBytes()).isEqualTo(fromBytes.canonicalBytes());
 		assertThat(fromFile.sha256()).isEqualTo(fromBytes.sha256());
+		assertThat(fromFile.worksheetSha256()).isEqualTo(fromBytes.worksheetSha256());
 
 		Path symbolicLink = temporaryDirectory.resolve("worksheet-link.json");
 		Files.createSymbolicLink(symbolicLink, worksheet.getFileName());

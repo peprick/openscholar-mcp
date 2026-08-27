@@ -122,7 +122,11 @@ final class ProviderQualityComparativeReviewWorksheet {
 		canonicalBytes[canonicalBytes.length - 1] = '\n';
 		BoundJudgments bound = ProviderQualityComparativeJudgments.parseBound(
 				objectMapper, canonicalBytes);
-		return new CompiledJudgments(canonicalBytes, bound.sha256(), bound);
+		return new CompiledJudgments(
+				canonicalBytes,
+				bound.sha256(),
+				sha256(worksheetBytes),
+				bound);
 	}
 
 	private static Worksheet parse(JsonNode root) {
@@ -478,11 +482,13 @@ final class ProviderQualityComparativeReviewWorksheet {
 	record CompiledJudgments(
 			byte[] canonicalBytes,
 			String sha256,
+			String worksheetSha256,
 			BoundJudgments boundJudgments) {
 
 		CompiledJudgments {
 			canonicalBytes = Objects.requireNonNull(canonicalBytes, "canonicalBytes").clone();
 			requireSha256(sha256, "sha256");
+			requireSha256(worksheetSha256, "worksheetSha256");
 			Objects.requireNonNull(boundJudgments, "boundJudgments");
 			if (!sha256.equals(ProviderQualityComparativeReviewWorksheet.sha256(canonicalBytes))
 					|| !sha256.equals(boundJudgments.sha256())) {

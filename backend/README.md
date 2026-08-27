@@ -190,7 +190,55 @@ Before scoring, the runner repeats the full evidence preflight, regenerates the 
 
 The v2 score summary carries the capture's canonical timestamp, manifest digest, and repository revision. After publishing a new private ignored report below `backend/target/provider-quality/` through create-new staging/move semantics, the runner reopens and exactly verifies its three-file layout, total bound, canonical manifest, file digests, strict JSON, recomputed report identity, and regenerated payload bytes before printing success. To verify a retained copy without writing another report, rerun the same command and add `OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_SCORE_REPORT=/absolute/external/report-directory`; the runner rejects lexical or resolved aliases into `backend/target/` because `clean` deletes that tree first. Replay assumes a locally operator-controlled directory with no concurrent file or ancestor replacement. The success record omits the environment-supplied path and contains only the mode, verified report ID, report-manifest digest, evidence ID, capture time, revision, query count, and total bytes—not metrics, queries, labels, or candidate data.
 
-Exact report replay is not external custody or a run seal. OpenScholar still does not promote evidence to an external workspace, bind the completed worksheet bytes into the scored run, enforce retention, compare time-separated reports, or automate provider enablement. Replay requires the separately retained evidence, packet, and judgment inputs, and the report remains engineering evidence rather than an enablement gate or provider-default decision.
+Exact report replay remains a report-only integrity check. The optional run-seal promotion below additionally retains the verified inputs and binds the exact completed worksheet bytes to the scored run. Neither mode enforces external authenticity, confidentiality, retention, or provider enablement.
+
+### Local comparative run-seal promotion
+
+The existing offline scoring runner can promote one fully verified comparative run into an operator-controlled filesystem root. Promotion mode requires these two variables together; supplying only one fails:
+
+```bash
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_WORKSHEET=/absolute/completed-worksheet.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_ROOT=/absolute/operator-controlled-root \
+RUN_PROVIDER_QUALITY_COMPARATIVE_SCORING=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_EVIDENCE=/absolute/evidence-dir \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_REVIEW_PACKET=/absolute/review-packet.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_JUDGMENTS=/absolute/judgments.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeOfflineScoringTests \
+  clean test
+```
+
+The run-seal root must already exist, be an absolute real directory, and resolve outside the repository. On a POSIX filesystem it must be owner-private and traversable (`0700`); for example, run `chmod 700 /absolute/operator-controlled-root` before promotion. The publisher also requires every created directory to remain `0700` and every created file to remain `0600`. It assumes that the root, its ancestors, and its files are controlled by the operator and cannot be replaced or modified concurrently.
+
+The publisher stages private create-new files beneath the root and requires an atomic move for publication; a filesystem without atomic-move support fails closed. It reopens the final directory and verifies its exact bytes and layout. The scoring runner then performs the full semantic replay: evidence verification and preflight, review-packet regeneration and exact verification, completed-worksheet compilation, exact canonical-judgment comparison, rescoring, exact score-report verification, and final run-seal verification. An existing deterministic run ID is accepted idempotently only when its complete bundle verifies exactly; it is never overwritten.
+
+The deterministic canonical v1 bundle has this fixed layout:
+
+```text
+<runId>/
+  run-seal.json
+  capture/<evidenceId>/
+    manifest.json
+    summary.json
+    blinded-candidates.json
+    provenance-map.json
+    reconciliation-trace.json
+  review/
+    review-packet.json
+    completed-worksheet.json
+    judgments.json
+  score/<reportId>/
+    manifest.json
+    query-scores.json
+    score-summary.json
+```
+
+The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-seal.json` is bounded to 65,536 bytes, and the complete bundle is bounded to 153,223,168 bytes. Existing component limits remain in force: 64 MiB for capture payloads plus a 64 KiB capture manifest, 72 MiB for the review packet, 1 MiB each for the completed worksheet and judgments, and 8 MiB for the complete score bundle.
+
+The deterministic canonical `provider-quality-comparative-run-seal-v1` document binds the exact completed worksheet bytes, canonical judgments, capture, review packet, scoring policy/query set, and exact score report through a versioned identity and sorted relative-path/size/SHA-256 inventory. A successful promotion logs only its mode, run-seal ID, run-seal SHA-256, and report ID—never paths, metrics, queries, labels, or candidate data. The independent reviewer must never receive this bundle because it contains hidden capture provenance and score material; the reviewer still receives only `review-packet.json` and the worksheet.
+
+This local SHA-256 seal provides integrity linkage, not authentication, a signature, a trusted timestamp, WORM storage, retention enforcement, access history, or confidentiality. Operators must provide the required encryption, access controls, immutable/versioned storage, signing, retention, and audit policy outside OpenScholar. Promotion adds no cloud integration, database, UI, MCP/REST surface, PDF handling, or standalone sealed-bundle replay mode.
 
 ## Optional local embeddings
 

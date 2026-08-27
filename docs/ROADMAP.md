@@ -16,6 +16,7 @@ The checked-in deployment stack is a hardened template, not evidence of a public
 ## 2. Broaden research coverage carefully
 
 - Keep Europe PMC default-off while the completed synthetic gate and checked-in comparative evaluator are followed by a clean reviewed raw-candidate capture, a disjoint independently authored holdout, and multiple time-separated live diagnostics for the intended audience.
+- Add standalone no-write verification for retained comparative run-seal bundles and select approved external controls for authenticity/signing, trusted timestamps, confidentiality, immutable or versioned retention, deletion, and access history. The implemented local SHA-256 run seal is an operator-only integrity bundle, not a substitute for those controls, and it must never be sent to the independent reviewer.
 - Evaluate audience-relevant institutional repositories through supported APIs.
 - Add providers only after documenting terms, attribution, quotas, failure isolation, and allowed metadata/document handling.
 - Measure provider-specific usefulness before enabling additional sources by default.

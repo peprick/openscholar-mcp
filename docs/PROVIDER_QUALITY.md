@@ -196,7 +196,49 @@ Generation publishes a private ignored report from a create-new staging director
 
 Replay is a local integrity check, not a hostile-filesystem isolation boundary. Use only an operator-controlled directory whose files and ancestors cannot be replaced or modified concurrently; the verifier rereads accepted bytes but cannot lock an entire path against an adversarial rename race. The success record deliberately omits the environment-supplied path and includes only bounded integrity handles.
 
-This boundary verifies a score-report bundle; it does not yet provide external promotion or custody, bind the completed worksheet bytes into a run seal, record retention or access-control history, compare time-separated runs, or make an enablement decision. Replay remains possible only while the separately governed evidence, immutable review packet, and judgment inputs are retained. Preserve the whole report directory and its bound inputs under an approved policy; OpenScholar does not copy or delete them automatically. A score report is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision, so maintainers must still review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
+The score-report boundary alone does not retain its separately governed evidence, immutable review packet, completed worksheet, and judgment inputs. The optional run-seal promotion below copies those exact verified bytes into one local integrity-linked bundle. It still does not authenticate an operator, enforce external custody or retention, compare time-separated runs, or make an enablement decision. A score report or run seal is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision, so maintainers must still review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
+
+## Local run-seal promotion
+
+The existing `EuropePmcComparativeOfflineScoringTests` runner has a local, file-only promotion mode. It is selected only when both of the following are supplied; either variable on its own is rejected:
+
+```bash
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_WORKSHEET=/absolute/completed-worksheet.json
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_ROOT=/absolute/operator-controlled-root
+```
+
+Add these variables to the existing scoring command and its existing evidence, reviewed-packet, judgment, revision, and optional retained-score-report inputs. When the retained-score-report variable is absent, the runner generates and verifies the score report first and promotes it in that same invocation, before a later Maven `clean` can remove it. There is no separate sealed-bundle replay mode.
+
+The run-seal root must already exist, be absolute, be a real non-symlink directory, and resolve outside the repository. The promoter does not create or change the policy of that parent. On POSIX filesystems the root must already grant all owner directory permissions and no group or other permissions—normally `chmod 700 /absolute/operator-controlled-root`. Published directories are `0700` and files are `0600`, and verification rejects a less-private POSIX tree. The workflow assumes an operator-controlled filesystem on which the root, ancestors, staging directory, and final directory cannot be replaced or modified concurrently.
+
+Under that assumption the promoter creates a private create-new staging directory and files, requires an atomic move to publish the final run directory, and fails without publication when the filesystem cannot provide that atomic boundary. It never replaces an existing run directory. A retry whose deterministic run ID already exists succeeds idempotently only after exact verification proves that the existing directory is the expected bundle; any mismatch fails.
+
+The canonical v1 bundle layout is exact:
+
+```text
+<runId>/
+  run-seal.json
+  capture/<evidenceId>/
+    manifest.json
+    summary.json
+    blinded-candidates.json
+    provenance-map.json
+    reconciliation-trace.json
+  review/
+    review-packet.json
+    completed-worksheet.json
+    judgments.json
+  score/<reportId>/
+    manifest.json
+    query-scores.json
+    score-summary.json
+```
+
+The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-seal.json` is bounded to 65,536 bytes, and the complete bundle is bounded to 153,223,168 bytes. Existing component limits still apply: the four capture payloads share 64 MiB and the capture manifest has 64 KiB; the review packet has 72 MiB; the completed worksheet and judgments have 1 MiB each; and all three score files together have 8 MiB.
+
+The canonical `provider-quality-comparative-run-seal-v1` document uses a versioned deterministic derivation domain and binds the repository revision and capture time; evidence, query-set, scoring-policy, review-packet, exact completed-worksheet, canonical-judgment, and score-report identities; and a sorted relative-path, byte-count, and SHA-256 inventory. Before promotion, the runner compiles the exact completed worksheet and requires its canonical judgment bytes to equal the supplied judgments. After the publisher atomically publishes and exactly verifies the final bundle, the runner performs the full semantic replay from the promoted bytes: strict capture verification and preflight, review-packet regeneration and exact comparison, worksheet compilation, exact judgment comparison and loading, rescoring to the same result, exact score-report verification, and final run-seal verification. Success is printed only after that replay and contains only the scoring mode, deterministic run-seal ID, run-seal SHA-256, and report ID; it contains no filesystem path, metric, query, label, or candidate value.
+
+The promoted bundle is operator-only and combines hidden provenance, completed labels, judgments, and scores. Never give it to the independent reviewer; that reviewer continues to receive only `review-packet.json` and the worksheet. The local seal is an integrity relationship, not proof of who created it: SHA-256 is not authentication, a signature, a trusted timestamp, WORM or immutable storage, retention enforcement, access-control history, or confidentiality. The approved external location must independently provide any required encryption, access controls, signing, versioning/object lock, retention, deletion, and audit history. Promotion adds no cloud service, database, Docker requirement, UI, REST/MCP endpoint, PDF handling, longitudinal comparison, reviewer-independence proof, or provider-enablement decision.
 
 ## Default-enablement evidence
 
