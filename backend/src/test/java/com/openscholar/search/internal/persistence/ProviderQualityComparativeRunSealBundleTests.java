@@ -12,6 +12,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
@@ -22,11 +23,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeRunSealBundle.Bindings;
 import com.openscholar.search.internal.persistence.ProviderQualityComparativeRunSealBundle.VerifiedRunSeal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class ProviderQualityComparativeRunSealBundleTests {
@@ -52,10 +56,21 @@ class ProviderQualityComparativeRunSealBundleTests {
 
 		VerifiedRunSeal published = ProviderQualityComparativeRunSealBundle.publishAndVerify(
 				OBJECT_MAPPER, root, fixture.bindings(), fixture.sources());
+		Map<String, byte[]> retainedBytes = snapshotTree(published.sourceDirectory());
+		Map<String, EntryMetadata> retainedMetadata = snapshotMetadata(
+				published.sourceDirectory());
 		BasicFileAttributes beforeRepublish = Files.readAttributes(
 				published.sourceDirectory(), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
 		VerifiedRunSeal verified = ProviderQualityComparativeRunSealBundle.verifyExact(
 				OBJECT_MAPPER, published.sourceDirectory(), fixture.bindings());
+		VerifiedRunSeal retained = ProviderQualityComparativeRunSealBundle.verifyRetained(
+				OBJECT_MAPPER, published.sourceDirectory());
+		VerifiedRunSeal retainedWithPrettyPrintingMapper =
+				ProviderQualityComparativeRunSealBundle.verifyRetained(
+						JsonMapper.builder()
+								.enable(SerializationFeature.INDENT_OUTPUT)
+								.build(),
+						published.sourceDirectory());
 		VerifiedRunSeal republished = ProviderQualityComparativeRunSealBundle.publishAndVerify(
 				OBJECT_MAPPER, root, fixture.bindings(), fixture.sources());
 		BasicFileAttributes afterRepublish = Files.readAttributes(
@@ -64,6 +79,8 @@ class ProviderQualityComparativeRunSealBundleTests {
 		assertThat(List.of(published.sealId(), published.sealSha256()))
 				.containsExactly(EXPECTED_SEAL_ID, EXPECTED_SEAL_SHA256);
 		assertThat(verified).isEqualTo(published);
+		assertThat(retained).isEqualTo(published);
+		assertThat(retainedWithPrettyPrintingMapper).isEqualTo(published);
 		assertThat(republished).isEqualTo(published);
 		assertThat(afterRepublish.fileKey()).isEqualTo(beforeRepublish.fileKey());
 		assertThat(published.sourceDirectory()).isEqualTo(root.resolve(EXPECTED_SEAL_ID));
@@ -82,8 +99,77 @@ class ProviderQualityComparativeRunSealBundleTests {
 		assertThat(relativeEntries(published.sourceDirectory()))
 				.isEqualTo(expectedEntries(fixture.bindings()));
 		assertThat(entries(root)).containsExactly(EXPECTED_SEAL_ID);
+		assertTreeSnapshot(retainedBytes, published.sourceDirectory());
+		assertThat(snapshotMetadata(published.sourceDirectory())).isEqualTo(retainedMetadata);
 		assertSourceSnapshot(sourceSnapshot, fixture.sources());
 		assertPrivateTreeWhenPosix(published.sourceDirectory());
+	}
+
+	@Test
+	void rejectsInvalidRetainedSealDeclarationsBeforeTrustingBindings() throws Exception {
+		Published missingRootField = published("retained-missing-root", BASE_WORKSHEET);
+		mutateSeal(missingRootField, seal -> seal.remove("protocolId"));
+		assertRetainedFailure(missingRootField.runDirectory(), "RUN_SEAL_SCHEMA_INVALID");
+
+		Published unknownRootField = published("retained-unknown-root", BASE_WORKSHEET);
+		mutateSeal(unknownRootField, seal -> seal.put("untrusted", true));
+		assertRetainedFailure(unknownRootField.runDirectory(), "RUN_SEAL_SCHEMA_INVALID");
+
+		Published wrongSchema = published("retained-wrong-schema", BASE_WORKSHEET);
+		mutateSeal(wrongSchema, seal -> seal.put("schemaVersion", 2));
+		assertRetainedFailure(wrongSchema.runDirectory(), "RUN_SEAL_SCHEMA_INVALID");
+
+		Published missingBinding = published("retained-missing-binding", BASE_WORKSHEET);
+		mutateSeal(missingBinding, seal -> ((ObjectNode) seal.get("bindings"))
+				.remove("querySetSha256"));
+		assertRetainedFailure(missingBinding.runDirectory(), "RUN_SEAL_BINDINGS_INVALID");
+
+		Published unsafeBinding = published("retained-unsafe-binding", BASE_WORKSHEET);
+		mutateSeal(unsafeBinding, seal -> ((ObjectNode) seal.get("bindings"))
+				.put("evidenceId", "../outside"));
+		assertRetainedFailure(unsafeBinding.runDirectory(), "RUN_SEAL_BINDINGS_INVALID");
+
+		Published inconsistentReport = published("retained-inconsistent-report", BASE_WORKSHEET);
+		mutateSeal(inconsistentReport, seal -> ((ObjectNode) seal.get("bindings"))
+				.put("evidenceManifestSha256", "9".repeat(64)));
+		assertRetainedFailure(inconsistentReport.runDirectory(), "RUN_SEAL_BINDINGS_INVALID");
+	}
+
+	@Test
+	void retainedVerificationNeverResolvesPathsFromTheUntrustedInventory() throws Exception {
+		Published published = published("retained-untrusted-inventory", BASE_WORKSHEET);
+		Path outsideSentinel = temporaryDirectory.resolve("outside-sentinel");
+		Files.writeString(outsideSentinel, "unchanged\n", StandardCharsets.UTF_8);
+		byte[] expectedSentinel = Files.readAllBytes(outsideSentinel);
+
+		mutateSeal(published, seal -> ((ObjectNode) seal.get("files").get(0))
+				.put("path", "../../outside-sentinel"));
+
+		assertRetainedFailure(
+				published.runDirectory(), "RUN_SEAL_NOT_CANONICAL_OR_EXPECTED");
+		assertThat(Files.readAllBytes(outsideSentinel)).isEqualTo(expectedSentinel);
+	}
+
+	@Test
+	void retainedVerificationRejectsWrongIdentityLinksAndPayloadTampering() throws Exception {
+		Published wrongIdentity = published("retained-wrong-identity", BASE_WORKSHEET);
+		String zeroId = ProviderQualityComparativeRunSealBundle.RUN_SEAL_ID_PREFIX
+				+ "0".repeat(64);
+		mutateSeal(wrongIdentity, seal -> seal.put("runSealId", zeroId));
+		assertRetainedFailure(wrongIdentity.runDirectory(), "RUN_SEAL_ID_INVALID");
+
+		Published linkedSeal = published("retained-linked-seal", BASE_WORKSHEET);
+		Path outsideSeal = temporaryDirectory.resolve("outside-run-seal.json");
+		Files.copy(linkedSeal.sealFile(), outsideSeal);
+		Files.delete(linkedSeal.sealFile());
+		Files.createSymbolicLink(linkedSeal.sealFile(), outsideSeal);
+		assertRetainedFailure(linkedSeal.runDirectory(), "RUN_SEAL_FILE_INVALID");
+
+		Published tampered = published("retained-tampered", BASE_WORKSHEET);
+		Path summary = tampered.runDirectory().resolve(
+				"capture/" + tampered.fixture().bindings().evidenceId() + "/summary.json");
+		Files.writeString(summary, "{\"artifact\":\"tampered\"}\n", StandardCharsets.UTF_8);
+		assertRetainedFailure(tampered.runDirectory(), "RUN_SEAL_ID_INVALID");
 	}
 
 	@Test
@@ -145,6 +231,7 @@ class ProviderQualityComparativeRunSealBundleTests {
 		Published malformed = published("seal-malformed", BASE_WORKSHEET);
 		Files.writeString(malformed.sealFile(), "{\n", StandardCharsets.UTF_8);
 		assertVerifyFailure(malformed, "RUN_SEAL_JSON_INVALID");
+		assertRetainedFailure(malformed.runDirectory(), "RUN_SEAL_JSON_INVALID");
 
 		Published duplicate = published("seal-duplicate", BASE_WORKSHEET);
 		String canonical = Files.readString(duplicate.sealFile());
@@ -154,6 +241,7 @@ class ProviderQualityComparativeRunSealBundleTests {
 		assertThat(duplicateJson).isNotEqualTo(canonical);
 		Files.writeString(duplicate.sealFile(), duplicateJson, StandardCharsets.UTF_8);
 		assertVerifyFailure(duplicate, "RUN_SEAL_JSON_INVALID");
+		assertRetainedFailure(duplicate.runDirectory(), "RUN_SEAL_JSON_INVALID");
 
 		Published trailing = published("seal-trailing", BASE_WORKSHEET);
 		Files.writeString(
@@ -161,6 +249,7 @@ class ProviderQualityComparativeRunSealBundleTests {
 				Files.readString(trailing.sealFile()) + "{}\n",
 				StandardCharsets.UTF_8);
 		assertVerifyFailure(trailing, "RUN_SEAL_JSON_INVALID");
+		assertRetainedFailure(trailing.runDirectory(), "RUN_SEAL_JSON_INVALID");
 
 		Published noncanonical = published("seal-noncanonical", BASE_WORKSHEET);
 		Files.writeString(
@@ -168,6 +257,8 @@ class ProviderQualityComparativeRunSealBundleTests {
 				" " + Files.readString(noncanonical.sealFile()),
 				StandardCharsets.UTF_8);
 		assertVerifyFailure(noncanonical, "RUN_SEAL_NOT_CANONICAL_OR_EXPECTED");
+		assertRetainedFailure(
+				noncanonical.runDirectory(), "RUN_SEAL_NOT_CANONICAL_OR_EXPECTED");
 
 		Published wrongEmbeddedId = published("seal-wrong-id", BASE_WORKSHEET);
 		String zeroId = ProviderQualityComparativeRunSealBundle.RUN_SEAL_ID_PREFIX
@@ -177,6 +268,7 @@ class ProviderQualityComparativeRunSealBundleTests {
 		assertThat(changed).isNotEqualTo(Files.readString(wrongEmbeddedId.sealFile()));
 		Files.writeString(wrongEmbeddedId.sealFile(), changed, StandardCharsets.UTF_8);
 		assertVerifyFailure(wrongEmbeddedId, "RUN_SEAL_NOT_CANONICAL_OR_EXPECTED");
+		assertRetainedFailure(wrongEmbeddedId.runDirectory(), "RUN_SEAL_ID_INVALID");
 	}
 
 	@Test
@@ -437,6 +529,26 @@ class ProviderQualityComparativeRunSealBundleTests {
 		return result;
 	}
 
+	private static Map<String, EntryMetadata> snapshotMetadata(Path directory)
+			throws IOException {
+		Map<String, EntryMetadata> result = new TreeMap<>();
+		try (var paths = Files.walk(directory)) {
+			for (Path path : paths.toList()) {
+				BasicFileAttributes attributes = Files.readAttributes(
+						path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+				String relative = path.equals(directory)
+						? "."
+						: posixPath(directory.relativize(path));
+				result.put(relative, new EntryMetadata(
+						attributes.isDirectory(),
+						attributes.size(),
+						attributes.fileKey(),
+						attributes.lastModifiedTime()));
+			}
+		}
+		return result;
+	}
+
 	private static void assertSourceSnapshot(
 			Map<String, byte[]> expected, Map<String, Path> sources) throws IOException {
 		assertThat(sources.keySet()).containsExactlyInAnyOrderElementsOf(expected.keySet());
@@ -493,6 +605,21 @@ class ProviderQualityComparativeRunSealBundleTests {
 				.hasMessage(diagnostic);
 	}
 
+	private static void assertRetainedFailure(Path runDirectory, String diagnostic) {
+		assertThatThrownBy(() -> ProviderQualityComparativeRunSealBundle.verifyRetained(
+				OBJECT_MAPPER, runDirectory))
+				.isInstanceOf(IOException.class)
+				.hasMessage(diagnostic);
+	}
+
+	private static void mutateSeal(Published published, Consumer<ObjectNode> mutation)
+			throws IOException {
+		ObjectNode seal = (ObjectNode) OBJECT_MAPPER.readTree(
+				Files.readAllBytes(published.sealFile()));
+		mutation.accept(seal);
+		Files.write(published.sealFile(), OBJECT_MAPPER.writeValueAsBytes(seal));
+	}
+
 	private static void assertPublishFailure(
 			Path root,
 			Bindings bindings,
@@ -525,6 +652,13 @@ class ProviderQualityComparativeRunSealBundleTests {
 	}
 
 	private record Fixture(Bindings bindings, Map<String, Path> sources) {
+	}
+
+	private record EntryMetadata(
+			boolean directory,
+			long size,
+			Object fileKey,
+			FileTime lastModifiedTime) {
 	}
 
 	private record Published(Fixture fixture, Path root, VerifiedRunSeal seal) {

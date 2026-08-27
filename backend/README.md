@@ -238,7 +238,33 @@ The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-se
 
 The deterministic canonical `provider-quality-comparative-run-seal-v1` document binds the exact completed worksheet bytes, canonical judgments, capture, review packet, scoring policy/query set, and exact score report through a versioned identity and sorted relative-path/size/SHA-256 inventory. A successful promotion logs only its mode, run-seal ID, run-seal SHA-256, and report ID—never paths, metrics, queries, labels, or candidate data. The independent reviewer must never receive this bundle because it contains hidden capture provenance and score material; the reviewer still receives only `review-packet.json` and the worksheet.
 
-This local SHA-256 seal provides integrity linkage, not authentication, a signature, a trusted timestamp, WORM storage, retention enforcement, access history, or confidentiality. Operators must provide the required encryption, access controls, immutable/versioned storage, signing, retention, and audit policy outside OpenScholar. Promotion adds no cloud integration, database, UI, MCP/REST surface, PDF handling, or standalone sealed-bundle replay mode.
+This local SHA-256 seal provides integrity linkage, not authentication, a signature, a trusted timestamp, WORM storage, retention enforcement, access history, or confidentiality. Operators must provide the required encryption, access controls, immutable/versioned storage, signing, retention, and audit policy outside OpenScholar. Promotion adds no cloud integration, database, UI, MCP/REST surface, or PDF handling.
+
+### Verify a retained comparative run seal
+
+Use the standalone verifier to check one retained run-seal directory without publishing or changing provider-quality artifacts:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_VERIFY=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_DIRECTORY=/absolute/external/provider-quality-comparative-run-seal-v1-... \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeRunSealVerificationTests \
+  clean test
+```
+
+`OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_DIRECTORY` must name one existing absolute real, non-symlink run directory that resolves outside the repository. The verifier requires the checked-out worktree to be clean, requires `OPENSCHOLAR_PROVIDER_QUALITY_REVISION` to equal committed `HEAD`, and requires the seal's capture revision to equal that exact revision. Run it only against a local operator-controlled directory whose files and ancestors cannot be replaced or mutated concurrently.
+
+The verifier first enforces the exact canonical bundle, layout, permissions, limits, identities, sizes, and SHA-256 inventory. It then performs the complete semantic replay from the retained bytes: strict capture verification and preflight; frozen query-set and scoring-policy loading from the exact revision; review-packet regeneration and exact verification; completed-worksheet compilation; exact canonical-judgment comparison and loading; rescoring; exact score-report verification; recomputation of every seal binding; and final seal verification.
+
+The verifier itself writes no provider-quality artifact or bundle bytes and never modifies the retained directory. Maven `clean test` may still create ordinary ignored build and test output below `backend/target/`. The path has no Spring context, Docker, network, PDF, UI, REST, or MCP dependency. On success it prints only this bounded record shape—no path, revision, metric, query, label, or candidate data:
+
+```text
+provider-quality-comparative-run-seal-v1 mode=verified run-seal-id=<id> run-seal-sha256=<sha256> report-id=<id>
+```
+
+This is local SHA-256 integrity and semantic-replay evidence under the stated filesystem assumption. It provides no authentication, signature, trusted timestamp, WORM or immutable-storage guarantee, confidentiality, retention or deletion enforcement, access history, or audit evidence. Keep those controls external, and never send the run-seal bundle to the independent reviewer; that reviewer receives only `review-packet.json` and the worksheet.
 
 ## Optional local embeddings
 

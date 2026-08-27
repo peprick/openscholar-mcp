@@ -207,7 +207,7 @@ OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_WORKSHEET=/absolute/completed-worksheet
 OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_ROOT=/absolute/operator-controlled-root
 ```
 
-Add these variables to the existing scoring command and its existing evidence, reviewed-packet, judgment, revision, and optional retained-score-report inputs. When the retained-score-report variable is absent, the runner generates and verifies the score report first and promotes it in that same invocation, before a later Maven `clean` can remove it. There is no separate sealed-bundle replay mode.
+Add these variables to the existing scoring command and its existing evidence, reviewed-packet, judgment, revision, and optional retained-score-report inputs. When the retained-score-report variable is absent, the runner generates and verifies the score report first and promotes it in that same invocation, before a later Maven `clean` can remove it.
 
 The run-seal root must already exist, be absolute, be a real non-symlink directory, and resolve outside the repository. The promoter does not create or change the policy of that parent. On POSIX filesystems the root must already grant all owner directory permissions and no group or other permissions—normally `chmod 700 /absolute/operator-controlled-root`. Published directories are `0700` and files are `0600`, and verification rejects a less-private POSIX tree. The workflow assumes an operator-controlled filesystem on which the root, ancestors, staging directory, and final directory cannot be replaced or modified concurrently.
 
@@ -239,6 +239,32 @@ The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-se
 The canonical `provider-quality-comparative-run-seal-v1` document uses a versioned deterministic derivation domain and binds the repository revision and capture time; evidence, query-set, scoring-policy, review-packet, exact completed-worksheet, canonical-judgment, and score-report identities; and a sorted relative-path, byte-count, and SHA-256 inventory. Before promotion, the runner compiles the exact completed worksheet and requires its canonical judgment bytes to equal the supplied judgments. After the publisher atomically publishes and exactly verifies the final bundle, the runner performs the full semantic replay from the promoted bytes: strict capture verification and preflight, review-packet regeneration and exact comparison, worksheet compilation, exact judgment comparison and loading, rescoring to the same result, exact score-report verification, and final run-seal verification. Success is printed only after that replay and contains only the scoring mode, deterministic run-seal ID, run-seal SHA-256, and report ID; it contains no filesystem path, metric, query, label, or candidate value.
 
 The promoted bundle is operator-only and combines hidden provenance, completed labels, judgments, and scores. Never give it to the independent reviewer; that reviewer continues to receive only `review-packet.json` and the worksheet. The local seal is an integrity relationship, not proof of who created it: SHA-256 is not authentication, a signature, a trusted timestamp, WORM or immutable storage, retention enforcement, access-control history, or confidentiality. The approved external location must independently provide any required encryption, access controls, signing, versioning/object lock, retention, deletion, and audit history. Promotion adds no cloud service, database, Docker requirement, UI, REST/MCP endpoint, PDF handling, longitudinal comparison, reviewer-independence proof, or provider-enablement decision.
+
+## Standalone retained run-seal verification
+
+The standalone verifier reopens one promoted run from an operator-controlled external directory and performs a no-provider-quality-write exact and semantic replay:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_VERIFY=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_DIRECTORY=/absolute/external/provider-quality-comparative-run-seal-v1-... \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeRunSealVerificationTests \
+  clean test
+```
+
+Exactly one retained run directory is supplied through `OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_RUN_SEAL_DIRECTORY`. It must be an existing absolute real, non-symlink directory that resolves outside the repository; the exact bundle layout and private-permission contract still apply. The checkout must be clean, `OPENSCHOLAR_PROVIDER_QUALITY_REVISION` must equal committed `HEAD`, and the capture revision bound by the run seal must equal that revision. Verification assumes that the directory, its files, and its ancestors are operator-controlled and cannot be replaced or mutated concurrently.
+
+The runner first verifies the exact canonical bundle, including its layout, limits, identities, sizes, SHA-256 inventory, and final seal. It then loads the frozen query set and scoring policy from the checked-out capture revision and repeats strict capture verification and preflight, review-packet regeneration and exact verification, completed-worksheet compilation, exact canonical-judgment comparison and loading, rescoring, exact score-report verification, recomputation of all seal bindings, and final run-seal verification.
+
+The verifier itself creates no provider-quality artifact or bundle bytes and does not alter the retained directory. Its required Maven `clean test` invocation can create normal ignored build and test output under `backend/target/`. It uses no Spring context, Docker, network, PDF, UI, REST, or MCP path. Its only success output has this shape:
+
+```text
+provider-quality-comparative-run-seal-v1 mode=verified run-seal-id=<id> run-seal-sha256=<sha256> report-id=<id>
+```
+
+The record contains only the protocol, verification mode, run-seal ID, run-seal SHA-256, and report ID. It contains no path, revision, metrics, queries, labels, or candidate material. This result proves only local integrity and semantic replay under the stated filesystem assumption; it is not authentication, a signature, a trusted timestamp, WORM or immutable storage, confidentiality, retention or deletion enforcement, access history, or audit evidence. Never send the retained bundle to the independent reviewer, because it contains hidden provenance, completed labels, judgments, and scores.
 
 ## Default-enablement evidence
 

@@ -164,8 +164,11 @@ class EuropePmcComparativeOfflineScoringTests {
 							worksheet,
 							judgmentPacket,
 							reportDirectory));
-			verifySealedSemantics(
-					objectMapper, runSeal, result, frozenQuerySet, policy);
+			ScoringResult replayed = verifySealedSemantics(
+					objectMapper, runSeal, frozenQuerySet, policy);
+			assertThat(replayed)
+					.as("the promoted bytes must reproduce the exact scored result")
+					.isEqualTo(result);
 		}
 
 		if (runSeal == null) {
@@ -227,10 +230,9 @@ class EuropePmcComparativeOfflineScoringTests {
 		return Map.copyOf(sources);
 	}
 
-	private static void verifySealedSemantics(
+	static ScoringResult verifySealedSemantics(
 			ObjectMapper objectMapper,
 			ProviderQualityComparativeRunSealBundle.VerifiedRunSeal sealed,
-			ScoringResult expectedResult,
 			ProviderQualityLiveQuerySet.BoundQuerySet frozenQuerySet,
 			BoundPolicy policy) throws Exception {
 		ProviderQualityComparativeRunSealBundle.Bindings bindings = sealed.bindings();
@@ -259,13 +261,30 @@ class EuropePmcComparativeOfflineScoringTests {
 
 		ScoringResult result = ProviderQualityComparativeScorer.score(
 				evidence, judgments, policy, generated.reviewPacketSha256());
-		assertThat(result)
-				.as("the promoted bytes must reproduce the exact scored result")
-				.isEqualTo(expectedResult);
-		ProviderQualityComparativeScoreReportBundle.verifyExact(
-				objectMapper, scoreDirectory, result);
+		ProviderQualityComparativeScoreReportBundle verifiedReport =
+				ProviderQualityComparativeScoreReportBundle.verifyExact(
+						objectMapper, scoreDirectory, result);
+		ProviderQualityComparativeRunSealBundle.Bindings replayedBindings =
+				new ProviderQualityComparativeRunSealBundle.Bindings(
+						evidence.evidenceId(),
+						evidence.manifestSha256(),
+						result.captureRepositoryRevision(),
+						result.captureMeasuredAt(),
+						frozenQuerySet.querySet().querySetId(),
+						frozenQuerySet.sha256(),
+						policy.policy().policyId(),
+						policy.sha256(),
+						generated.reviewPacketSha256(),
+						compiled.worksheetSha256(),
+						judgments.sha256(),
+						verifiedReport.reportId(),
+						verifiedReport.manifestSha256());
+		if (!replayedBindings.equals(bindings)) {
+			throw new IllegalStateException("RUN_SEAL_SEMANTIC_BINDING_MISMATCH");
+		}
 		ProviderQualityComparativeRunSealBundle.verifyExact(
 				objectMapper, root, bindings);
+		return result;
 	}
 
 	private static Path optionalAbsolutePath(String environmentName) {

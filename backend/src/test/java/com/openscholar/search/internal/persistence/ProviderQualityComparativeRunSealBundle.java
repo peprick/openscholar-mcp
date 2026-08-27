@@ -35,6 +35,7 @@ import java.util.regex.Pattern;
 
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.SerializationFeature;
@@ -75,6 +76,29 @@ final class ProviderQualityComparativeRunSealBundle {
 	private static final Pattern REPORT_ID = Pattern.compile(
 			'^' + Pattern.quote(ProviderQualityComparativeScorer.REPORT_ID_PREFIX)
 					+ "[0-9a-f]{64}$");
+	private static final Pattern RUN_SEAL_ID = Pattern.compile(
+			'^' + Pattern.quote(RUN_SEAL_ID_PREFIX) + "[0-9a-f]{64}$");
+	private static final Set<String> SEAL_FIELDS = Set.of(
+			"schemaVersion",
+			"protocolId",
+			"runSealId",
+			"bindings",
+			"payloadBytes",
+			"files");
+	private static final Set<String> BINDING_FIELDS = Set.of(
+			"evidenceId",
+			"evidenceManifestSha256",
+			"captureRepositoryRevision",
+			"captureMeasuredAt",
+			"querySetId",
+			"querySetSha256",
+			"scoringPolicyId",
+			"scoringPolicySha256",
+			"reviewPacketSha256",
+			"completedWorksheetSha256",
+			"judgmentsSha256",
+			"reportId",
+			"reportManifestSha256");
 	private static final Set<PosixFilePermission> DIRECTORY_PERMISSIONS =
 			PosixFilePermissions.fromString("rwx------");
 	private static final Set<PosixFilePermission> FILE_PERMISSIONS =
@@ -177,6 +201,39 @@ final class ProviderQualityComparativeRunSealBundle {
 				true);
 	}
 
+	static VerifiedRunSeal verifyRetained(ObjectMapper objectMapper, Path runDirectory)
+			throws IOException {
+		Objects.requireNonNull(objectMapper, "objectMapper");
+		Path directory;
+		try {
+			directory = Objects.requireNonNull(runDirectory, "runDirectory")
+					.toAbsolutePath().normalize();
+		}
+		catch (RuntimeException exception) {
+			throw failure("RUN_SEAL_INPUT_INVALID");
+		}
+		if (Files.isSymbolicLink(directory)
+				|| !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+			throw failure("RUN_SEAL_DIRECTORY_INVALID");
+		}
+		requirePrivatePermissions(directory, true);
+		Path directoryName = directory.getFileName();
+		if (directoryName == null || !RUN_SEAL_ID.matcher(directoryName.toString()).matches()) {
+			throw failure("RUN_SEAL_ID_INVALID");
+		}
+		byte[] sealBytes = readBootstrapSeal(
+				directory.resolve(SEAL_FILENAME),
+				MAXIMUM_SEAL_BYTES);
+		JsonNode seal = parseStrict(objectMapper, sealBytes);
+		Bindings bindings = parseRetainedBindings(seal);
+		String claimedSealId = requiredText(seal.get("runSealId"), "RUN_SEAL_SCHEMA_INVALID");
+		if (!RUN_SEAL_ID.matcher(claimedSealId).matches()
+				|| !sameAscii(directoryName.toString(), claimedSealId)) {
+			throw failure("RUN_SEAL_ID_INVALID");
+		}
+		return verifyExact(objectMapper, directory, bindings);
+	}
+
 	static List<String> expectedPayloadPaths(Bindings bindings) {
 		Bindings expected = Objects.requireNonNull(bindings, "bindings");
 		List<String> paths = new ArrayList<>(List.of(
@@ -257,7 +314,8 @@ final class ProviderQualityComparativeRunSealBundle {
 	private static ObjectWriter canonicalWriter(ObjectMapper objectMapper) {
 		return Objects.requireNonNull(objectMapper, "objectMapper")
 				.writer()
-				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+				.without(SerializationFeature.INDENT_OUTPUT);
 	}
 
 	private static Map<String, Path> validateSources(
@@ -682,18 +740,102 @@ final class ProviderQualityComparativeRunSealBundle {
 		return terminated;
 	}
 
-	private static void parseStrict(ObjectMapper objectMapper, byte[] bytes) throws IOException {
+	private static JsonNode parseStrict(ObjectMapper objectMapper, byte[] bytes)
+			throws IOException {
 		try {
-			objectMapper.reader()
+			JsonNode root = objectMapper.reader()
 					.with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 					.with(
 							DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY,
 							DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
 					.readTree(bytes);
+			if (root == null) {
+				throw failure("RUN_SEAL_JSON_INVALID");
+			}
+			return root;
+		}
+		catch (VerificationException exception) {
+			throw exception;
 		}
 		catch (RuntimeException exception) {
 			throw failure("RUN_SEAL_JSON_INVALID");
 		}
+	}
+
+	private static Bindings parseRetainedBindings(JsonNode seal) throws IOException {
+		if (!hasExactFields(seal, SEAL_FIELDS)
+				|| seal.get("schemaVersion") == null
+				|| !seal.get("schemaVersion").isInt()
+				|| seal.get("schemaVersion").asInt() != 1
+				|| seal.get("protocolId") == null
+				|| !seal.get("protocolId").isString()
+				|| !PROTOCOL_ID.equals(seal.get("protocolId").asString())
+				|| seal.get("payloadBytes") == null
+				|| !seal.get("payloadBytes").isIntegralNumber()
+				|| !seal.get("payloadBytes").canConvertToLong()
+				|| seal.get("payloadBytes").longValue() < 1
+				|| seal.get("payloadBytes").longValue() > MAXIMUM_PAYLOAD_BYTES
+				|| seal.get("files") == null
+				|| !seal.get("files").isArray()
+				|| seal.get("files").size() != 11) {
+			throw failure("RUN_SEAL_SCHEMA_INVALID");
+		}
+		JsonNode bindingNode = seal.get("bindings");
+		if (!hasExactFields(bindingNode, BINDING_FIELDS)) {
+			throw failure("RUN_SEAL_BINDINGS_INVALID");
+		}
+		try {
+			return new Bindings(
+					requiredText(bindingNode.get("evidenceId"), "RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("evidenceManifestSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("captureRepositoryRevision"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("captureMeasuredAt"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(bindingNode.get("querySetId"), "RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("querySetSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("scoringPolicyId"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("scoringPolicySha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("reviewPacketSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("completedWorksheetSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("judgmentsSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(bindingNode.get("reportId"), "RUN_SEAL_BINDINGS_INVALID"),
+					requiredText(
+							bindingNode.get("reportManifestSha256"),
+							"RUN_SEAL_BINDINGS_INVALID"));
+		}
+		catch (IllegalArgumentException exception) {
+			throw failure("RUN_SEAL_BINDINGS_INVALID");
+		}
+	}
+
+	private static boolean hasExactFields(JsonNode node, Set<String> expected) {
+		return node != null
+				&& node.isObject()
+				&& new LinkedHashSet<>(node.propertyNames()).equals(expected);
+	}
+
+	private static String requiredText(JsonNode node, String diagnostic) throws IOException {
+		if (node == null || !node.isString()) {
+			throw failure(diagnostic);
+		}
+		return node.asString();
 	}
 
 	private static byte[] readBytesBounded(Path path, long maximum, String diagnostic)
@@ -716,6 +858,28 @@ final class ProviderQualityComparativeRunSealBundle {
 		catch (IOException | SecurityException exception) {
 			throw failure("RUN_SEAL_FILE_UNREADABLE");
 		}
+	}
+
+	private static byte[] readBootstrapSeal(Path path, long maximum) throws IOException {
+		if (Files.isSymbolicLink(path)
+				|| !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+			throw failure("RUN_SEAL_FILE_INVALID");
+		}
+		requirePrivatePermissions(path, false);
+		BasicFileAttributes before = readAttributes(path);
+		if (!before.isRegularFile() || before.size() < 1 || before.size() > maximum) {
+			throw failure(before.size() > maximum
+					? "RUN_SEAL_TOO_LARGE"
+					: "RUN_SEAL_FILE_SIZE_INVALID");
+		}
+		byte[] bytes = readBytesBounded(path, maximum, "RUN_SEAL_TOO_LARGE");
+		BasicFileAttributes after = readAttributes(path);
+		if (bytes.length != before.size()
+				|| bytes.length != after.size()
+				|| !Objects.equals(before.fileKey(), after.fileKey())) {
+			throw failure("RUN_SEAL_FILE_CHANGED");
+		}
+		return bytes;
 	}
 
 	private static Map<String, Long> fileSizes(List<SealedFile> files) {
