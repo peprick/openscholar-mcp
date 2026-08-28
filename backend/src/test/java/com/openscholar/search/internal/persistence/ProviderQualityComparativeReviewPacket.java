@@ -213,7 +213,8 @@ final class ProviderQualityComparativeReviewPacket {
 	static byte[] canonicalBytes(ObjectMapper objectMapper, Object value) throws IOException {
 		ObjectWriter writer = Objects.requireNonNull(objectMapper, "objectMapper")
 				.writer()
-				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+				.without(SerializationFeature.INDENT_OUTPUT);
 		byte[] json = writer.writeValueAsBytes(Objects.requireNonNull(value, "value"));
 		if (json.length > 0 && json[json.length - 1] == '\n') {
 			return json;

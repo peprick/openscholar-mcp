@@ -15,7 +15,7 @@ The checked-in deployment stack is a hardened template, not evidence of a public
 
 ## 2. Broaden research coverage carefully
 
-- Keep Europe PMC default-off while the completed synthetic gate and checked-in comparative evaluator are followed by a clean reviewed raw-candidate capture, a disjoint independently authored holdout, and multiple time-separated live diagnostics for the intended audience.
+- Keep Europe PMC default-off while the completed synthetic gate, checked-in comparative evaluator, retained-run semantic verifier, private longitudinal comparison, and retained longitudinal-report verifier are used with a clean reviewed raw-candidate capture, a disjoint independently authored holdout, and actual multiple time-separated live diagnostics for the intended audience. The workflow exists; the repository intentionally contains no real retained labels, holdout, multi-capture cohort, or enablement evidence.
 - Select and validate approved external controls for authenticity/signing, trusted timestamps, confidentiality, immutable or versioned retention, deletion, access history, and audit evidence for operator-only comparative run-seal bundles. The implemented standalone verifier proves local SHA-256 integrity and semantic replay under an operator-controlled, non-concurrently-mutated filesystem assumption; it is not a substitute for those external controls, and the bundle must never be sent to the independent reviewer.
 - Evaluate audience-relevant institutional repositories through supported APIs.
 - Add providers only after documenting terms, attribution, quotas, failure isolation, and allowed metadata/document handling.

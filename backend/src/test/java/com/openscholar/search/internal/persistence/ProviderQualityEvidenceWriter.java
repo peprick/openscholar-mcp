@@ -48,7 +48,8 @@ final class ProviderQualityEvidenceWriter {
 			ObjectMapper objectMapper, Path outputRoot, long maximumTotalBytes) {
 		this.canonicalWriter = Objects.requireNonNull(objectMapper, "objectMapper")
 				.writer()
-				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+				.with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+				.without(SerializationFeature.INDENT_OUTPUT);
 		this.outputRoot = Objects.requireNonNull(outputRoot, "outputRoot")
 				.toAbsolutePath().normalize();
 		if (!this.outputRoot.endsWith(Path.of("backend", "target", "provider-quality"))) {

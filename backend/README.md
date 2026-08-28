@@ -238,7 +238,7 @@ The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-se
 
 The deterministic canonical `provider-quality-comparative-run-seal-v1` document binds the exact completed worksheet bytes, canonical judgments, capture, review packet, scoring policy/query set, and exact score report through a versioned identity and sorted relative-path/size/SHA-256 inventory. A successful promotion logs only its mode, run-seal ID, run-seal SHA-256, and report ID—never paths, metrics, queries, labels, or candidate data. The independent reviewer must never receive this bundle because it contains hidden capture provenance and score material; the reviewer still receives only `review-packet.json` and the worksheet.
 
-This local SHA-256 seal provides integrity linkage, not authentication, a signature, a trusted timestamp, WORM storage, retention enforcement, access history, or confidentiality. Operators must provide the required encryption, access controls, immutable/versioned storage, signing, retention, and audit policy outside OpenScholar. Promotion adds no cloud integration, database, UI, MCP/REST surface, or PDF handling.
+This local SHA-256 seal provides integrity linkage, not authentication, a signature, a trusted timestamp, WORM storage, retention enforcement, access history, or confidentiality. Operators must provide the required encryption, access controls, immutable/versioned storage, signing, retention, and audit policy outside OpenScholar. Promotion itself adds no cloud integration, database, UI, MCP/REST surface, PDF handling, or longitudinal conclusion.
 
 ### Verify a retained comparative run seal
 
@@ -265,6 +265,70 @@ provider-quality-comparative-run-seal-v1 mode=verified run-seal-id=<id> run-seal
 ```
 
 This is local SHA-256 integrity and semantic-replay evidence under the stated filesystem assumption. It provides no authentication, signature, trusted timestamp, WORM or immutable-storage guarantee, confidentiality, retention or deletion enforcement, access history, or audit evidence. Keep those controls external, and never send the run-seal bundle to the independent reviewer; that reviewer receives only `review-packet.json` and the worksheet.
+
+### Compare retained runs longitudinally
+
+The separate local comparator accepts a strict private JSON selection of two through sixteen retained run-seal directories. Every run must use the same exact clean repository revision, report schema, frozen query-set identity and ordered keys, scoring-policy identity, query count, and scenarios; run-seal, evidence, report, and canonical capture-time identities must be distinct. The selection file must be an absolute real non-symlink file outside the repository, bounded to 16 KiB, and `0600` on POSIX filesystems. Every selected path must be an absolute real non-symlink directory outside the repository, with no resolved duplicates or ancestor overlap:
+
+```json
+{
+  "schemaVersion": 1,
+  "protocolId": "provider-quality-comparative-longitudinal-selection-v1",
+  "runSealDirectories": [
+    "/absolute/operator-controlled/run-seal-a",
+    "/absolute/operator-controlled/run-seal-b"
+  ]
+}
+```
+
+Run the file-only workflow from the exact revision bound by all selected seals:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION=/absolute/private-selection.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLongitudinalComparisonTests \
+  clean test
+```
+
+The runner exactly verifies and semantically replays every seal before it writes a report. It sorts by the content-bound canonical capture time, derives a deterministic path-independent identity from the ordered seal IDs and SHA-256 values, and publishes exactly `manifest.json` plus `longitudinal-report.json` below ignored `backend/target/provider-quality/<comparisonId>/`. The private bundle is capped at 8 MiB and uses `0700`/`0600` permissions on POSIX filesystems. `clean` deletes it.
+
+The report keeps exact run snapshots and adjacent aggregate and per-query changes with their counts and undefined values. It never averages captures, assigns improvement/regression or significance, applies a pass/fail gate, or changes a provider default. Its metrics remain operator-only and are never exposed through the UI, REST, MCP, database, Spring application, Docker, or normal logs. Success prints only:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=generated comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+The comparator uses no Spring context, Docker, network, provider call, PDF/document path, or runtime endpoint. The declared capture times are content-bound but are not trusted timestamps; authenticity, confidential retention, deletion, and access/audit controls remain external. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for the full boundary.
+
+### Verify a retained longitudinal report
+
+After moving an approved longitudinal report to governed external storage, verify it without generating or changing any provider-quality artifact:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_VERIFY=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION=/absolute/private-selection.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_DIRECTORY=/absolute/external/provider-quality-comparative-longitudinal-v1-... \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLongitudinalReportVerificationTests \
+  clean test
+```
+
+Both inputs must exist outside the repository before the command starts because Maven `clean` removes the original ignored report. The selection keeps its strict private-file contract. The report input must be an existing absolute real, non-symlink directory outside the repository, retain the comparison-ID directory name, contain exactly `manifest.json` and `longitudinal-report.json`, and keep the report bundle's private permissions. Use only operator-controlled paths whose files and ancestors cannot be replaced or mutated concurrently.
+
+The verifier checks the clean exact revision, then exactly verifies and fully semantically replays every selected run seal. It reconstructs the canonical comparison from those replayed results and only then verifies the retained report's exact layout, identity, canonical bytes, sizes, manifest, and digests against that reconstruction. The report never supplies its own expected cohort or identity.
+
+The verifier itself writes no provider-quality artifact or bundle bytes and does not modify the selection, run seals, or report. Maven may still create ordinary ignored build/test output below `backend/target/`. Success prints no path, revision, capture time, run identity, query, metric, label, or candidate data:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=verified comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+This remains local deterministic integrity and semantic-replay evidence—not authentication, a signature, trusted time, immutable retention, confidentiality, deletion enforcement, access history, audit evidence, statistical interpretation, or a provider-enablement decision.
 
 ## Optional local embeddings
 

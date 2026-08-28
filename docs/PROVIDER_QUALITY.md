@@ -4,7 +4,7 @@
 
 Provider-quality evaluation is engineering evidence for deciding whether an optional discovery adapter improves OpenScholar's search mechanics and coverage. It is not a product analytics feature: no quality scores, evaluation controls, or operational metrics are shown in the reader UI or exposed through REST or MCP.
 
-Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has five deliberately separate evidence layers:
+Europe PMC remains disabled by default. Passing an evaluation does not change `EUROPE_PMC_ENABLED`, authorize new routes, establish article rights, or make the adapter a default source. The evaluation has six deliberately separate evidence layers:
 
 | Layer | Execution | What it can show | What it cannot show |
 |---|---|---|---|
@@ -13,6 +13,7 @@ Europe PMC remains disabled by default. Passing an evaluation does not change `E
 | Comparative raw-candidate capture | Explicit operator opt-in in an isolated Testcontainers evaluation context | One live metadata fetch per provider/query, identical-result replay through isolated and fused production persistence, and every raw-to-canonical decision before page truncation | Ground-truth relevance or identity, representative audience usefulness, document access, reuse rights, durable quality, or permission to enable the provider by default |
 | Blinded review packet and worksheet | Explicit local projection from a verified comparative capture, followed by independent human review and strict compilation | A provenance-free, digest-bound labeling surface and a canonical judgment packet for the scorer | Independent judgments when the reviewer saw hidden evidence, a disjoint holdout by itself, any quality score, or permission to enable the provider by default |
 | Offline comparative scoring | Explicit operator opt-in over a verified capture and independently supplied judgments | Frozen cluster-aware ranking, reconciliation, expected-field, and provider-unique-coverage measurements bound to exact input digests | Representative judgments when the packet is not a disjoint holdout, durable quality, a product metric, or permission to enable the provider by default |
+| Longitudinal retained-run comparison | Explicit local opt-in over two through sixteen fully verified and semantically replayed compatible run seals | Exact chronological snapshots and adjacent changes without averaging away reversals or undefined values | A trusted timestamp, statistical trend, improvement/regression label, pass/fail result, reviewer-independence proof, or permission to enable the provider by default |
 
 ## Deterministic pull-request gate
 
@@ -196,7 +197,7 @@ Generation publishes a private ignored report from a create-new staging director
 
 Replay is a local integrity check, not a hostile-filesystem isolation boundary. Use only an operator-controlled directory whose files and ancestors cannot be replaced or modified concurrently; the verifier rereads accepted bytes but cannot lock an entire path against an adversarial rename race. The success record deliberately omits the environment-supplied path and includes only bounded integrity handles.
 
-The score-report boundary alone does not retain its separately governed evidence, immutable review packet, completed worksheet, and judgment inputs. The optional run-seal promotion below copies those exact verified bytes into one local integrity-linked bundle. It still does not authenticate an operator, enforce external custody or retention, compare time-separated runs, or make an enablement decision. A score report or run seal is neither a reader-facing metric nor an automatic pass/fail or default-enablement decision, so maintainers must still review it alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
+The score-report boundary alone does not retain its separately governed evidence, immutable review packet, completed worksheet, and judgment inputs. The optional run-seal promotion below copies those exact verified bytes into one local integrity-linked bundle. One score report or run seal still does not authenticate an operator, enforce external custody or retention, compare time-separated runs by itself, or make an enablement decision. The separate longitudinal workflow can compare a compatible cohort, but none of these artifacts is a reader-facing metric or an automatic pass/fail or default-enablement decision. Maintainers must still review the evidence alongside the independent-holdout, time-separation, provider-policy, privacy, and legal requirements below.
 
 ## Local run-seal promotion
 
@@ -238,7 +239,7 @@ The 11 retained payload files are bounded to 153,157,632 bytes in total, `run-se
 
 The canonical `provider-quality-comparative-run-seal-v1` document uses a versioned deterministic derivation domain and binds the repository revision and capture time; evidence, query-set, scoring-policy, review-packet, exact completed-worksheet, canonical-judgment, and score-report identities; and a sorted relative-path, byte-count, and SHA-256 inventory. Before promotion, the runner compiles the exact completed worksheet and requires its canonical judgment bytes to equal the supplied judgments. After the publisher atomically publishes and exactly verifies the final bundle, the runner performs the full semantic replay from the promoted bytes: strict capture verification and preflight, review-packet regeneration and exact comparison, worksheet compilation, exact judgment comparison and loading, rescoring to the same result, exact score-report verification, and final run-seal verification. Success is printed only after that replay and contains only the scoring mode, deterministic run-seal ID, run-seal SHA-256, and report ID; it contains no filesystem path, metric, query, label, or candidate value.
 
-The promoted bundle is operator-only and combines hidden provenance, completed labels, judgments, and scores. Never give it to the independent reviewer; that reviewer continues to receive only `review-packet.json` and the worksheet. The local seal is an integrity relationship, not proof of who created it: SHA-256 is not authentication, a signature, a trusted timestamp, WORM or immutable storage, retention enforcement, access-control history, or confidentiality. The approved external location must independently provide any required encryption, access controls, signing, versioning/object lock, retention, deletion, and audit history. Promotion adds no cloud service, database, Docker requirement, UI, REST/MCP endpoint, PDF handling, longitudinal comparison, reviewer-independence proof, or provider-enablement decision.
+The promoted bundle is operator-only and combines hidden provenance, completed labels, judgments, and scores. Never give it to the independent reviewer; that reviewer continues to receive only `review-packet.json` and the worksheet. The local seal is an integrity relationship, not proof of who created it: SHA-256 is not authentication, a signature, a trusted timestamp, WORM or immutable storage, retention enforcement, access-control history, or confidentiality. The approved external location must independently provide any required encryption, access controls, signing, versioning/object lock, retention, deletion, and audit history. Promotion itself adds no cloud service, database, Docker requirement, UI, REST/MCP endpoint, PDF handling, longitudinal conclusion, reviewer-independence proof, or provider-enablement decision.
 
 ## Standalone retained run-seal verification
 
@@ -265,6 +266,85 @@ provider-quality-comparative-run-seal-v1 mode=verified run-seal-id=<id> run-seal
 ```
 
 The record contains only the protocol, verification mode, run-seal ID, run-seal SHA-256, and report ID. It contains no path, revision, metrics, queries, labels, or candidate material. This result proves only local integrity and semantic replay under the stated filesystem assumption; it is not authentication, a signature, a trusted timestamp, WORM or immutable storage, confidentiality, retention or deletion enforcement, access history, or audit evidence. Never send the retained bundle to the independent reviewer, because it contains hidden provenance, completed labels, judgments, and scores.
+
+## Local longitudinal comparison of retained runs
+
+The longitudinal runner compares between two and sixteen independently retained run seals without contacting a provider or averaging observations into a trend. Every selected run must belong to one exact comparable cohort: the same clean repository revision, report schema, frozen query-set ID and SHA-256, ordered query keys, query count, scoring-policy ID and SHA-256, and scenario set. Run-seal, evidence, report, and canonical capture-time identities must be distinct. Judgments may and normally will differ between captures because each time-separated review is independent.
+
+Create a private selection file outside the repository. Its exact schema is:
+
+```json
+{
+  "schemaVersion": 1,
+  "protocolId": "provider-quality-comparative-longitudinal-selection-v1",
+  "runSealDirectories": [
+    "/absolute/operator-controlled/run-seal-a",
+    "/absolute/operator-controlled/run-seal-b"
+  ]
+}
+```
+
+The selection file must be an absolute real, non-symlink regular file and, on POSIX filesystems, have mode `0600`. Each entry must be an absolute real, non-symlink directory outside the repository. Resolved duplicates, ancestor/descendant pairs, and repository aliases are rejected. The input is bounded to 16 KiB and the selected directories are read without modification. Run the comparator from the exact clean revision bound by every seal:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION=/absolute/private-selection.json \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLongitudinalComparisonTests \
+  clean test
+```
+
+For every selected directory, the runner first verifies the exact run-seal layout, identities, limits, permissions, digests, and inventory. It then repeats the complete semantic replay from the retained bytes using the frozen query set and policy at that revision, and performs a final exact seal verification. A report is published only after every run passes.
+
+The deterministic comparison identity is derived from the chronologically ordered run-seal ID and run-seal SHA-256 pairs, never caller ordering or filesystem paths. Chronology uses each seal's canonical content-bound `captureMeasuredAt` value. That ordering is reproducible, but the declared value is not an externally trusted timestamp. Equal capture instants are rejected.
+
+The private ignored output has exactly this layout below `backend/target/provider-quality/<comparisonId>/`:
+
+```text
+manifest.json
+longitudinal-report.json
+```
+
+The complete bundle is bounded to 8 MiB, uses `0700`/`0600` permissions where POSIX permissions are available, and is reopened for strict JSON, exact layout, canonical-byte, size, digest, manifest, identity, and expected-content verification before success is printed. Maven `clean` deletes this directory, so move an approved report to its governed retention location before another clean run.
+
+The report preserves each exact run snapshot and every adjacent transition, including denominator/context counts, undefined rates, aggregate scenario values, and per-query changes. It does not average captures, collapse reversals into one trend, calculate statistical significance, call a change an improvement or regression, apply a pass/fail threshold, or decide whether Europe PMC should be enabled. It contains operator-only metrics, integrity handles, and frozen evaluation query keys, but no end-user query, paper title, candidate metadata, completed label, provenance map, source-document location, PDF, credential, or filesystem path.
+
+On success the runner prints only this bounded record:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=generated comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+Neither the report nor its metrics are exposed through the reader UI, REST API, MCP server, database, Spring application, Docker service, or ordinary application logs. Never send the report or any selected run seal to the independent reviewer. This local workflow uses no Spring context, Docker, network, scholarly-provider call, PDF/document handling, or runtime endpoint. Like the individual seals, it assumes operator-controlled non-concurrently-mutated paths and supplies no signature, trusted time, confidentiality, immutable retention, deletion enforcement, access history, or reviewer-independence proof.
+
+## Standalone retained longitudinal-report verification
+
+Move an approved generated report out of ignored `backend/target/provider-quality/` before another Maven clean, preserving its comparison-ID directory name and exact two-file layout. Keep the private selection separately. Then run the no-provider-quality-write verifier from the exact clean revision bound by every selected seal:
+
+```bash
+cd backend
+RUN_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_VERIFY=true \
+OPENSCHOLAR_PROVIDER_QUALITY_REVISION="$(git rev-parse HEAD)" \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION=/absolute/private-selection.json \
+OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_DIRECTORY=/absolute/external/provider-quality-comparative-longitudinal-v1-... \
+./mvnw --batch-mode --no-transfer-progress \
+  -Dtest=EuropePmcComparativeLongitudinalReportVerificationTests \
+  clean test
+```
+
+The selection retains the bounded, owner-private, real-file rules described above. The report variable must name an existing absolute real, final-component non-symlink directory that resolves outside the repository and does not contain it. Its basename must equal the comparison ID reconstructed from the selected runs; its exact `manifest.json` and `longitudinal-report.json` layout, 8 MiB bound, canonical bytes, identities, sizes, SHA-256 digests, and POSIX-private modes remain mandatory. Both inputs must already be external because `clean` deletes the ignored generated copy.
+
+The verifier does not trust fields read from the report to choose an expected run set. It requires a clean committed checkout and the explicit exact revision, strict-loads the private selection, verifies every selected run-seal bundle, requires each capture revision to match the checkout, and repeats the complete semantic replay for every run. It constructs the canonical chronological comparison from those replayed results and passes only that trusted in-memory result to exact retained-report verification. A self-consistent report for a different, omitted, added, or changed cohort therefore cannot verify.
+
+The verifier creates no provider-quality artifact or bundle bytes and does not alter the selection, any run seal, or the retained report. Its Maven invocation may still create ordinary ignored compiler and test output below `backend/target/`. No Spring context, Docker service, database, network, provider, PDF/document, UI, REST, or MCP path is involved. Success has only this privacy-allowlisted shape:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=verified comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+The success record contains no path, revision, capture time, individual seal/evidence/report identity, query, metric, label, candidate data, or byte count. Verification assumes locally operator-controlled files and ancestors with no concurrent replacement or mutation; path resolution and repeated reads do not isolate a hostile filesystem. It proves deterministic local integrity and semantic replay, not who created the artifacts, trusted chronology, signing, confidentiality, immutable or versioned retention, deletion enforcement, access history, audit evidence, reviewer independence, statistical significance, pass/fail status, or permission to enable a provider. Never send the retained report or selected seals to the independent reviewer.
 
 ## Default-enablement evidence
 
