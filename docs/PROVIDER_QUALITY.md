@@ -307,21 +307,37 @@ manifest.json
 longitudinal-report.json
 ```
 
-The complete bundle is bounded to 8 MiB, uses `0700`/`0600` permissions where POSIX permissions are available, and is reopened for strict JSON, exact layout, canonical-byte, size, digest, manifest, identity, and expected-content verification before success is printed. Maven `clean` deletes this directory, so move an approved report to its governed retention location before another clean run.
+The complete bundle is bounded to 8 MiB, uses `0700`/`0600` permissions where POSIX permissions are available, and is reopened for strict JSON, exact layout, canonical-byte, size, digest, manifest, identity, and expected-content verification before success is printed. Maven `clean` deletes this directory, so use the optional atomic promotion below—or otherwise place an approved report in its governed retention location—before another clean run.
+
+For a fail-closed local custody handoff, export this optional variable before running the same generation command:
+
+```bash
+export OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_ROOT=/absolute/private-retention-root
+```
+
+The configured root must already be a writable absolute real, final-component non-symlink directory outside—and not containing—the repository. On POSIX filesystems it must be owner-private `0700`; it must also be disjoint from the selection's retained run directories. This is a local filesystem-directory handoff, not an object-storage or cloud-retention integration. The generator first completes full semantic replay and exact local report verification. A separate external publisher then copies only `manifest.json` and `longitudinal-report.json` with stable bounded reads into a create-new `0700` staging directory below that root, creates `0600` files, exactly verifies the staged bundle against the replay-built comparison, and requires that filesystem to support a same-filesystem atomic rename without requesting replacement to `<root>/<comparisonId>`. Unsupported atomic rename fails closed.
+
+If `<root>/<comparisonId>` already exists, promotion is idempotent only when that existing directory exactly verifies against the newly replayed comparison; mismatched content is left untouched and rejected. For an absent destination the publisher requests an atomic move without replacement, but Java leaves replacement behavior filesystem-specific if another process creates the target concurrently. Its non-overwrite contract therefore depends on the required operator-controlled, non-concurrently-mutated filesystem assumption. After a successful rename or idempotent match, the external destination is exactly verified again. Promotion never changes the generated source, the selection, or any selected run seal. Under the same assumption, cleanup is restricted to the exact lexically bounded private staging pathname created by that attempt; cleanup failure is reported rather than broadening the deletion target.
 
 The report preserves each exact run snapshot and every adjacent transition, including denominator/context counts, undefined rates, aggregate scenario values, and per-query changes. It does not average captures, collapse reversals into one trend, calculate statistical significance, call a change an improvement or regression, apply a pass/fail threshold, or decide whether Europe PMC should be enabled. It contains operator-only metrics, integrity handles, and frozen evaluation query keys, but no end-user query, paper title, candidate metadata, completed label, provenance map, source-document location, PDF, credential, or filesystem path.
 
-On success the runner prints only this bounded record:
+Without external promotion, success has this bounded shape:
 
 ```text
 provider-quality-comparative-longitudinal-v1 mode=generated comparison-id=<id> manifest-sha256=<sha256> runs=<count>
 ```
 
-Neither the report nor its metrics are exposed through the reader UI, REST API, MCP server, database, Spring application, Docker service, or ordinary application logs. Never send the report or any selected run seal to the independent reviewer. This local workflow uses no Spring context, Docker, network, scholarly-provider call, PDF/document handling, or runtime endpoint. Like the individual seals, it assumes operator-controlled non-concurrently-mutated paths and supplies no signature, trusted time, confidentiality, immutable retention, deletion enforcement, access history, or reviewer-independence proof.
+With successful promotion, it instead reports:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=promoted comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+Beyond the displayed comparison ID and manifest digest, neither success record contains a filesystem path, revision, capture time, individual run-seal/evidence/report identity, query, metric, label, candidate datum, or byte count. Neither the report nor its metrics are exposed through the reader UI, REST API, MCP server, database, Spring application, Docker service, or ordinary application logs. Never send the report or any selected run seal to the independent reviewer. This local workflow uses no Spring context, Docker, network, scholarly-provider call, PDF/document handling, or runtime endpoint. Like the individual seals, it assumes operator-controlled non-concurrently-mutated paths. Atomic local promotion reduces accidental partial-copy risk; it supplies no authentication, signature, trusted time, confidentiality, immutable or versioned retention, deletion enforcement, access history, audit evidence, or reviewer-independence proof.
 
 ## Standalone retained longitudinal-report verification
 
-Move an approved generated report out of ignored `backend/target/provider-quality/` before another Maven clean, preserving its comparison-ID directory name and exact two-file layout. Keep the private selection separately. Then run the no-provider-quality-write verifier from the exact clean revision bound by every selected seal:
+Use the optional atomic promotion workflow above—or otherwise place an approved generated report outside ignored `backend/target/provider-quality/` before another Maven clean—while preserving its comparison-ID directory name and exact two-file layout. Keep the private selection separately. Then run the no-provider-quality-write verifier from the exact clean revision bound by every selected seal:
 
 ```bash
 cd backend
@@ -344,7 +360,7 @@ The verifier creates no provider-quality artifact or bundle bytes and does not a
 provider-quality-comparative-longitudinal-v1 mode=verified comparison-id=<id> manifest-sha256=<sha256> runs=<count>
 ```
 
-The success record contains no path, revision, capture time, individual seal/evidence/report identity, query, metric, label, candidate data, or byte count. Verification assumes locally operator-controlled files and ancestors with no concurrent replacement or mutation; path resolution and repeated reads do not isolate a hostile filesystem. It proves deterministic local integrity and semantic replay, not who created the artifacts, trusted chronology, signing, confidentiality, immutable or versioned retention, deletion enforcement, access history, audit evidence, reviewer independence, statistical significance, pass/fail status, or permission to enable a provider. Never send the retained report or selected seals to the independent reviewer.
+Beyond the displayed comparison ID and manifest digest, the success record contains no path, revision, capture time, individual run-seal/evidence/report identity, query, metric, label, candidate data, or byte count. Verification assumes locally operator-controlled files and ancestors with no concurrent replacement or mutation; path resolution and repeated reads do not isolate a hostile filesystem. It proves deterministic local integrity and semantic replay, not who created the artifacts, trusted chronology, signing, confidentiality, immutable or versioned retention, deletion enforcement, access history, audit evidence, reviewer independence, statistical significance, pass/fail status, or permission to enable a provider. Never send the retained report or selected seals to the independent reviewer.
 
 ## Default-enablement evidence
 

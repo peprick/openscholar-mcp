@@ -19,7 +19,7 @@ class EuropePmcComparativeLongitudinalComparisonContractTests {
 	private Path temporaryDirectory;
 
 	@Test
-	void manualRunnerHasTheExactOptInGateAndSelectionVariable() {
+	void manualRunnerHasTheExactOptInGateAndInputVariables() {
 		EnabledIfEnvironmentVariable gate =
 				EuropePmcComparativeLongitudinalComparisonTests.class
 						.getAnnotation(EnabledIfEnvironmentVariable.class);
@@ -31,6 +31,27 @@ class EuropePmcComparativeLongitudinalComparisonContractTests {
 		assertThat(EuropePmcComparativeLongitudinalComparisonTests.SELECTION_ENV)
 				.isEqualTo(
 						"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION");
+		assertThat(EuropePmcComparativeLongitudinalComparisonTests.REPORT_ROOT_ENV)
+				.isEqualTo(
+						"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_ROOT");
+	}
+
+	@Test
+	void promotionRootIsOptionalButMustBeAbsoluteWhenPresent() {
+		Path absolute = temporaryDirectory.resolve("private-retention-root");
+
+		assertThat(EuropePmcComparativeLongitudinalComparisonTests
+				.optionalReportRoot(null)).isNull();
+		assertThat(EuropePmcComparativeLongitudinalComparisonTests
+				.optionalReportRoot(absolute.toString()))
+				.isEqualTo(absolute.toAbsolutePath().normalize());
+		for (String rejected : List.of("", "retention-root", "   ")) {
+			assertThatThrownBy(() -> EuropePmcComparativeLongitudinalComparisonTests
+					.optionalReportRoot(rejected))
+					.as(rejected)
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("must name an absolute directory");
+		}
 	}
 
 	@Test
@@ -92,6 +113,24 @@ class EuropePmcComparativeLongitudinalComparisonContractTests {
 						"metric=",
 						"label=",
 						"bytes=");
+		assertThat(EuropePmcComparativeLongitudinalComparisonTests.successRecord(
+				"promoted", comparisonId, manifestSha256, 2))
+				.isEqualTo(
+						"provider-quality-comparative-longitudinal-v1 mode=promoted "
+								+ "comparison-id=" + comparisonId
+								+ " manifest-sha256=" + manifestSha256
+								+ " runs=2")
+				.doesNotContain(
+						"path=",
+						"directory=",
+						"revision=",
+						"timestamp=",
+						"report-id=",
+						"evidence-id=",
+						"query=",
+						"metric=",
+						"label=",
+						"bytes=");
 	}
 
 	@Test
@@ -111,6 +150,10 @@ class EuropePmcComparativeLongitudinalComparisonContractTests {
 				.hasMessage("LONGITUDINAL_SUCCESS_RECORD_INVALID");
 		assertThatThrownBy(() -> EuropePmcComparativeLongitudinalComparisonTests
 				.successRecord(comparisonId, manifestSha256, 1))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("LONGITUDINAL_SUCCESS_RECORD_INVALID");
+		assertThatThrownBy(() -> EuropePmcComparativeLongitudinalComparisonTests
+				.successRecord("promoted\npath=/private", comparisonId, manifestSha256, 2))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessage("LONGITUDINAL_SUCCESS_RECORD_INVALID");
 	}

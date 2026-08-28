@@ -436,7 +436,7 @@ class ProviderQualityComparativeLongitudinalReportBundleTests {
 						OBJECT_MAPPER, manifest));
 	}
 
-	private static Comparison comparison() {
+	static Comparison comparison() {
 		Map<Scenario, ScenarioSummary> scenarios = scenarioSummaries();
 		List<QueryScore> queries = List.of(new QueryScore("query-one", queryScenarios()));
 		RunSnapshot first = new RunSnapshot(

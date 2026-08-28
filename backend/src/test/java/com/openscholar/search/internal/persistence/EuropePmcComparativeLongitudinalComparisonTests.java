@@ -20,8 +20,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Manual, opt-in comparison of a bounded selection of fully retained comparative runs.
  * The runner performs no provider, Spring, database, Docker, document, UI, REST, MCP,
- * or network operation. Its only path input is the private selection file; output is
- * fixed below the repository's ignored provider-quality target directory.
+ * or network operation. Output is first verified below the repository's ignored
+ * provider-quality target directory and can optionally be atomically promoted to an
+ * explicitly configured private external root.
  */
 @EnabledIfEnvironmentVariable(
 		named = EuropePmcComparativeLongitudinalComparisonTests.ENABLE_ENV,
@@ -32,6 +33,8 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 			"RUN_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL";
 	static final String SELECTION_ENV =
 			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION";
+	static final String REPORT_ROOT_ENV =
+			"OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_ROOT";
 
 	private static final Pattern SHA256 = Pattern.compile("^[0-9a-f]{64}$");
 	private static final Pattern COMPARISON_ID = Pattern.compile(
@@ -45,21 +48,42 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 		String repositoryRevision =
 				EuropePmcComparativeLiveEvaluationTests.requiredRepositoryRevision(repositoryRoot);
 		Path selectionPath = requiredSelectionPath(System.getenv(SELECTION_ENV));
+		Path reportRoot = optionalReportRoot(System.getenv(REPORT_ROOT_ENV));
 		ObjectMapper objectMapper = JsonMapper.builder().build();
 
 		ProviderQualityComparativeLongitudinalSelection.Selection selection =
 				ProviderQualityComparativeLongitudinalSelection.load(
 						objectMapper, repositoryRoot, selectionPath);
+		if (reportRoot != null) {
+			reportRoot = ProviderQualityComparativeLongitudinalReportPromotion
+					.validateExternalRoot(
+							repositoryRoot,
+							reportRoot,
+							null,
+							selection.runDirectories());
+		}
 		Comparison comparison = replaySelection(
 				objectMapper, repositoryRevision, selection);
 		ProviderQualityComparativeLongitudinalReportBundle report =
 				ProviderQualityComparativeLongitudinalReportBundle.publishAndVerify(
 						objectMapper, repositoryRoot, comparison);
+		String mode = "generated";
+		if (reportRoot != null) {
+			report = ProviderQualityComparativeLongitudinalReportPromotion.promoteAndVerify(
+					objectMapper,
+					repositoryRoot,
+					reportRoot,
+					report.sourceDirectory(),
+					comparison,
+					selection.runDirectories());
+			mode = "promoted";
+		}
 
 		System.out.printf(
 				Locale.ROOT,
 				"%s%n",
 				successRecord(
+						mode,
 						report.comparisonId(),
 						report.manifestSha256(),
 						comparison.runCount()));
@@ -116,6 +140,31 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 		}
 	}
 
+	static Path optionalReportRoot(String value) {
+		if (value == null) {
+			return null;
+		}
+		if (value.isBlank()) {
+			throw new IllegalStateException(
+					REPORT_ROOT_ENV + " must name an absolute directory");
+		}
+		try {
+			Path supplied = Path.of(value);
+			if (!supplied.isAbsolute()) {
+				throw new IllegalStateException(
+						REPORT_ROOT_ENV + " must name an absolute directory");
+			}
+			return supplied.toAbsolutePath().normalize();
+		}
+		catch (RuntimeException exception) {
+			if (exception instanceof IllegalStateException state) {
+				throw state;
+			}
+			throw new IllegalStateException(
+					REPORT_ROOT_ENV + " must name an absolute directory", exception);
+		}
+	}
+
 	static void requireCaptureRevision(
 			String repositoryRevision, VerifiedRunSeal sealed) {
 		String expected = Objects.requireNonNull(
@@ -130,7 +179,16 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 			String comparisonId,
 			String manifestSha256,
 			int runCount) {
-		if (comparisonId == null || !COMPARISON_ID.matcher(comparisonId).matches()
+		return successRecord("generated", comparisonId, manifestSha256, runCount);
+	}
+
+	static String successRecord(
+			String mode,
+			String comparisonId,
+			String manifestSha256,
+			int runCount) {
+		if (!("generated".equals(mode) || "promoted".equals(mode))
+				|| comparisonId == null || !COMPARISON_ID.matcher(comparisonId).matches()
 				|| manifestSha256 == null || !SHA256.matcher(manifestSha256).matches()
 				|| runCount < ProviderQualityComparativeLongitudinalComparison.MINIMUM_RUNS
 				|| runCount > ProviderQualityComparativeLongitudinalComparison.MAXIMUM_RUNS) {
@@ -138,8 +196,9 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 		}
 		return String.format(
 				Locale.ROOT,
-				"provider-quality-comparative-longitudinal-v1 mode=generated "
+				"provider-quality-comparative-longitudinal-v1 mode=%s "
 						+ "comparison-id=%s manifest-sha256=%s runs=%d",
+				mode,
 				comparisonId,
 				manifestSha256,
 				runCount);

@@ -295,17 +295,31 @@ OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_SELECTION=/absolute/privat
 
 The runner exactly verifies and semantically replays every seal before it writes a report. It sorts by the content-bound canonical capture time, derives a deterministic path-independent identity from the ordered seal IDs and SHA-256 values, and publishes exactly `manifest.json` plus `longitudinal-report.json` below ignored `backend/target/provider-quality/<comparisonId>/`. The private bundle is capped at 8 MiB and uses `0700`/`0600` permissions on POSIX filesystems. `clean` deletes it.
 
-The report keeps exact run snapshots and adjacent aggregate and per-query changes with their counts and undefined values. It never averages captures, assigns improvement/regression or significance, applies a pass/fail gate, or changes a provider default. Its metrics remain operator-only and are never exposed through the UI, REST, MCP, database, Spring application, Docker, or normal logs. Success prints only:
+To promote the same verified bytes into governed external storage before a later clean, export this optional variable before running the command:
+
+```bash
+export OPENSCHOLAR_PROVIDER_QUALITY_COMPARATIVE_LONGITUDINAL_REPORT_ROOT=/absolute/private-retention-root
+```
+
+The root must already exist as an absolute real, final-component non-symlink directory outside—and not containing—the repository, be writable by the invoking operator, use `0700` on POSIX filesystems, and be disjoint from every selected run directory. This is a local filesystem-directory handoff, not an object-storage or cloud-retention integration. Promotion copies only the exact two report files through a create-new private staging directory and requires the filesystem to support a same-filesystem atomic rename to `<root>/<comparisonId>`; unsupported atomic publication fails closed. An existing destination is accepted only when exact verification against the replay-built comparison succeeds. For an absent destination, the publisher requests an atomic move without replacement, but Java does not guarantee no-replacement if another process creates the target concurrently. The non-overwrite behavior therefore depends on the required operator-controlled, non-concurrently-mutated filesystem assumption. The generated source is never modified, and the retained copy is reopened and exactly verified before success.
+
+The report keeps exact run snapshots and adjacent aggregate and per-query changes with their counts and undefined values. It never averages captures, assigns improvement/regression or significance, applies a pass/fail gate, or changes a provider default. Its metrics remain operator-only and are never exposed through the UI, REST, MCP, database, Spring application, Docker, or normal logs. Without the optional root, success prints only:
 
 ```text
 provider-quality-comparative-longitudinal-v1 mode=generated comparison-id=<id> manifest-sha256=<sha256> runs=<count>
 ```
 
-The comparator uses no Spring context, Docker, network, provider call, PDF/document path, or runtime endpoint. The declared capture times are content-bound but are not trusted timestamps; authenticity, confidential retention, deletion, and access/audit controls remain external. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for the full boundary.
+Successful external promotion instead prints the equally bounded record:
+
+```text
+provider-quality-comparative-longitudinal-v1 mode=promoted comparison-id=<id> manifest-sha256=<sha256> runs=<count>
+```
+
+Beyond the displayed comparison ID and manifest digest, neither record contains a path, revision, capture time, individual run-seal/evidence/report identity, query, metric, label, candidate datum, or byte count. The comparator and promoter use no Spring context, Docker, network, provider call, PDF/document path, or runtime endpoint. The declared capture times are content-bound but are not trusted timestamps; the local atomic copy supplies no authentication, signing, immutable retention, confidentiality, deletion, or access/audit control. See [Provider quality evaluation](../docs/PROVIDER_QUALITY.md) for the full boundary.
 
 ### Verify a retained longitudinal report
 
-After moving an approved longitudinal report to governed external storage, verify it without generating or changing any provider-quality artifact:
+After automatically promoting—or otherwise placing—an approved longitudinal report in governed external storage, verify it without generating or changing any provider-quality artifact:
 
 ```bash
 cd backend
