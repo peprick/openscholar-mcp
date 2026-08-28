@@ -44,29 +44,48 @@ class EuropePmcComparativeLongitudinalReportVerificationTests {
 				EuropePmcComparativeLiveEvaluationTests.requiredRepositoryRevision(repositoryRoot);
 		Path selectionPath = requiredAbsolutePath(
 				SELECTION_ENV, System.getenv(SELECTION_ENV));
-		Path reportDirectory = validateExternalReportDirectory(
-				repositoryRoot,
-				requiredAbsolutePath(
-						REPORT_DIRECTORY_ENV, System.getenv(REPORT_DIRECTORY_ENV)));
+		Path reportDirectory = requiredAbsolutePath(
+				REPORT_DIRECTORY_ENV, System.getenv(REPORT_DIRECTORY_ENV));
 		ObjectMapper objectMapper = JsonMapper.builder().build();
 
 		ProviderQualityComparativeLongitudinalSelection.Selection selection =
 				ProviderQualityComparativeLongitudinalSelection.load(
 						objectMapper, repositoryRoot, selectionPath);
+		VerificationResult verified = verifyRetainedReport(
+				objectMapper,
+				repositoryRoot,
+				repositoryRevision,
+				selection,
+				reportDirectory);
+
+		System.out.printf(
+				Locale.ROOT,
+				"%s%n",
+				successRecord(
+						verified.report().comparisonId(),
+						verified.report().manifestSha256(),
+						verified.comparison().runCount()));
+	}
+
+	/**
+	 * Runs the no-write retained-report verification used by the manual entry point
+	 * and ordinary synthetic workflow coverage.
+	 */
+	static VerificationResult verifyRetainedReport(
+			ObjectMapper objectMapper,
+			Path repositoryRoot,
+			String repositoryRevision,
+			ProviderQualityComparativeLongitudinalSelection.Selection selection,
+			Path suppliedReportDirectory) throws Exception {
+		Path reportDirectory = validateExternalReportDirectory(
+				repositoryRoot, suppliedReportDirectory);
 		validateReportRunSeparation(reportDirectory, selection.runDirectories());
 		Comparison comparison = EuropePmcComparativeLongitudinalComparisonTests
 				.replaySelection(objectMapper, repositoryRevision, selection);
 		ProviderQualityComparativeLongitudinalReportBundle report =
 				ProviderQualityComparativeLongitudinalReportBundle.verifyExact(
 						objectMapper, reportDirectory, comparison);
-
-		System.out.printf(
-				Locale.ROOT,
-				"%s%n",
-				successRecord(
-						report.comparisonId(),
-						report.manifestSha256(),
-						comparison.runCount()));
+		return new VerificationResult(comparison, report);
 	}
 
 	static Path requiredAbsolutePath(String environmentName, String value) {
@@ -171,5 +190,10 @@ class EuropePmcComparativeLongitudinalReportVerificationTests {
 				comparisonId,
 				manifestSha256,
 				runCount);
+	}
+
+	record VerificationResult(
+			Comparison comparison,
+			ProviderQualityComparativeLongitudinalReportBundle report) {
 	}
 }

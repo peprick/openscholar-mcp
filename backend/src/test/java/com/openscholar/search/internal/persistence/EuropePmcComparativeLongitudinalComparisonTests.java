@@ -54,39 +54,60 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 		ProviderQualityComparativeLongitudinalSelection.Selection selection =
 				ProviderQualityComparativeLongitudinalSelection.load(
 						objectMapper, repositoryRoot, selectionPath);
-		if (reportRoot != null) {
-			reportRoot = ProviderQualityComparativeLongitudinalReportPromotion
-					.validateExternalRoot(
-							repositoryRoot,
-							reportRoot,
-							null,
-							selection.runDirectories());
-		}
-		Comparison comparison = replaySelection(
-				objectMapper, repositoryRevision, selection);
-		ProviderQualityComparativeLongitudinalReportBundle report =
-				ProviderQualityComparativeLongitudinalReportBundle.publishAndVerify(
-						objectMapper, repositoryRoot, comparison);
-		String mode = "generated";
-		if (reportRoot != null) {
-			report = ProviderQualityComparativeLongitudinalReportPromotion.promoteAndVerify(
-					objectMapper,
-					repositoryRoot,
-					reportRoot,
-					report.sourceDirectory(),
-					comparison,
-					selection.runDirectories());
-			mode = "promoted";
-		}
+		GenerationResult generated = generate(
+				objectMapper,
+				repositoryRoot,
+				repositoryRevision,
+				selection,
+				reportRoot);
 
 		System.out.printf(
 				Locale.ROOT,
 				"%s%n",
 				successRecord(
-						mode,
-						report.comparisonId(),
-						report.manifestSha256(),
-						comparison.runCount()));
+						generated.mode(),
+						generated.report().comparisonId(),
+						generated.report().manifestSha256(),
+						generated.comparison().runCount()));
+	}
+
+	/**
+	 * Runs the environment-independent generation and optional custody handoff used by
+	 * both the manual entry point and ordinary synthetic workflow coverage.
+	 */
+	static GenerationResult generate(
+			ObjectMapper objectMapper,
+			Path repositoryRoot,
+			String repositoryRevision,
+			ProviderQualityComparativeLongitudinalSelection.Selection selection,
+			Path reportRoot) throws Exception {
+		Path validatedReportRoot = reportRoot;
+		if (validatedReportRoot != null) {
+			validatedReportRoot = ProviderQualityComparativeLongitudinalReportPromotion
+					.validateExternalRoot(
+							repositoryRoot,
+							validatedReportRoot,
+							null,
+							selection.runDirectories());
+		}
+		Comparison comparison = replaySelection(
+				objectMapper, repositoryRevision, selection);
+		ProviderQualityComparativeLongitudinalReportBundle localReport =
+				ProviderQualityComparativeLongitudinalReportBundle.publishAndVerify(
+						objectMapper, repositoryRoot, comparison);
+		ProviderQualityComparativeLongitudinalReportBundle report = localReport;
+		String mode = "generated";
+		if (validatedReportRoot != null) {
+			report = ProviderQualityComparativeLongitudinalReportPromotion.promoteAndVerify(
+					objectMapper,
+					repositoryRoot,
+					validatedReportRoot,
+					localReport.sourceDirectory(),
+					comparison,
+					selection.runDirectories());
+			mode = "promoted";
+		}
+		return new GenerationResult(mode, comparison, localReport, report);
 	}
 
 	/**
@@ -202,5 +223,12 @@ class EuropePmcComparativeLongitudinalComparisonTests {
 				comparisonId,
 				manifestSha256,
 				runCount);
+	}
+
+	record GenerationResult(
+			String mode,
+			Comparison comparison,
+			ProviderQualityComparativeLongitudinalReportBundle localReport,
+			ProviderQualityComparativeLongitudinalReportBundle report) {
 	}
 }

@@ -198,7 +198,7 @@ class EuropePmcComparativeOfflineScoringTests {
 		}
 	}
 
-	private static Map<String, Path> runSealSources(
+	static Map<String, Path> runSealSources(
 			ProviderQualityComparativeRunSealBundle.Bindings bindings,
 			Path evidenceDirectory,
 			Path reviewPacket,
