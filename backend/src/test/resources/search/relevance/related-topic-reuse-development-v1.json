@@ -1,0 +1,445 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "related-topic-reuse-development-v1",
+  "split": "DEVELOPMENT",
+  "labelUnit": "CANONICAL_PAPER_TOPIC_RELEVANCE",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "retrievedAt": "2026-08-29T00:00:00Z",
+  "lineages": [
+    {"key": "target-search-coastal", "kind": "TARGET_OWNER_SEARCH"},
+    {"key": "target-collection-coastal", "kind": "TARGET_OWNER_COLLECTION"},
+    {"key": "target-search-river", "kind": "TARGET_OWNER_SEARCH"},
+    {"key": "target-collection-river", "kind": "TARGET_OWNER_COLLECTION"},
+    {"key": "target-search-wildfire", "kind": "TARGET_OWNER_SEARCH"},
+    {"key": "target-collection-wildfire", "kind": "TARGET_OWNER_COLLECTION"},
+    {"key": "target-search-author", "kind": "TARGET_OWNER_SEARCH"},
+    {"key": "target-collection-controls", "kind": "TARGET_OWNER_COLLECTION"},
+    {"key": "other-search-history", "kind": "OTHER_OWNER_SEARCH"},
+    {"key": "other-collection", "kind": "OTHER_OWNER_COLLECTION"},
+    {"key": "catalog-only", "kind": "CATALOG_ONLY"}
+  ],
+  "candidates": [
+    {
+      "key": "coastal-exact",
+      "lineageKey": "target-search-coastal",
+      "title": "Coastal Erosion Drone Mapping",
+      "abstractText": "A synthetic field protocol maps retreating beaches after seasonal storms.",
+      "venueName": "Synthetic Shoreline Methods",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 18,
+      "reportedOpenAccess": true,
+      "authors": ["Nila Crest"]
+    },
+    {
+      "key": "coastal-bridge-drone",
+      "lineageKey": "target-collection-coastal",
+      "title": "Drone Surveys of Retreating Shorelines",
+      "abstractText": "Uncrewed aircraft quantify beach loss without permanent ground stations.",
+      "venueName": "Open Littoral Observations",
+      "publicationYear": 2024,
+      "documentType": "PREPRINT",
+      "language": "en",
+      "citationCount": 5,
+      "reportedOpenAccess": true,
+      "authors": ["Oren Tide"]
+    },
+    {
+      "key": "coastal-bridge-mapping",
+      "lineageKey": "target-collection-coastal",
+      "title": "Mapping Beach Loss with Uncrewed Aircraft",
+      "abstractText": "Repeated aerial surveys quantify coastal erosion across barrier islands.",
+      "venueName": null,
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 2,
+      "reportedOpenAccess": true,
+      "authors": ["Sena Dune"]
+    },
+    {
+      "key": "coastal-wrong-domain",
+      "lineageKey": "target-search-coastal",
+      "title": "Drone Mapping for Coastal Resort Marketing",
+      "abstractText": "A synthetic advertising study scores promotional imagery for seaside hotels.",
+      "venueName": "Tourism Media Analytics",
+      "publicationYear": 2018,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 800,
+      "reportedOpenAccess": true,
+      "authors": ["Pavel Bay"]
+    },
+    {
+      "key": "river-exact",
+      "lineageKey": "target-search-river",
+      "title": "Microplastic River Monitoring",
+      "abstractText": "A synthetic sampling network measures polymer fragments in flowing freshwater.",
+      "venueName": "Freshwater Evidence",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 16,
+      "reportedOpenAccess": true,
+      "authors": ["Imani Ford"]
+    },
+    {
+      "key": "river-bridge-monitoring",
+      "lineageKey": "target-collection-river",
+      "title": "Monitoring Polymer Debris in Freshwater Streams",
+      "abstractText": "Passive samplers track small synthetic particles throughout a catchment.",
+      "venueName": "Open Watershed Research",
+      "publicationYear": 2024,
+      "documentType": "PREPRINT",
+      "language": "en",
+      "citationCount": 6,
+      "reportedOpenAccess": true,
+      "authors": ["Tara Reed"]
+    },
+    {
+      "key": "river-bridge-spectroscopy",
+      "lineageKey": "target-collection-river",
+      "title": "River Spectroscopy for Synthetic Particle Loads",
+      "abstractText": "Optical signatures estimate microplastic abundance between manual surveys.",
+      "venueName": null,
+      "publicationYear": 2022,
+      "documentType": "REPORT",
+      "language": "en",
+      "citationCount": 4,
+      "reportedOpenAccess": true,
+      "authors": ["Vik Elm"]
+    },
+    {
+      "key": "river-wrong-domain",
+      "lineageKey": "target-search-river",
+      "title": "River Monitoring with Plastic Sensor Housings",
+      "abstractText": "An engineering note compares durable enclosures for water-level electronics.",
+      "venueName": "Field Instrument Design",
+      "publicationYear": 2019,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 740,
+      "reportedOpenAccess": true,
+      "authors": ["Gita Span"]
+    },
+    {
+      "key": "wildfire-exact",
+      "lineageKey": "target-search-wildfire",
+      "title": "Community Wildfire Smoke Sensors",
+      "abstractText": "A synthetic thesis evaluates resident-operated particulate monitors during fire seasons.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2025,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 12,
+      "reportedOpenAccess": true,
+      "authors": ["Ari Flint"]
+    },
+    {
+      "key": "wildfire-bridge",
+      "lineageKey": "target-collection-wildfire",
+      "title": "Neighborhood Sensor Networks for Fire-Season Air Pollution",
+      "abstractText": "Distributed devices measure particulate exposure during landscape fires.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2024,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 7,
+      "reportedOpenAccess": true,
+      "authors": ["Mina Ash"]
+    },
+    {
+      "key": "wildfire-too-old",
+      "lineageKey": "target-search-wildfire",
+      "title": "Community Wildfire Smoke Sensors Before Current Standards",
+      "abstractText": "A historical synthetic thesis outside the selected year window.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2021,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 40,
+      "reportedOpenAccess": true,
+      "authors": ["Ari Flint"]
+    },
+    {
+      "key": "wildfire-too-new",
+      "lineageKey": "target-search-wildfire",
+      "title": "Community Wildfire Smoke Sensors in Future Deployments",
+      "abstractText": "A synthetic thesis beyond the selected upper year boundary.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2027,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 9,
+      "reportedOpenAccess": true,
+      "authors": ["Mina Ash"]
+    },
+    {
+      "key": "wildfire-wrong-type",
+      "lineageKey": "target-search-wildfire",
+      "title": "Community Wildfire Smoke Sensors Field Note",
+      "abstractText": "A synthetic article with the wrong document type for the request.",
+      "venueName": "Synthetic Air Monitoring",
+      "publicationYear": 2024,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 30,
+      "reportedOpenAccess": true,
+      "authors": ["Kori Ember"]
+    },
+    {
+      "key": "wildfire-closed",
+      "lineageKey": "target-collection-wildfire",
+      "title": "Community Wildfire Smoke Sensors in Rural Valleys",
+      "abstractText": "A synthetic thesis without a reported open-access record.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2024,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 25,
+      "reportedOpenAccess": false,
+      "authors": ["Kori Ember"]
+    },
+    {
+      "key": "wildfire-low-citations",
+      "lineageKey": "target-collection-wildfire",
+      "title": "Community Wildfire Smoke Sensors Pilot",
+      "abstractText": "A synthetic thesis below the request's citation threshold.",
+      "venueName": "Example Public Health Repository",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 2,
+      "reportedOpenAccess": true,
+      "authors": ["Dara Pine"]
+    },
+    {
+      "key": "wildfire-wrong-language",
+      "lineageKey": "target-collection-wildfire",
+      "title": "Community Wildfire Smoke Sensors en Espanol",
+      "abstractText": "Una tesis sintética sobre redes vecinales de calidad del aire.",
+      "venueName": "Repositorio de Salud Ambiental",
+      "publicationYear": 2024,
+      "documentType": "THESIS",
+      "language": "es",
+      "citationCount": 11,
+      "reportedOpenAccess": true,
+      "authors": ["Luz Pino"]
+    },
+    {
+      "key": "author-mara-vellum",
+      "lineageKey": "target-search-author",
+      "title": "Tidal Salt Intrusion in Marsh Channels",
+      "abstractText": "A synthetic hydrology study of salinity movement through coastal wetlands.",
+      "venueName": "Marsh Process Letters",
+      "publicationYear": 2023,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 13,
+      "reportedOpenAccess": true,
+      "authors": ["Mara Vellum"]
+    },
+    {
+      "key": "author-substring-collision",
+      "lineageKey": "target-collection-controls",
+      "title": "Ancient Ceramic Kiln Temperatures",
+      "abstractText": "A synthetic archaeology study unrelated to marsh hydrology.",
+      "venueName": "Material Heritage Notes",
+      "publicationYear": 2020,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 3,
+      "reportedOpenAccess": true,
+      "authors": ["Mara Vellumstone"]
+    },
+    {
+      "key": "generic-control",
+      "lineageKey": "target-collection-controls",
+      "title": "Acoustic Census of Alpine Moths",
+      "abstractText": "A synthetic biodiversity survey used as an unrelated control.",
+      "venueName": "Mountain Field Records",
+      "publicationYear": 2022,
+      "documentType": "REPORT",
+      "language": "en",
+      "citationCount": 1,
+      "reportedOpenAccess": true,
+      "authors": ["Eli Snow"]
+    },
+    {
+      "key": "other-coastal-exact",
+      "lineageKey": "other-search-history",
+      "title": "Coastal Erosion Drone Mapping",
+      "abstractText": "An exact synthetic topic match visible only through another owner's history.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 999,
+      "reportedOpenAccess": true,
+      "authors": ["Other Owner Author"]
+    },
+    {
+      "key": "other-river-exact",
+      "lineageKey": "other-collection",
+      "title": "Microplastic River Monitoring",
+      "abstractText": "An exact synthetic topic match saved only by another owner.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 998,
+      "reportedOpenAccess": true,
+      "authors": ["Other Owner Author"]
+    },
+    {
+      "key": "catalog-wildfire-exact",
+      "lineageKey": "catalog-only",
+      "title": "Community Wildfire Smoke Sensors",
+      "abstractText": "An exact filter-eligible synthetic match with no owner visibility edge.",
+      "venueName": "Unowned Synthetic Catalog",
+      "publicationYear": 2025,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 997,
+      "reportedOpenAccess": true,
+      "authors": ["Catalog Only Author"]
+    },
+    {
+      "key": "other-author-exact",
+      "lineageKey": "other-search-history",
+      "title": "Subglacial Lake Chemistry",
+      "abstractText": "Synthetic metadata visible only through another owner's history.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 996,
+      "reportedOpenAccess": true,
+      "authors": ["Mara Vellum"]
+    },
+    {
+      "key": "other-orbital-lichen-exact",
+      "lineageKey": "other-search-history",
+      "title": "Orbital Lichen Spectroscopy",
+      "abstractText": "An exact synthetic no-seed match visible only to another owner.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 995,
+      "reportedOpenAccess": true,
+      "authors": ["Other Owner Author"]
+    },
+    {
+      "key": "catalog-orbital-lichen-exact",
+      "lineageKey": "catalog-only",
+      "title": "Orbital Lichen Spectroscopy",
+      "abstractText": "An exact synthetic no-seed match with no owner visibility edge.",
+      "venueName": "Unowned Synthetic Catalog",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 994,
+      "reportedOpenAccess": true,
+      "authors": ["Catalog Only Author"]
+    }
+  ],
+  "queries": [
+    {
+      "key": "coastal-erosion-drone-mapping",
+      "text": "coastal erosion drone mapping",
+      "kind": "LEXICAL_BRIDGE_OPPORTUNITY",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "coastal-exact": 3, "coastal-bridge-drone": 2, "coastal-bridge-mapping": 1, "coastal-wrong-domain": 0,
+        "river-exact": 0, "river-bridge-monitoring": 0, "river-bridge-spectroscopy": 0, "river-wrong-domain": 0,
+        "wildfire-exact": 0, "wildfire-bridge": 0, "wildfire-too-old": 0, "wildfire-too-new": 0,
+        "wildfire-wrong-type": 0, "wildfire-closed": 0, "wildfire-low-citations": 0, "wildfire-wrong-language": 0,
+        "author-mara-vellum": 0, "author-substring-collision": 0, "generic-control": 0
+      },
+      "adversaries": [
+        {"candidateKey": "coastal-wrong-domain", "kind": "OWNER_VISIBLE_TOPIC_DRIFT", "reason": "A high-citation lexical neighbor must not displace shoreline-research bridges."},
+        {"candidateKey": "other-coastal-exact", "kind": "OTHER_OWNER_HIGHER_RELATED_SCORE", "reason": "An exact match from another owner's history must remain ineligible."}
+      ]
+    },
+    {
+      "key": "microplastic-river-monitoring",
+      "text": "microplastic river monitoring",
+      "kind": "LEXICAL_BRIDGE_OPPORTUNITY",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "coastal-exact": 0, "coastal-bridge-drone": 0, "coastal-bridge-mapping": 0, "coastal-wrong-domain": 0,
+        "river-exact": 3, "river-bridge-monitoring": 2, "river-bridge-spectroscopy": 1, "river-wrong-domain": 0,
+        "wildfire-exact": 0, "wildfire-bridge": 0, "wildfire-too-old": 0, "wildfire-too-new": 0,
+        "wildfire-wrong-type": 0, "wildfire-closed": 0, "wildfire-low-citations": 0, "wildfire-wrong-language": 0,
+        "author-mara-vellum": 0, "author-substring-collision": 0, "generic-control": 0
+      },
+      "adversaries": [
+        {"candidateKey": "river-wrong-domain", "kind": "OWNER_VISIBLE_TOPIC_DRIFT", "reason": "Shared river-monitoring words must not turn sensor-enclosure research into a topic match."},
+        {"candidateKey": "other-river-exact", "kind": "OTHER_OWNER_HIGHER_RELATED_SCORE", "reason": "An exact match saved only by another owner must remain ineligible."}
+      ]
+    },
+    {
+      "key": "community-wildfire-smoke-sensors-filtered",
+      "text": "community wildfire smoke sensors",
+      "kind": "FILTERED_LEXICAL_BRIDGE_OPPORTUNITY",
+      "cutoff": 10,
+      "filters": {"yearFrom": 2022, "yearTo": 2026, "documentTypes": ["THESIS"], "openAccessOnly": true, "minimumCitations": 5, "languages": ["en"]},
+      "judgments": {
+        "coastal-exact": 0, "coastal-bridge-drone": 0, "coastal-bridge-mapping": 0, "coastal-wrong-domain": 0,
+        "river-exact": 0, "river-bridge-monitoring": 0, "river-bridge-spectroscopy": 0, "river-wrong-domain": 0,
+        "wildfire-exact": 3, "wildfire-bridge": 2, "wildfire-too-old": 0, "wildfire-too-new": 0,
+        "wildfire-wrong-type": 0, "wildfire-closed": 0, "wildfire-low-citations": 0, "wildfire-wrong-language": 0,
+        "author-mara-vellum": 0, "author-substring-collision": 0, "generic-control": 0
+      },
+      "adversaries": [
+        {"candidateKey": "wildfire-too-old", "kind": "FILTER_VIOLATION", "reason": "A topical thesis below the lower year boundary must not enter feedback."},
+        {"candidateKey": "wildfire-too-new", "kind": "FILTER_VIOLATION", "reason": "A topical thesis above the upper year boundary must not enter feedback."},
+        {"candidateKey": "wildfire-wrong-type", "kind": "FILTER_VIOLATION", "reason": "A topical article must not satisfy a thesis-only request."},
+        {"candidateKey": "wildfire-closed", "kind": "FILTER_VIOLATION", "reason": "A record without reported open access must remain excluded."},
+        {"candidateKey": "wildfire-low-citations", "kind": "FILTER_VIOLATION", "reason": "A topical thesis below the citation threshold must remain excluded."},
+        {"candidateKey": "wildfire-wrong-language", "kind": "FILTER_VIOLATION", "reason": "A Spanish record must not satisfy an English-only request."},
+        {"candidateKey": "catalog-wildfire-exact", "kind": "CATALOG_ONLY_HIGHER_RELATED_SCORE", "reason": "An exact filter-eligible catalog record without an owner edge must remain ineligible."}
+      ]
+    },
+    {
+      "key": "author-mara-vellum",
+      "text": "mara vellum",
+      "kind": "AUTHOR_NO_RELATED_SIGNAL_CONTROL",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "coastal-exact": 0, "coastal-bridge-drone": 0, "coastal-bridge-mapping": 0, "coastal-wrong-domain": 0,
+        "river-exact": 0, "river-bridge-monitoring": 0, "river-bridge-spectroscopy": 0, "river-wrong-domain": 0,
+        "wildfire-exact": 0, "wildfire-bridge": 0, "wildfire-too-old": 0, "wildfire-too-new": 0,
+        "wildfire-wrong-type": 0, "wildfire-closed": 0, "wildfire-low-citations": 0, "wildfire-wrong-language": 0,
+        "author-mara-vellum": 3, "author-substring-collision": 0, "generic-control": 0
+      },
+      "adversaries": [
+        {"candidateKey": "author-substring-collision", "kind": "AUTHOR_SUBSTRING_COLLISION", "reason": "A longer credited name containing the query must not outrank the exact author."},
+        {"candidateKey": "other-author-exact", "kind": "OTHER_OWNER_HIGHER_RELATED_SCORE", "reason": "An exact author match from another owner's history must remain ineligible."}
+      ]
+    },
+    {
+      "key": "orbital-lichen-spectroscopy-no-seed",
+      "text": "orbital lichen spectroscopy",
+      "kind": "NO_SEED_FALLBACK_CONTROL",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "coastal-exact": 0, "coastal-bridge-drone": 0, "coastal-bridge-mapping": 0, "coastal-wrong-domain": 0,
+        "river-exact": 0, "river-bridge-monitoring": 0, "river-bridge-spectroscopy": 0, "river-wrong-domain": 0,
+        "wildfire-exact": 0, "wildfire-bridge": 0, "wildfire-too-old": 0, "wildfire-too-new": 0,
+        "wildfire-wrong-type": 0, "wildfire-closed": 0, "wildfire-low-citations": 0, "wildfire-wrong-language": 0,
+        "author-mara-vellum": 0, "author-substring-collision": 0, "generic-control": 0
+      },
+      "adversaries": [
+        {"candidateKey": "other-orbital-lichen-exact", "kind": "OTHER_OWNER_HIGHER_RELATED_SCORE", "reason": "Another owner's exact match must not create a target-owner seed."},
+        {"candidateKey": "catalog-orbital-lichen-exact", "kind": "CATALOG_ONLY_HIGHER_RELATED_SCORE", "reason": "A catalog-only exact match must not create a target-owner seed."}
+      ]
+    }
+  ]
+}

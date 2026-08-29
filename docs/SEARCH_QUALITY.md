@@ -178,6 +178,33 @@ The digest-bound v1 development fixture contains 25 synthetic canonical-paper ca
 
 This baseline does not change production ranking, combine local results with provider scores, or select a multilingual configuration. Production LOCAL search continues to use its explicit PostgreSQL `english` text-search configuration until a separately reviewed, versioned change is supported by representative evidence.
 
+## Related-topic reuse development comparison
+
+`related-topic-reuse-development-v1.json` and `related-topic-reuse-policy-v1.json` define a separate synthetic `DEVELOPMENT` comparison. Related-topic reuse is evaluated as a new ranking for a different target query over canonical papers already visible to the target owner. It is not an exact search-cache hit, a replay of an earlier provider ranking, or the separate global related-paper endpoint. The unchanged production `LOCAL` / `local-catalog-v1` result is the control.
+
+This was development tuning, not a prospective or blinded evaluation. An initial author-only control exposed unrelated feedback, so its visible development result was used to narrow seed eligibility. The resulting policy is now digest-bound and frozen as a regression contract:
+
+1. Run the production LOCAL control with the target owner, query, and filters, retaining a bounded control pool of at most 50 papers for a cutoff of 10. In control order, select at most two results that carry at least one topic signal: `TITLE_EXACT`, `TITLE_PREFIX`, `TITLE_CONTAINS`, or `POSTGRES_FULL_TEXT`. A result supported only by `AUTHOR_MATCH` is not a seed. The frozen evaluator applies this rule without reading relevance labels.
+2. For each seed, parse its source title with PostgreSQL's `english` text-search configuration, preserve at most 16 distinct lexemes in source order, and combine those lexemes with OR semantics. Apply the target owner's visibility boundary and every original query filter before feedback scoring, ranking, or truncation, then retain at most 25 feedback papers for that seed.
+3. Fuse the control list and the actual non-empty feedback lists with weighted reciprocal-rank fusion at `k = 60`. The control has weight `1`; the feedback lists have total weight `1`, divided evenly by their actual non-empty count. With one-based ranks and a missing-list contribution of zero, the frozen score is `1 / (60 + rank_LOCAL)` plus `((1 / m) / (60 + rank_seed))` for each of the `m` non-empty feedback lists.
+4. Break equal fused scores by control rank with missing values last, then best feedback rank with missing values last, and finally canonical paper UUID ascending. If every seed feedback list is empty, preserve the production LOCAL membership and order exactly with baseline-only RRF contributions.
+
+The separate fixture defines new target-topic relevance labels and explicit prior-search, collection, filter, other-owner, and catalog-only cases. Four queries contribute quality measurements: three lexical-bridge opportunities and one author-only control. A fifth no-seed case is a structural empty-result fallback control. The existing owner-scoped LOCAL development fixture and its production-path regression, filter, provenance, pagination, zero-leak, and zero-provider-call gates remain unchanged.
+
+The focused local reference run observed macro Recall@10 move from `0.542` for the production control to `1.000` for the candidate, and macro nDCG@10 move from `0.819` to `0.968`. The candidate introduced five relevant papers absent from the control top ten and produced strict recall gains on all three opportunity queries. It recorded zero owner-scope leaks, filter violations, rank-one adversaries, discovery-provider calls, and candidate-snapshot writes. Explicit fixture-adversary exposure at 10 moved from one in the control to three in the candidate. The frozen regression policy caps both counts at those observed values and also requires no per-query Recall@10 or nDCG@10 regression. These are narrow observations on the tuned synthetic development labels, not retained blind evidence or exact-score contracts.
+
+Related expansion still surfaced two owner-visible off-topic controls at rank two in this tiny corpus, while the inherited author-substring collision remained in the unchanged author-control ranking. The explicit adversary-at-10 counters make that pollution visible; the zero rank-one-adversary count means only that no adversary occupied the first position. Together with the label-visible seed-rule change, this makes the development result useful for regression but unsuitable as activation evidence.
+
+This candidate is test-only. It does not call `GET /api/v1/papers/{paperId}/related` or the globally catalog-scoped related-paper service; the evaluation query applies owner and filter scope before any feedback score, rank, or 25-paper limit. It invokes no discovery provider, embedding generator, PDF path, or external scholarly network. It introduces no migration, production service path, query fingerprint, search-snapshot origin or ranking explanation, UI, REST, MCP, or runtime-default change, and its measurements are not reader-facing telemetry.
+
+Run the related-topic comparison, its strict fixture/policy and fusion contracts, and the unchanged LOCAL regression from `backend/` with:
+
+```bash
+./mvnw -Dtest=OwnerScopedRelatedTopicReuseEvaluationTests,RelatedTopicRankFusionTests,RelatedTopicReuseEvaluationFixtureContractTests,RelatedTopicReuseEvaluationPolicyContractTests,LocalCatalogTopicSearchEvaluationTests,LocalCatalogTopicEvaluationContractTests test
+```
+
+Advancement requires a policy frozen before a disjoint independently authored blind holdout is scored, gains without regressions on that holdout and the unchanged LOCAL control, representative scale and target-deployment performance measurements, and a separately reviewed design for immutable snapshot explanations, fallback, rollout, and provenance before any product implementation.
+
 ## Multilingual lexical configuration comparison
 
 `multilingual-lexical-development-v1.json` and `multilingual-lexical-policy-v1.json` define a separate SHA-256-bound, evaluation-only comparison. The fixture contains 15 synthetic candidates and five fully judged, language-scoped queries: English, German, French, Spanish, and a Japanese tokenizer control. Every language has two relevant candidates and one same-language negative. The test sends title, abstract, and venue metadata through real PostgreSQL 17 `to_tsvector`, `websearch_to_tsquery`, and `ts_rank_cd(..., 32)` expressions with the same A/B/C field weights as production. This is a comparison of the full-text component only; it does not execute LOCAL title/author/citation boosts, owner visibility, pagination, or the final production tie-break. The initial corpus is designed to expose stemming recall differences, not substantial false-positive or global cross-language ranking pressure.
@@ -208,6 +235,7 @@ Candidate work includes:
 
 - add a disjoint independently authored multilingual holdout and evaluate a real tokenizer strategy for languages without built-in PostgreSQL configurations;
 - design and benchmark language detection, generated-vector/index migration, mixed-language behavior, and rollback before any multilingual production candidate exists;
+- add a disjoint independently authored related-topic reuse holdout and target-deployment performance evidence before considering a versioned product path;
 - evaluate the default-off mode on a larger and more representative relevance set before considering a default change;
 - persist feature-level reasons if hybrid results enter immutable search snapshots;
 - expand the owner-scoped local-catalog topic fixture and add an independently authored holdout before changing its ranking formula or combining it with provider scores.

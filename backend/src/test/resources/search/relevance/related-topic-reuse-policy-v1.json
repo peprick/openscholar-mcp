@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "policyId": "related-topic-reuse-policy-v1",
+  "developmentFixtureId": "related-topic-reuse-development-v1",
+  "developmentFixtureSha256": "ff82f415c629f4e8b46606ece900de40c6ff05ddd77c0c7f8af319e191263f2e",
+  "status": "EVALUATION_ONLY",
+  "labelUnit": "CANONICAL_PAPER_TOPIC_RELEVANCE",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "baseline": {
+    "pipelineVersion": "local-catalog-v1",
+    "mode": "LOCAL",
+    "poolSize": 50,
+    "cutoff": 10
+  },
+  "candidate": {
+    "seedSelection": "PRODUCTION_LOCAL_TOPIC_SIGNAL_RANK",
+    "seedEligibilityFeatures": [
+      "TITLE_EXACT",
+      "TITLE_PREFIX",
+      "TITLE_CONTAINS",
+      "POSTGRES_FULL_TEXT"
+    ],
+    "maximumSeeds": 2,
+    "feedbackSignal": "SOURCE_TITLE_POSTGRES_FULL_TEXT",
+    "textSearchConfiguration": "english",
+    "maximumSeedLexemes": 16,
+    "queryConstruction": "ORDERED_LEXEME_OR",
+    "textRankNormalization": 32,
+    "maximumRelatedCandidatesPerSeed": 25,
+    "scopeOrder": [
+      "OWNER_ELIGIBILITY",
+      "COMMAND_FILTERS",
+      "RELATED_MATCH",
+      "RANK",
+      "LIMIT"
+    ],
+    "fusion": {
+      "method": "WEIGHTED_RRF",
+      "k": 60,
+      "baselineWeight": 1.0,
+      "totalFeedbackWeight": 1.0,
+      "normalizeBy": "NONEMPTY_FEEDBACK_LIST_COUNT"
+    },
+    "tieBreak": [
+      "FUSED_SCORE_DESC",
+      "BASELINE_RANK_ASC_MISSING_LAST",
+      "BEST_FEEDBACK_RANK_ASC_MISSING_LAST",
+      "PAPER_UUID_ASC"
+    ],
+    "fallback": "EXACT_BASELINE_WHEN_NO_NONEMPTY_FEEDBACK"
+  },
+  "constraints": {
+    "queryCount": 5,
+    "candidateCount": 25,
+    "targetVisibleCandidateCount": 19,
+    "opportunityQueryCount": 3,
+    "controlQueryCount": 2,
+    "metadataOnly": true,
+    "allTargetVisibleCandidatesJudged": true,
+    "requiredLineageKinds": [
+      "TARGET_OWNER_SEARCH",
+      "TARGET_OWNER_COLLECTION",
+      "OTHER_OWNER_SEARCH",
+      "OTHER_OWNER_COLLECTION",
+      "CATALOG_ONLY"
+    ],
+    "requiredAdversaryKinds": [
+      "OWNER_VISIBLE_TOPIC_DRIFT",
+      "OTHER_OWNER_HIGHER_RELATED_SCORE",
+      "CATALOG_ONLY_HIGHER_RELATED_SCORE",
+      "FILTER_VIOLATION",
+      "AUTHOR_SUBSTRING_COLLISION"
+    ]
+  },
+  "metrics": [
+    "RECALL_AT_10",
+    "NDCG_AT_10",
+    "PRECISION_AT_1",
+    "MEAN_RECIPROCAL_RANK_AT_10",
+    "NOVEL_RELEVANT_AT_10",
+    "OWNER_SCOPE_LEAK_COUNT",
+    "FILTER_VIOLATION_COUNT",
+    "BASELINE_EXPLICIT_ADVERSARY_AT_10_COUNT",
+    "CANDIDATE_EXPLICIT_ADVERSARY_AT_10_COUNT",
+    "RANK_ONE_ADVERSARY_COUNT",
+    "PROVIDER_CALL_COUNT",
+    "EXPERIMENTAL_SNAPSHOT_WRITE_COUNT"
+  ],
+  "gates": {
+    "minimumStrictOpportunityRecallImprovements": 2,
+    "minimumNovelRelevantAt10": 2,
+    "requireNoPerQueryRecallRegression": true,
+    "requireNoPerQueryNdcgRegression": true,
+    "requireNoMacroNdcgRegression": true,
+    "requireNoControlRegression": true,
+    "requireFilteredOpportunityStrictRecallImprovement": true,
+    "requireAuthorControlRelevantBaselineHit": true,
+    "maximumOwnerScopeLeakCount": 0,
+    "maximumFilterViolationCount": 0,
+    "maximumBaselineAdversaryAt10Count": 1,
+    "maximumCandidateAdversaryAt10Count": 3,
+    "maximumRankOneAdversaryCount": 0,
+    "maximumProviderCallCount": 0,
+    "maximumExperimentalSnapshotWriteCount": 0,
+    "requireRepeatedOrderAndScores": true,
+    "requireHiddenCandidateNoninterference": true,
+    "requireExactFallbackWithoutFeedback": true
+  }
+}
