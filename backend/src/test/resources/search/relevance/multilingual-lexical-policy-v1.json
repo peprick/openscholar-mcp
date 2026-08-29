@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "policyId": "multilingual-lexical-policy-v1",
+  "developmentFixtureId": "multilingual-lexical-development-v1",
+  "developmentFixtureSha256": "366f49cd7278fc0d015adffc173632ae3384c863da0aff7270656317bccf1471",
+  "status": "EVALUATION_ONLY",
+  "baseline": {
+    "profile": "PRODUCTION_ENGLISH",
+    "configuration": "english",
+    "queryFunction": "WEBSEARCH_TO_TSQUERY",
+    "rankFunction": "TS_RANK_CD",
+    "rankNormalization": 32,
+    "weightedFields": ["TITLE_A", "ABSTRACT_B", "VENUE_C"]
+  },
+  "runtime": {
+    "postgresMajor": 17,
+    "containerImage": "pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f"
+  },
+  "profiles": [
+    {
+      "key": "PRODUCTION_ENGLISH",
+      "defaultConfiguration": "english",
+      "languageConfigurations": {}
+    },
+    {
+      "key": "SIMPLE",
+      "defaultConfiguration": "simple",
+      "languageConfigurations": {}
+    },
+    {
+      "key": "LANGUAGE_AWARE",
+      "defaultConfiguration": "simple",
+      "languageConfigurations": {
+        "en": "english",
+        "de": "german",
+        "fr": "french",
+        "es": "spanish"
+      }
+    }
+  ],
+  "supportedLanguages": ["en", "de", "fr", "es"],
+  "fallbackLanguages": ["ja"],
+  "metrics": [
+    "RECALL_AT_3",
+    "NDCG_AT_3",
+    "PRECISION_AT_1",
+    "MEAN_RECIPROCAL_RANK_AT_3",
+    "MATCHED_RELEVANT_COUNT"
+  ],
+  "gates": {
+    "minimumLanguageAwareSupportedMacroRecallAt3": 0.90,
+    "minimumLanguageAwareSupportedMacroNdcgAt3": 0.90,
+    "minimumStrictNonEnglishImprovementCount": 2,
+    "maximumSupportedQueryRegressionCount": 0,
+    "requireStableRepeatedRanking": true,
+    "requireFallbackReportedSeparately": true,
+    "requireProductionConfigurationUnchanged": true
+  }
+}

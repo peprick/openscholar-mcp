@@ -89,6 +89,8 @@ Its [provider-quality evaluation](docs/PROVIDER_QUALITY.md) is engineering-only.
 
 The [owner-scoped LOCAL search-quality baseline](docs/SEARCH_QUALITY.md#owner-scoped-local-topic-search-baseline) is also engineering-only. It uses synthetic metadata made visible through prior searches and collections, exercises the production LOCAL path on PostgreSQL, and measures Recall@10, nDCG@10, Precision@1, and MRR behind zero-leak and zero-provider-call gates. It performs no provider-network access, stores no PDFs, exposes no reader-facing metrics, and leaves production's explicit `english` text-search configuration unchanged.
 
+The separate [multilingual lexical comparison](docs/SEARCH_QUALITY.md#multilingual-lexical-configuration-comparison) evaluates PostgreSQL `english`, `simple`, and an allowlisted language-aware profile over digest-bound English, German, French, Spanish, and Japanese synthetic metadata. It is an evaluation-only Testcontainers experiment, not a product feature or migration. The language-aware profile uses `simple` as its Japanese fallback, Japanese is reported as unsupported rather than claimed as covered, and production remains on `english` pending representative independent evidence and an indexing/migration design.
+
 ## Use it from an agent
 
 With `MCP_LOCAL_API_KEY` configured, connect a Streamable HTTP client to `http://127.0.0.1:8080/mcp`:

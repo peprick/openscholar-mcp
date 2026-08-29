@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "multilingual-lexical-development-v1",
+  "policyId": "multilingual-lexical-policy-v1",
+  "split": "DEVELOPMENT",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "candidates": [
+    {
+      "key": "en-calibration-primary",
+      "language": "en",
+      "title": "Calibration of Neural Models for Clinical Decisions",
+      "abstractText": "Reliable probability estimates help clinicians interpret model uncertainty.",
+      "venueName": "Journal of Clinical Machine Learning"
+    },
+    {
+      "key": "en-calibration-secondary",
+      "language": "en",
+      "title": "Calibrated Neural Modeling in Medical Diagnosis",
+      "abstractText": "A neural model is calibrated across hospitals and patient groups.",
+      "venueName": null
+    },
+    {
+      "key": "en-calibration-negative",
+      "language": "en",
+      "title": "Calibration of Statistical Forecast Models",
+      "abstractText": "Reliable weather probabilities are evaluated across seasonal forecasts.",
+      "venueName": "Meteorological Methods"
+    },
+    {
+      "key": "de-supply-chain-primary",
+      "language": "de",
+      "title": "Absicherungen reproduzierbarer Software Lieferketten",
+      "abstractText": "Signierte Builds schützen Abhängigkeiten und Herkunftsnachweise.",
+      "venueName": "Zeitschrift für Softwaresicherheit"
+    },
+    {
+      "key": "de-supply-chain-secondary",
+      "language": "de",
+      "title": "Absicherung von Software Lieferketten mit reproduzierbaren Builds",
+      "abstractText": "Die Studie prüft Pakete, Signaturen und Abhängigkeiten.",
+      "venueName": null
+    },
+    {
+      "key": "de-supply-chain-negative",
+      "language": "de",
+      "title": "Absicherung reproduzierbarer Lebensmittel Lieferketten",
+      "abstractText": "Kühlketten schützen verderbliche Waren auf dem Transportweg.",
+      "venueName": "Logistik und Handel"
+    },
+    {
+      "key": "fr-urban-cooling-primary",
+      "language": "fr",
+      "title": "Refroidissement des îlots urbains par les arbres",
+      "abstractText": "La canopée réduit les températures pendant les vagues de chaleur.",
+      "venueName": "Climat et villes"
+    },
+    {
+      "key": "fr-urban-cooling-secondary",
+      "language": "fr",
+      "title": "Les arbres refroidissent les îlots en zone urbaine",
+      "abstractText": "Des images thermiques mesurent l'ombre et le refroidissement des rues.",
+      "venueName": null
+    },
+    {
+      "key": "fr-urban-cooling-negative",
+      "language": "fr",
+      "title": "Inventaire des oiseaux des îlots urbains",
+      "abstractText": "Les écologues cartographient les habitats et la diversité aviaire.",
+      "venueName": "Écologie urbaine"
+    },
+    {
+      "key": "es-solar-battery-primary",
+      "language": "es",
+      "title": "Optimizar batería solar para microrredes",
+      "abstractText": "El control de carga mejora la eficiencia y la vida útil del almacenamiento.",
+      "venueName": "Energía distribuida"
+    },
+    {
+      "key": "es-solar-battery-secondary",
+      "language": "es",
+      "title": "Baterías optimizadas con generación solar",
+      "abstractText": "Un algoritmo coordina paneles, almacenamiento y demanda local.",
+      "venueName": null
+    },
+    {
+      "key": "es-solar-battery-negative",
+      "language": "es",
+      "title": "Optimización de turbinas eólicas eficientes",
+      "abstractText": "El control aerodinámico aumenta la producción de parques marinos.",
+      "venueName": "Sistemas eólicos"
+    },
+    {
+      "key": "ja-ukiyoe-primary",
+      "language": "ja",
+      "title": "浮世絵顔料の非破壊分光分析",
+      "abstractText": "可搬型分光計を用いて木版画の色材を識別する。",
+      "venueName": "文化財科学"
+    },
+    {
+      "key": "ja-ukiyoe-secondary",
+      "language": "ja",
+      "title": "分光画像による浮世絵顔料の同定",
+      "abstractText": "反射スペクトルから退色した顔料を分類する。",
+      "venueName": null
+    },
+    {
+      "key": "ja-ukiyoe-negative",
+      "language": "ja",
+      "title": "浮世絵の配色を用いた画像推薦",
+      "abstractText": "色彩特徴から現代のデジタル画像を検索する。",
+      "venueName": "画像情報学"
+    }
+  ],
+  "queries": [
+    {
+      "key": "english-inflection",
+      "language": "en",
+      "text": "calibrate neural model",
+      "cutoff": 3,
+      "judgments": {
+        "en-calibration-primary": 3,
+        "en-calibration-secondary": 2,
+        "en-calibration-negative": 0
+      }
+    },
+    {
+      "key": "german-inflection",
+      "language": "de",
+      "text": "Absicherung reproduzierbare Software Lieferkette",
+      "cutoff": 3,
+      "judgments": {
+        "de-supply-chain-primary": 3,
+        "de-supply-chain-secondary": 2,
+        "de-supply-chain-negative": 0
+      }
+    },
+    {
+      "key": "french-inflection",
+      "language": "fr",
+      "text": "refroidir îlot urbain",
+      "cutoff": 3,
+      "judgments": {
+        "fr-urban-cooling-primary": 3,
+        "fr-urban-cooling-secondary": 2,
+        "fr-urban-cooling-negative": 0
+      }
+    },
+    {
+      "key": "spanish-inflection",
+      "language": "es",
+      "text": "optimizar batería solar",
+      "cutoff": 3,
+      "judgments": {
+        "es-solar-battery-primary": 3,
+        "es-solar-battery-secondary": 2,
+        "es-solar-battery-negative": 0
+      }
+    },
+    {
+      "key": "japanese-tokenizer-control",
+      "language": "ja",
+      "text": "浮世絵 顔料 分光",
+      "cutoff": 3,
+      "judgments": {
+        "ja-ukiyoe-primary": 3,
+        "ja-ukiyoe-secondary": 2,
+        "ja-ukiyoe-negative": 0
+      }
+    }
+  ]
+}

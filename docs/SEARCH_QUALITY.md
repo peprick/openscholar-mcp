@@ -174,15 +174,40 @@ The dedicated `local-catalog-v1` development gate is evaluation-only. It loads v
 
 The evaluator reports Recall@10, nDCG@10, Precision@1, and mean reciprocal rank. Separate structural gates require zero cross-owner result leakage and zero discovery-provider calls; the run performs no provider-network access and stores no PDFs. These are engineering metrics and are not exposed through the reader UI, REST API, or MCP tools.
 
-The digest-bound v1 development fixture contains 25 synthetic canonical-paper candidates, including 19 candidates visible to the target owner, across six fully judged queries. The pinned 2026-08-29 run recorded macro Recall@10 `1.000`, macro nDCG@10 `0.989`, macro Precision@1 `1.000`, and MRR@10 `1.000`, with zero owner-scope leaks, zero top-ranked adversaries, and zero provider calls. These numbers describe this small synthetic development fixture only; they are regression evidence, not a claim about general search quality or a substitute for an independently authored holdout.
+The digest-bound v1 development fixture contains 25 synthetic canonical-paper candidates, including 19 candidates visible to the target owner, across six fully judged queries. A local reference run on 2026-08-29 observed macro Recall@10 `1.000`, macro nDCG@10 `0.989`, macro Precision@1 `1.000`, and MRR@10 `1.000`, with zero owner-scope leaks, zero top-ranked adversaries, and zero provider calls. These values are an observation rather than a retained result artifact or an exact-score contract. The enforced policy uses bounded floors plus structural safety gates. This small synthetic development fixture is regression evidence, not a claim about general search quality or a substitute for an independently authored holdout.
 
 This baseline does not change production ranking, combine local results with provider scores, or select a multilingual configuration. Production LOCAL search continues to use its explicit PostgreSQL `english` text-search configuration until a separately reviewed, versioned change is supported by representative evidence.
+
+## Multilingual lexical configuration comparison
+
+`multilingual-lexical-development-v1.json` and `multilingual-lexical-policy-v1.json` define a separate SHA-256-bound, evaluation-only comparison. The fixture contains 15 synthetic candidates and five fully judged, language-scoped queries: English, German, French, Spanish, and a Japanese tokenizer control. Every language has two relevant candidates and one same-language negative. The test sends title, abstract, and venue metadata through real PostgreSQL 17 `to_tsvector`, `websearch_to_tsquery`, and `ts_rank_cd(..., 32)` expressions with the same A/B/C field weights as production. This is a comparison of the full-text component only; it does not execute LOCAL title/author/citation boosts, owner visibility, pagination, or the final production tie-break. The initial corpus is designed to expose stemming recall differences, not substantial false-positive or global cross-language ranking pressure.
+
+Three explicit profiles are compared:
+
+- `PRODUCTION_ENGLISH` reproduces the production full-text configuration by applying `english` to every query and document; it does not represent the complete LOCAL scoring formula;
+- `SIMPLE` applies the no-stemming `simple` configuration; and
+- `LANGUAGE_AWARE` maps `en -> english`, `de -> german`, `fr -> french`, and `es -> spanish` through a closed enum allowlist.
+
+PostgreSQL has no built-in Japanese configuration in this pinned image. The language-aware profile therefore falls back to `simple` for Japanese. `TOKENIZER_FALLBACK` is the query's unsupported-language status in every profile's diagnostic output, not a claim that every profile used `simple`; Japanese is excluded from supported-language macro gates. It remains visible in per-query output so a zero or weak result cannot be hidden inside an aggregate. A real Japanese search design would need an explicitly selected tokenizer/parser and its own representative evaluation.
+
+The policy requires supported-language macro Recall@3 and nDCG@3 of at least `0.90` for the language-aware profile, at least two strict non-English recall improvements over the production profile, no supported-query recall regression, and identical repeated ordering. The focused reference run cleared those gates. Exact decimal scores and complete rankings are diagnostic output, not committed product telemetry or general multilingual-quality claims.
+
+The test checks that every configured PostgreSQL text-search configuration exists, the running server major is 17, the running container name matches the policy's digest-pinned image, and the migrated production `paper.search_vector` still uses `english`. The policy and Testcontainers configuration share one image constant. A source-level contract freezes the production LOCAL query function, normalization, weights, tie-break, and V9 generated-vector expression; a separate assertion binds the comparator SQL to the policy's function, normalization, and A/B/C declarations. After Flyway bootstraps an ephemeral schema, the evaluator executes only scoring and metadata reads and writes no product rows. No provider or scholarly-network adapter is invoked, no PDF is stored, and no UI, REST, or MCP response exposes these measurements.
+
+Run the comparison from `backend/` with:
+
+```bash
+./mvnw -Dtest=MultilingualLexicalConfigurationEvaluationTests,MultilingualLexicalEvaluationContractTests,LocalCatalogLexicalBaselineContractTests test
+```
+
+The experiment does not establish a migration path. A real switch would require reliable language identification, a schema/index strategy for per-language vectors, mixed-language and unknown-language behavior, an independently authored holdout, representative performance measurements, and explicit review of ranking and rollout compatibility.
 
 ## Remaining evaluation gates
 
 Candidate work includes:
 
-- compare `english`, `simple`, and language-aware lexical configurations;
+- add a disjoint independently authored multilingual holdout and evaluate a real tokenizer strategy for languages without built-in PostgreSQL configurations;
+- design and benchmark language detection, generated-vector/index migration, mixed-language behavior, and rollback before any multilingual production candidate exists;
 - evaluate the default-off mode on a larger and more representative relevance set before considering a default change;
 - persist feature-level reasons if hybrid results enter immutable search snapshots;
 - expand the owner-scoped local-catalog topic fixture and add an independently authored holdout before changing its ranking formula or combining it with provider scores.
