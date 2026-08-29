@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "policyId": "local-catalog-topic-policy-v1",
+  "developmentFixtureId": "local-catalog-topic-development-v1",
+  "developmentFixtureSha256": "702f8e9b546977b80cc16192c105173f90a0fc0e66eea309f50703d8ba1fbd3f",
+  "status": "EVALUATION_ONLY",
+  "labelUnit": "CANONICAL_PAPER_TOPIC_RELEVANCE",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "baseline": {
+    "pipelineVersion": "local-catalog-v1",
+    "mode": "LOCAL",
+    "textSearchConfiguration": "english",
+    "queryFunction": "WEBSEARCH_TO_TSQUERY",
+    "textRankNormalization": 32,
+    "searchVectorFields": ["TITLE_A", "ABSTRACT_B", "VENUE_C"],
+    "weights": {
+      "titleExact": 8.0,
+      "titlePrefix": 5.0,
+      "titleContains": 2.5,
+      "textRank": 3.0,
+      "authorSubstring": 1.5,
+      "logCitation": 0.01
+    },
+    "tieBreak": ["TOTAL_SCORE_DESC", "CITATION_COUNT_DESC_NULLS_LAST", "PAPER_UUID_ASC"]
+  },
+  "constraints": {
+    "queryCount": 6,
+    "candidateCount": 25,
+    "targetVisibleCandidateCount": 19,
+    "pageSize": 10,
+    "metadataOnly": true,
+    "allTargetVisibleCandidatesJudged": true,
+    "requiredVisibilities": [
+      "TARGET_OWNER_SEARCH",
+      "TARGET_OWNER_COLLECTION",
+      "OTHER_OWNER_SEARCH",
+      "OTHER_OWNER_COLLECTION",
+      "CATALOG_ONLY"
+    ],
+    "requiredAdversaryKinds": [
+      "OTHER_OWNER_SEARCH_EXACT_MATCH",
+      "OTHER_OWNER_COLLECTION_EXACT_MATCH",
+      "CATALOG_ONLY_EXACT_MATCH",
+      "HIGH_CITATION_LEXICAL_COLLISION",
+      "AUTHOR_SUBSTRING_COLLISION"
+    ],
+    "requiredFilterDimensions": [
+      "YEAR_FROM",
+      "YEAR_TO",
+      "DOCUMENT_TYPE",
+      "OPEN_ACCESS",
+      "MINIMUM_CITATIONS",
+      "LANGUAGE"
+    ]
+  },
+  "metrics": [
+    "RECALL_AT_10",
+    "NDCG_AT_10",
+    "PRECISION_AT_1",
+    "MEAN_RECIPROCAL_RANK_AT_10",
+    "OWNER_SCOPE_LEAK_COUNT",
+    "TOP_RANKED_ADVERSARY_COUNT"
+  ],
+  "gates": {
+    "minimumPerQueryRecallAt10": 0.5,
+    "minimumPerQueryNdcgAt10": 0.6,
+    "minimumMacroRecallAt10": 0.9,
+    "minimumMacroNdcgAt10": 0.8,
+    "minimumMacroPrecisionAt1": 0.6,
+    "minimumMeanReciprocalRankAt10": 0.8,
+    "maximumOwnerScopeLeakCount": 0,
+    "maximumTopRankedAdversaryCount": 0,
+    "requireRepeatedOrder": true,
+    "requireNoProviderCalls": true
+  }
+}

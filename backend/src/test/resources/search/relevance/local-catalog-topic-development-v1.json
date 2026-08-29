@@ -1,0 +1,437 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "local-catalog-topic-development-v1",
+  "policyId": "local-catalog-topic-policy-v1",
+  "split": "DEVELOPMENT",
+  "labelUnit": "CANONICAL_PAPER_TOPIC_RELEVANCE",
+  "sourcePolicy": "SYNTHETIC_METADATA_ONLY",
+  "retrievedAt": "2026-08-29T00:00:00Z",
+  "candidates": [
+    {
+      "key": "rare-disease-exact",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Rare Disease Graph Diagnosis",
+      "abstractText": "A synthetic benchmark for evidence-aware diagnosis of uncommon disorders.",
+      "venueName": "Synthetic Clinical Informatics",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 21,
+      "reportedOpenAccess": true,
+      "authors": ["Mira Sen"]
+    },
+    {
+      "key": "rare-disease-prefix",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Rare Disease Graph Diagnosis with Sparse Evidence",
+      "abstractText": "A synthetic study of graph-supported diagnostic ranking.",
+      "venueName": "Open Methods Archive",
+      "publicationYear": 2024,
+      "documentType": "PREPRINT",
+      "language": "en",
+      "citationCount": 8,
+      "reportedOpenAccess": true,
+      "authors": ["Noor Vale"]
+    },
+    {
+      "key": "rare-disease-fulltext",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Evidence Networks for Uncommon Disorders",
+      "abstractText": "This synthetic paper evaluates rare disease graph diagnosis under incomplete evidence.",
+      "venueName": "Journal of Synthetic Health Data",
+      "publicationYear": 2023,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 12,
+      "reportedOpenAccess": false,
+      "authors": ["Asha Neri"]
+    },
+    {
+      "key": "rare-disease-citation-collision",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Graph Diagnosis for Rare Industrial Disease Codes",
+      "abstractText": "A synthetic equipment taxonomy using graph diagnosis and rare disease-shaped code labels.",
+      "venueName": "Industrial Taxonomy Review",
+      "publicationYear": 2019,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 900,
+      "reportedOpenAccess": true,
+      "authors": ["Tomas Quill"]
+    },
+    {
+      "key": "maternal-sepsis-exact",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Maternal Sepsis Prediction",
+      "abstractText": "A synthetic early-warning cohort for obstetric infection risk.",
+      "venueName": "Synthetic Maternal Health",
+      "publicationYear": 2025,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 17,
+      "reportedOpenAccess": true,
+      "authors": ["Leena Moss"]
+    },
+    {
+      "key": "maternal-sepsis-fulltext",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Early Warning Models in Obstetric Care",
+      "abstractText": "A synthetic evaluation of maternal sepsis prediction before clinical deterioration.",
+      "venueName": "Open Obstetric Models",
+      "publicationYear": 2022,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 50,
+      "reportedOpenAccess": true,
+      "authors": ["Priya North"]
+    },
+    {
+      "key": "adaptive-trial-exact",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Adaptive Trial Matching",
+      "abstractText": "A synthetic protocol for matching participants to changing eligibility rules.",
+      "venueName": null,
+      "publicationYear": 2024,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": null,
+      "reportedOpenAccess": false,
+      "authors": ["Evan Pike"]
+    },
+    {
+      "key": "adaptive-trial-fulltext",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Adaptive Clinical Recruitment",
+      "abstractText": "Synthetic trial matching under incomplete metadata and changing enrollment constraints.",
+      "venueName": null,
+      "publicationYear": null,
+      "documentType": "PREPRINT",
+      "language": "en",
+      "citationCount": null,
+      "reportedOpenAccess": true,
+      "authors": []
+    },
+    {
+      "key": "author-ilya-rowan",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Federated Cohort Analysis",
+      "abstractText": "A synthetic privacy-preserving cohort analysis.",
+      "venueName": "Synthetic Data Systems",
+      "publicationYear": 2021,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 25,
+      "reportedOpenAccess": true,
+      "authors": ["Ilya Rowan"]
+    },
+    {
+      "key": "author-substring-collision",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Marine Sensor Calibration",
+      "abstractText": "A synthetic study unrelated to cohort analysis.",
+      "venueName": "Synthetic Ocean Engineering",
+      "publicationYear": 2020,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 1,
+      "reportedOpenAccess": true,
+      "authors": ["Ilya Rowanfield"]
+    },
+    {
+      "key": "genomic-filter-relevant",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Open Genomic Surveillance",
+      "abstractText": "Synthetic pathogen surveillance for reproducible public-health analysis.",
+      "venueName": "Example Graduate Repository",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 15,
+      "reportedOpenAccess": true,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "genomic-filter-old",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Open Genomic Surveillance Before Modern Pipelines",
+      "abstractText": "Synthetic pathogen surveillance outside the selected year window.",
+      "venueName": "Example Graduate Repository",
+      "publicationYear": 2018,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 100,
+      "reportedOpenAccess": true,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "genomic-filter-type",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Open Genomic Surveillance Article",
+      "abstractText": "Synthetic pathogen surveillance with the wrong document type.",
+      "venueName": "Synthetic Genomics",
+      "publicationYear": 2023,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 100,
+      "reportedOpenAccess": true,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "genomic-filter-language",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Open Genomic Surveillance en Francais",
+      "abstractText": "Synthetic pathogen surveillance with non-English metadata.",
+      "venueName": "Example Graduate Repository",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "fr",
+      "citationCount": 100,
+      "reportedOpenAccess": true,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "genomic-filter-closed",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Open Genomic Surveillance in a Closed Archive",
+      "abstractText": "Synthetic pathogen surveillance without a reported open-access record.",
+      "venueName": "Example Graduate Repository",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 100,
+      "reportedOpenAccess": false,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "genomic-filter-low-citations",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Open Genomic Surveillance Pilot",
+      "abstractText": "Synthetic pathogen surveillance below the citation threshold.",
+      "venueName": "Example Graduate Repository",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 3,
+      "reportedOpenAccess": true,
+      "authors": ["Rhea Stone"]
+    },
+    {
+      "key": "soil-carbon-exact",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Soil Carbon Forecasting",
+      "abstractText": "A synthetic benchmark for forecasting carbon changes in soil.",
+      "venueName": "Synthetic Climate Methods",
+      "publicationYear": 2024,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 14,
+      "reportedOpenAccess": true,
+      "authors": ["Nia Brook"]
+    },
+    {
+      "key": "soil-carbon-fulltext",
+      "visibility": "TARGET_OWNER_COLLECTION",
+      "title": "Forecasts for Managed Landscapes",
+      "abstractText": "Synthetic soil carbon forecasting across changing land-management regimes.",
+      "venueName": "Open Agroecology Models",
+      "publicationYear": 2023,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 9,
+      "reportedOpenAccess": true,
+      "authors": ["Omar Reed"]
+    },
+    {
+      "key": "soil-carbon-collision",
+      "visibility": "TARGET_OWNER_SEARCH",
+      "title": "Soil Carbon Forecasting for Fictional Planet Games",
+      "abstractText": "A synthetic game-balancing model rather than environmental research.",
+      "venueName": "Synthetic Game Systems",
+      "publicationYear": 2020,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 700,
+      "reportedOpenAccess": true,
+      "authors": ["Kira Flint"]
+    },
+    {
+      "key": "other-rare-disease-exact",
+      "visibility": "OTHER_OWNER_SEARCH",
+      "title": "Rare Disease Graph Diagnosis",
+      "abstractText": "An exact synthetic title visible only to another owner.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 999,
+      "reportedOpenAccess": true,
+      "authors": ["Other Owner Author"]
+    },
+    {
+      "key": "other-maternal-sepsis-exact",
+      "visibility": "OTHER_OWNER_COLLECTION",
+      "title": "Maternal Sepsis Prediction",
+      "abstractText": "An exact synthetic title saved only by another owner.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 998,
+      "reportedOpenAccess": true,
+      "authors": ["Other Owner Author"]
+    },
+    {
+      "key": "other-author-ilya-rowan",
+      "visibility": "OTHER_OWNER_SEARCH",
+      "title": "Private Owner Cohort Notes",
+      "abstractText": "Synthetic metadata visible only to another owner.",
+      "venueName": "Other Owner Archive",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 997,
+      "reportedOpenAccess": true,
+      "authors": ["Ilya Rowan"]
+    },
+    {
+      "key": "catalog-adaptive-trial-exact",
+      "visibility": "CATALOG_ONLY",
+      "title": "Adaptive Trial Matching",
+      "abstractText": "An exact synthetic title with no owner visibility edge.",
+      "venueName": "Unowned Synthetic Catalog",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 996,
+      "reportedOpenAccess": true,
+      "authors": ["Catalog Only Author"]
+    },
+    {
+      "key": "catalog-soil-carbon-exact",
+      "visibility": "CATALOG_ONLY",
+      "title": "Soil Carbon Forecasting",
+      "abstractText": "An exact synthetic title with no owner visibility edge.",
+      "venueName": "Unowned Synthetic Catalog",
+      "publicationYear": 2026,
+      "documentType": "ARTICLE",
+      "language": "en",
+      "citationCount": 995,
+      "reportedOpenAccess": true,
+      "authors": ["Catalog Only Author"]
+    },
+    {
+      "key": "catalog-genomic-filter-exact",
+      "visibility": "CATALOG_ONLY",
+      "title": "Open Genomic Surveillance",
+      "abstractText": "An exact synthetic title satisfying filters but with no owner visibility edge.",
+      "venueName": "Unowned Synthetic Catalog",
+      "publicationYear": 2023,
+      "documentType": "THESIS",
+      "language": "en",
+      "citationCount": 994,
+      "reportedOpenAccess": true,
+      "authors": ["Catalog Only Author"]
+    }
+  ],
+  "queries": [
+    {
+      "key": "rare-disease-graph-diagnosis",
+      "text": "rare disease graph diagnosis",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "rare-disease-exact": 3, "rare-disease-prefix": 2, "rare-disease-fulltext": 2, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 0, "maternal-sepsis-fulltext": 0, "adaptive-trial-exact": 0, "adaptive-trial-fulltext": 0,
+        "author-ilya-rowan": 0, "author-substring-collision": 0, "genomic-filter-relevant": 0, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 0, "soil-carbon-fulltext": 0, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "other-rare-disease-exact", "kind": "OTHER_OWNER_SEARCH_EXACT_MATCH", "reason": "An exact high-citation match must remain invisible to the target owner."},
+        {"candidateKey": "rare-disease-citation-collision", "kind": "HIGH_CITATION_LEXICAL_COLLISION", "reason": "Citation volume must not put an off-topic lexical collision first."}
+      ]
+    },
+    {
+      "key": "maternal-sepsis-prediction",
+      "text": "maternal sepsis prediction",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "rare-disease-exact": 0, "rare-disease-prefix": 0, "rare-disease-fulltext": 0, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 3, "maternal-sepsis-fulltext": 2, "adaptive-trial-exact": 0, "adaptive-trial-fulltext": 0,
+        "author-ilya-rowan": 0, "author-substring-collision": 0, "genomic-filter-relevant": 0, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 0, "soil-carbon-fulltext": 0, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "other-maternal-sepsis-exact", "kind": "OTHER_OWNER_COLLECTION_EXACT_MATCH", "reason": "An exact saved-paper match must remain private to the other owner."}
+      ]
+    },
+    {
+      "key": "adaptive-trial-matching",
+      "text": "adaptive trial matching",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "rare-disease-exact": 0, "rare-disease-prefix": 0, "rare-disease-fulltext": 0, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 0, "maternal-sepsis-fulltext": 0, "adaptive-trial-exact": 3, "adaptive-trial-fulltext": 2,
+        "author-ilya-rowan": 0, "author-substring-collision": 0, "genomic-filter-relevant": 0, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 0, "soil-carbon-fulltext": 0, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "catalog-adaptive-trial-exact", "kind": "CATALOG_ONLY_EXACT_MATCH", "reason": "A catalog record without an owner visibility edge must not appear."}
+      ]
+    },
+    {
+      "key": "author-ilya-rowan",
+      "text": "ilya rowan",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "rare-disease-exact": 0, "rare-disease-prefix": 0, "rare-disease-fulltext": 0, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 0, "maternal-sepsis-fulltext": 0, "adaptive-trial-exact": 0, "adaptive-trial-fulltext": 0,
+        "author-ilya-rowan": 3, "author-substring-collision": 0, "genomic-filter-relevant": 0, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 0, "soil-carbon-fulltext": 0, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "author-substring-collision", "kind": "AUTHOR_SUBSTRING_COLLISION", "reason": "A longer credited name containing the query must not outrank the exact author."},
+        {"candidateKey": "other-author-ilya-rowan", "kind": "OTHER_OWNER_SEARCH_EXACT_MATCH", "reason": "An exact author match must remain private to the other owner."}
+      ]
+    },
+    {
+      "key": "open-genomic-surveillance-filtered",
+      "text": "open genomic surveillance",
+      "cutoff": 10,
+      "filters": {"yearFrom": 2020, "yearTo": 2026, "documentTypes": ["THESIS"], "openAccessOnly": true, "minimumCitations": 10, "languages": ["en"]},
+      "judgments": {
+        "rare-disease-exact": 0, "rare-disease-prefix": 0, "rare-disease-fulltext": 0, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 0, "maternal-sepsis-fulltext": 0, "adaptive-trial-exact": 0, "adaptive-trial-fulltext": 0,
+        "author-ilya-rowan": 0, "author-substring-collision": 0, "genomic-filter-relevant": 3, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 0, "soil-carbon-fulltext": 0, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "catalog-genomic-filter-exact", "kind": "CATALOG_ONLY_EXACT_MATCH", "reason": "A catalog-only exact match satisfying every filter must remain invisible."}
+      ]
+    },
+    {
+      "key": "soil-carbon-forecasting",
+      "text": "soil carbon forecasting",
+      "cutoff": 10,
+      "filters": {"yearFrom": null, "yearTo": null, "documentTypes": [], "openAccessOnly": false, "minimumCitations": 0, "languages": []},
+      "judgments": {
+        "rare-disease-exact": 0, "rare-disease-prefix": 0, "rare-disease-fulltext": 0, "rare-disease-citation-collision": 0,
+        "maternal-sepsis-exact": 0, "maternal-sepsis-fulltext": 0, "adaptive-trial-exact": 0, "adaptive-trial-fulltext": 0,
+        "author-ilya-rowan": 0, "author-substring-collision": 0, "genomic-filter-relevant": 0, "genomic-filter-old": 0,
+        "genomic-filter-type": 0, "genomic-filter-language": 0, "genomic-filter-closed": 0, "genomic-filter-low-citations": 0,
+        "soil-carbon-exact": 3, "soil-carbon-fulltext": 2, "soil-carbon-collision": 0
+      },
+      "adversaries": [
+        {"candidateKey": "catalog-soil-carbon-exact", "kind": "CATALOG_ONLY_EXACT_MATCH", "reason": "A catalog-only exact title must not appear for the target owner."},
+        {"candidateKey": "soil-carbon-collision", "kind": "HIGH_CITATION_LEXICAL_COLLISION", "reason": "A fictional-domain lexical collision must not rank first despite high citations."}
+      ]
+    }
+  ]
+}

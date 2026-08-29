@@ -168,6 +168,16 @@ The production-readiness implementation remains off by default. With `RELATED_PA
 
 The pool setting is validated in `25..100` and defaults to 100. A missing profile, missing source vector, or incomplete lexical-candidate vector coverage returns the same lexical result slice with an explicit typed fallback reason. Only those expected availability exceptions are translated; JDBC and other operational failures propagate. The request path reads precomputed data only and never invokes Ollama or a hosted embedding provider.
 
+## Owner-scoped LOCAL topic-search baseline
+
+The dedicated `local-catalog-v1` development gate is evaluation-only. It loads versioned synthetic metadata into real PostgreSQL, makes candidates visible to one test owner through that owner's prior search snapshots and collections, and includes relevant-looking records visible only to another owner. It then exercises the production `LOCAL` search path rather than a parallel in-memory ranker.
+
+The evaluator reports Recall@10, nDCG@10, Precision@1, and mean reciprocal rank. Separate structural gates require zero cross-owner result leakage and zero discovery-provider calls; the run performs no provider-network access and stores no PDFs. These are engineering metrics and are not exposed through the reader UI, REST API, or MCP tools.
+
+The digest-bound v1 development fixture contains 25 synthetic canonical-paper candidates, including 19 candidates visible to the target owner, across six fully judged queries. The pinned 2026-08-29 run recorded macro Recall@10 `1.000`, macro nDCG@10 `0.989`, macro Precision@1 `1.000`, and MRR@10 `1.000`, with zero owner-scope leaks, zero top-ranked adversaries, and zero provider calls. These numbers describe this small synthetic development fixture only; they are regression evidence, not a claim about general search quality or a substitute for an independently authored holdout.
+
+This baseline does not change production ranking, combine local results with provider scores, or select a multilingual configuration. Production LOCAL search continues to use its explicit PostgreSQL `english` text-search configuration until a separately reviewed, versioned change is supported by representative evidence.
+
 ## Remaining evaluation gates
 
 Candidate work includes:
@@ -175,7 +185,7 @@ Candidate work includes:
 - compare `english`, `simple`, and language-aware lexical configurations;
 - evaluate the default-off mode on a larger and more representative relevance set before considering a default change;
 - persist feature-level reasons if hybrid results enter immutable search snapshots;
-- evaluate local-catalog topic ranking on a separate owner-scoped query fixture before changing its ranking formula or combining it with provider scores.
+- expand the owner-scoped local-catalog topic fixture and add an independently authored holdout before changing its ranking formula or combining it with provider scores.
 
 The frozen hybrid has cleared the first independent holdout plus the pinned HNSW mechanics gate and now has deterministic database-only fallback behavior and honest feature values. Lexical remains the default product ranker until an explicit later review changes the flag default.
 

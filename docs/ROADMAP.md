@@ -26,7 +26,7 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 ## 3. Improve retrieval quality
 
 - Expand the independently labelled relevance and deduplication corpus beyond the current synthetic/reference-shaped sets.
-- Evaluate multilingual lexical configuration and related-topic reuse.
+- Evaluate multilingual lexical configurations and related-topic reuse against the owner-scoped LOCAL topic-search baseline; production remains on the explicit `english` configuration until representative evidence supports a versioned change.
 - Revisit the default-off hybrid pgvector path only after representative evaluation shows stable gains.
 - Add performance budgets for the target deployment rather than extrapolating from loopback measurements.
 

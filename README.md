@@ -87,6 +87,8 @@ Europe PMC is an opt-in metadata source, not a document source. Its adapter uses
 
 Its [provider-quality evaluation](docs/PROVIDER_QUALITY.md) is engineering-only. A deterministic synthetic PR gate exercises the real catalog/search-snapshot mechanics; one optional diagnostic samples already fused pages, and a separate opt-in Testcontainers evaluator fetches each provider once before replaying identical raw metadata through isolated and fused rollback-only scenarios. A manual offline workflow projects a verified capture into a blinded, packet-local review worksheet, verifies the exact reviewed packet during compilation and scoring, and scores only the resulting digest-bound judgments under the frozen evaluation policy; the repository includes no real labels. These paths retain no PDFs and expose no metrics to readers. Default enablement still requires clean reviewed captures, an independently authored holdout, time-separated live evidence, and an explicit maintainer decision.
 
+The [owner-scoped LOCAL search-quality baseline](docs/SEARCH_QUALITY.md#owner-scoped-local-topic-search-baseline) is also engineering-only. It uses synthetic metadata made visible through prior searches and collections, exercises the production LOCAL path on PostgreSQL, and measures Recall@10, nDCG@10, Precision@1, and MRR behind zero-leak and zero-provider-call gates. It performs no provider-network access, stores no PDFs, exposes no reader-facing metrics, and leaves production's explicit `english` text-search configuration unchanged.
+
 ## Use it from an agent
 
 With `MCP_LOCAL_API_KEY` configured, connect a Streamable HTTP client to `http://127.0.0.1:8080/mcp`:
@@ -186,6 +188,7 @@ Start with the [documentation index](docs/README.md), or jump directly to:
 - [Security and legal boundaries](docs/SECURITY_AND_LEGAL.md)
 - [Deployment guide](docs/DEPLOYMENT.md)
 - [Testing strategy](docs/TESTING_STRATEGY.md)
+- [Search quality](docs/SEARCH_QUALITY.md)
 - [Provider quality evaluation](docs/PROVIDER_QUALITY.md)
 
 ## Current status
