@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "policyId": "related-topic-reuse-scale-policy-v1",
+  "status": "DIAGNOSTIC_ONLY",
+  "subjectPolicyId": "related-topic-reuse-policy-v1",
+  "subjectPolicySha256": "5538dc68135e98a77093b51ba70259a410b9ad56c87ddcd5262941fd80b84fa3",
+  "environmentGate": "RUN_RELATED_TOPIC_REUSE_SCALE_EVALUATION",
+  "databaseImage": "pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f",
+  "postgresMajorVersion": 17,
+  "sourcePolicy": "DETERMINISTIC_SYNTHETIC_METADATA_ONLY",
+  "corpus": {
+    "generatorVersion": "related-topic-reuse-scale-corpus-v1",
+    "generatorSeed": 20260829,
+    "generatorSqlSha256": "57930b169306879eb7bcd089edad4c650938deaecfb3b15cd6f0580c0b94c0a6",
+    "totalPaperCount": 100000,
+    "targetSearchVisibleCount": 40000,
+    "targetCollectionVisibleCount": 10000,
+    "otherOwnerVisibleCount": 25000,
+    "catalogOnlyCount": 25000
+  },
+  "workloads": [
+    {
+      "key": "no-seed-owner-scope-control",
+      "kind": "NO_SEED_SCOPE_CONTROL",
+      "query": "orbital lichen spectroscopy",
+      "yearFrom": null,
+      "yearTo": null,
+      "documentTypes": [],
+      "openAccessOnly": false,
+      "minimumCitations": 0,
+      "languages": [],
+      "expectedSeedCount": 0
+    },
+    {
+      "key": "one-seed-sparse-feedback",
+      "kind": "ONE_SEED_SPARSE",
+      "query": "coastal erosion drone mapping",
+      "yearFrom": null,
+      "yearTo": null,
+      "documentTypes": [],
+      "openAccessOnly": false,
+      "minimumCitations": 0,
+      "languages": [],
+      "expectedSeedCount": 1
+    },
+    {
+      "key": "two-seed-broad-feedback",
+      "kind": "TWO_SEED_BROAD",
+      "query": "river microplastic community sensors",
+      "yearFrom": null,
+      "yearTo": null,
+      "documentTypes": [],
+      "openAccessOnly": false,
+      "minimumCitations": 0,
+      "languages": [],
+      "expectedSeedCount": 2
+    },
+    {
+      "key": "fully-filtered-selective-feedback",
+      "kind": "FULLY_FILTERED_SELECTIVE",
+      "query": "community wildfire smoke sensors",
+      "yearFrom": 2022,
+      "yearTo": 2026,
+      "documentTypes": [
+        "THESIS"
+      ],
+      "openAccessOnly": true,
+      "minimumCitations": 5,
+      "languages": [
+        "en"
+      ],
+      "expectedSeedCount": 1
+    }
+  ],
+  "measurement": {
+    "baselinePoolSize": 50,
+    "cutoff": 10,
+    "warmupRuns": 2,
+    "measurementRuns": 30,
+    "concurrency": 1,
+    "cacheState": "WARM",
+    "clock": "SYSTEM_NANO_TIME",
+    "stageOrder": "ROTATING_CONTROL_FEEDBACK_FUSION",
+    "percentileMethod": "NEAREST_RANK",
+    "percentiles": [
+      0.5,
+      0.95,
+      0.99
+    ],
+    "outputSchemaVersion": 1,
+    "outputMode": "STDOUT_JSON_DIAGNOSTIC"
+  },
+  "structuralGates": {
+    "requireStableControl": true,
+    "requireStableFeedback": true,
+    "requireStableFusion": true,
+    "requireExactNoSeedFallback": true,
+    "requireNonemptySeededFeedback": true,
+    "maximumOwnerScopeLeakCount": 0,
+    "maximumFilterViolationCount": 0,
+    "maximumProviderCallCount": 0,
+    "maximumExperimentalSnapshotWriteCount": 0
+  },
+  "interpretation": {
+    "evidenceClassification": "REFERENCE_SHAPED_DIAGNOSTIC",
+    "latencyDecision": "RECORD_ONLY",
+    "qualifiedTargetEnvironmentRequired": true,
+    "activationEvidence": false
+  }
+}

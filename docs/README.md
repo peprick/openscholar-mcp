@@ -30,6 +30,7 @@ The root [README](../README.md) is the fastest path to running OpenScholar. Use 
 - [Search quality](SEARCH_QUALITY.md) — lexical, deduplication, vector, and hybrid evaluation results.
 - [Provider quality](PROVIDER_QUALITY.md) — deterministic fusion mechanics, live-capture protocols, and strict offline comparative scoring.
 - [HNSW evaluation protocol](HNSW_EVALUATION_PROTOCOL.md) — approximate-nearest-neighbor mechanics gate.
+- [Related-topic reuse scale protocol](RELATED_TOPIC_REUSE_PERFORMANCE_PROTOCOL.md) — opt-in 100,000-paper database-mechanics diagnostic and its evidence limits.
 - [Holdout evaluation protocol](HOLDOUT_EVALUATION_PROTOCOL.md) — frozen related-paper validation process.
 - [Performance evidence](PERFORMANCE_EVIDENCE.md) — reproducible local performance measurements and their limits.
 - [Portfolio demo evidence](PORTFOLIO_DEMO.md) — deterministic full-stack screenshots and reproduction steps.
