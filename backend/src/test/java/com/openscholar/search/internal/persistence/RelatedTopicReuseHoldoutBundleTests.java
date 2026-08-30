@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,6 +84,921 @@ class RelatedTopicReuseHoldoutBundleTests {
 				.isInstanceOf(UnsupportedOperationException.class);
 		assertThatThrownBy(() -> bundle.judgments().queries().get(0).adversaries().clear())
 				.isInstanceOf(UnsupportedOperationException.class);
+	}
+
+	@Test
+	void sealedPostRankingInputsProduceACompletePassingDeterministicScore() throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var completion = RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, ignored -> passingRankingObservation(verified));
+		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), completion);
+
+		var first = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
+		var second = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
+
+		assertThat(second).isEqualTo(first);
+		assertThat(first.policyGatesPassed()).isTrue();
+		assertThat(first.gates()).hasSize(22).allMatch(
+				RelatedTopicReuseHoldoutScoringResult.GateOutcome::passed);
+		assertThat(first.queries()).hasSize(8);
+		assertThat(first.control().recallQueryCount()).isEqualTo(7);
+		assertThat(first.control().precisionAt1QueryCount()).isEqualTo(8);
+		assertThat(first.control().macroRecallAt10()).isEqualTo(5.0d / 7.0d);
+		assertThat(first.candidate().macroRecallAt10()).isEqualTo(1.0d);
+		assertThat(first.aggregate().macroRecallAt10Delta()).isEqualTo(2.0d / 7.0d);
+		assertThat(first.aggregate().strictOpportunityRecallImprovementCount()).isEqualTo(4);
+		assertThat(first.aggregate().novelRelevantAt10()).isEqualTo(4);
+		assertThat(first.aggregate().ownerScopeLeakCount()).isZero();
+		assertThat(first.aggregate().filterViolationCount()).isZero();
+		assertThat(first.identity().rankingSnapshotSha256())
+				.isEqualTo(completion.rankingSnapshot().evidenceSha256());
+		assertThat(first.readerFacing()).isFalse();
+		assertThat(first.externalBundleAcceptanceAuthorized()).isFalse();
+		assertThat(first.custodyReleaseAuthorized()).isFalse();
+		assertThat(first.productActivationAuthorized()).isFalse();
+		var evidenceReport = RelatedTopicReuseHoldoutEvidenceReport.create(
+				syntheticEvaluatorSeal(completion.rankingSnapshot().candidateRevision()),
+				completion.rankingSnapshot(),
+				first);
+		assertThat(evidenceReport.reportId())
+				.startsWith("related-topic-reuse-holdout-report-v1-");
+		assertThat(new String(
+				evidenceReport.evidenceReportJson(), StandardCharsets.UTF_8))
+				.contains("\"evaluationProtocolId\":\"related-topic-reuse-holdout-evaluation-v1\"")
+				.contains("\"externalBundleAcceptanceAuthorized\":false")
+				.contains("\"custodyReleaseAuthorized\":false");
+		assertThatThrownBy(() -> first.queries().clear())
+				.isInstanceOf(UnsupportedOperationException.class);
+		assertThatThrownBy(() -> first.gates().clear())
+				.isInstanceOf(UnsupportedOperationException.class);
+	}
+
+	@Test
+	void qualityFailureReturnsEveryMetricAndGateWithoutGrantingAuthorization()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper,
+				files.directory(),
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						verified, ignored -> emptyRankingObservation(verified)));
+
+		var result = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
+
+		assertThat(result.policyGatesPassed()).isFalse();
+		assertThat(result.queries()).hasSize(8);
+		assertThat(result.gates()).hasSize(22);
+		assertThat(result.gates())
+				.filteredOn(outcome -> outcome.gate()
+						== RelatedTopicReuseHoldoutScoringResult.GateId.MINIMUM_MACRO_NDCG_DELTA)
+				.singleElement()
+				.satisfies(outcome -> assertThat(outcome.passed()).isFalse());
+		assertThat(result.aggregate().macroNdcgAt10Delta()).isZero();
+		assertThat(result.structural().filteredOpportunityFailureCount()).isOne();
+		assertThat(result.structural().authorRelevantBaselineFailureCount()).isEqualTo(3);
+		assertThat(result.readerFacing()).isFalse();
+		assertThat(result.productActivationAuthorized()).isFalse();
+	}
+
+	@Test
+	void scorerApiAcceptsOnlyTheOpaquePostRankingCapability() {
+		assertThat(Arrays.stream(RelatedTopicReuseHoldoutScorer.class.getDeclaredMethods())
+				.filter(method -> !Modifier.isPrivate(method.getModifiers())))
+				.singleElement()
+				.satisfies(method -> {
+					assertThat(method.getName()).isEqualTo("score");
+					assertThat(method.getParameterTypes()).containsExactly(
+							RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs.class);
+					assertThat(method.getReturnType()).isEqualTo(
+							RelatedTopicReuseHoldoutScoringResult.class);
+				});
+		assertThat(RelatedTopicReuseHoldoutScorer.class.getDeclaredFields()).isEmpty();
+		assertThat(Arrays.stream(
+				RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs.class.getDeclaredFields()))
+				.noneMatch(field -> Path.class.isAssignableFrom(field.getType()));
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutScorer.score(null))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("verified holdout scoring input");
+	}
+
+	@Test
+	void scorerComparisonBoundariesUseTheFrozenInclusiveEpsilonRule()
+			throws Exception {
+		double epsilon = 0.000000000001d;
+		var gain = RelatedTopicReuseHoldoutScorer.class.getDeclaredMethod(
+				"gain", Double.class, double.class);
+		var regression = RelatedTopicReuseHoldoutScorer.class.getDeclaredMethod(
+				"regression", Double.class, double.class);
+		var minimum = RelatedTopicReuseHoldoutScorer.class.getDeclaredMethod(
+				"minimum", double.class, double.class, double.class);
+		var maximum = RelatedTopicReuseHoldoutScorer.class.getDeclaredMethod(
+				"maximum", double.class, double.class, double.class);
+		gain.setAccessible(true);
+		regression.setAccessible(true);
+		minimum.setAccessible(true);
+		maximum.setAccessible(true);
+
+		assertThat((boolean) gain.invoke(null, epsilon, epsilon)).isFalse();
+		assertThat((boolean) gain.invoke(null, Math.nextUp(epsilon), epsilon)).isTrue();
+		assertThat((boolean) regression.invoke(null, -epsilon, epsilon)).isFalse();
+		assertThat((boolean) regression.invoke(null, Math.nextDown(-epsilon), epsilon)).isTrue();
+		assertThat((boolean) minimum.invoke(null, -epsilon, 0.0d, epsilon)).isTrue();
+		assertThat((boolean) minimum.invoke(
+				null, Math.nextDown(-epsilon), 0.0d, epsilon)).isFalse();
+		assertThat((boolean) maximum.invoke(null, epsilon, 0.0d, epsilon)).isTrue();
+		assertThat((boolean) maximum.invoke(
+				null, Math.nextUp(epsilon), 0.0d, epsilon)).isFalse();
+	}
+
+	@Test
+	void scorerUsesRawBitsForStabilityAndExactRecordsForHiddenNoninterference()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var passing = passingRankingObservation(verified);
+		var original = passing.queries().getFirst();
+		var positiveZero = withFirstControlScore(original.initialRun(), +0.0d);
+		var negativeZero = withFirstControlScore(original.initialRun(), -0.0d);
+		var unstable = replaceQuery(
+				passing,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						original.queryKey(), positiveZero, negativeZero, hiddenFor(positiveZero)));
+
+		var unstableScore = score(files, unstable);
+
+		assertThat(unstableScore.structural().repeatedInstabilityCount()).isOne();
+		assertGate(unstableScore,
+				RelatedTopicReuseHoldoutScoringResult.GateId.REPEATED_ORDER_AND_SCORES,
+				false);
+
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> hiddenTop =
+				new ArrayList<>(original.initialRun().candidateTop10());
+		hiddenTop.set(0, new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				hiddenTop.getFirst().paperKey(), Math.nextUp(hiddenTop.getFirst().score())));
+		var hiddenChanged = replaceQuery(
+				passing,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						original.queryKey(),
+						original.initialRun(),
+						original.repeatedRun(),
+						new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+								original.hiddenPerturbation().otherOwnerCandidateKey(),
+								original.hiddenPerturbation().catalogOnlyCandidateKey(),
+								original.initialRun().feedbackPools(),
+								hiddenTop)));
+
+		var hiddenScore = score(files, hiddenChanged);
+
+		assertThat(hiddenScore.structural().hiddenInterferenceCount()).isOne();
+		assertGate(hiddenScore,
+				RelatedTopicReuseHoldoutScoringResult.GateId.HIDDEN_CANDIDATE_NONINTERFERENCE,
+				false);
+		var stableScore = RelatedTopicReuseHoldoutScorer.score(
+				verifiedScoringInputs(files, passing));
+		assertThat(stableScore.queries().get(4).exactFallback()).isTrue();
+		assertThat(unstableScore.identity().rankingSnapshotSha256())
+				.isNotEqualTo(stableScore.identity().rankingSnapshotSha256());
+		assertThat(hiddenScore.identity().rankingSnapshotSha256())
+				.isNotEqualTo(stableScore.identity().rankingSnapshotSha256());
+		assertThat(passing.queries().get(4).initialRun().controlTop10().getFirst().scoreBits())
+				.isNotEqualTo(
+						passing.queries().get(4).initialRun().candidateTop10()
+								.getFirst().scoreBits());
+	}
+
+	@Test
+	void scopeCountsUseUniqueQueryCandidatePairsAcrossEveryInspectedLocation()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var passing = passingRankingObservation(verified);
+		var corpus = verified.rankingCorpus();
+		String relevantOne = corpus.corpus().candidates().get(0).key();
+		String relevantTwo = corpus.corpus().candidates().get(1).key();
+		String otherOwner = corpus.corpus().candidates().get(30).key();
+		var ownerLeakRun = threePaperRun(relevantOne, relevantTwo, otherOwner);
+		var ownerLeak = replaceQuery(
+				passing,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						passing.queryOrder().get(0),
+						ownerLeakRun,
+						ownerLeakRun,
+						hiddenFor(ownerLeakRun)));
+
+		var ownerScore = score(files, ownerLeak);
+
+		assertThat(ownerScore.queries().getFirst().ownerScopeViolationCount()).isOne();
+		assertThat(ownerScore.aggregate().ownerScopeLeakCount()).isOne();
+		assertGate(ownerScore,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_OWNER_SCOPE_LEAK_COUNT,
+				false);
+
+		String filterNegative = corpus.corpus().candidates().get(9).key();
+		var filterRun = threePaperRun(relevantOne, relevantTwo, filterNegative);
+		var filterLeak = replaceQuery(
+				passing,
+				3,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						passing.queryOrder().get(3),
+						filterRun,
+						filterRun,
+						hiddenFor(filterRun)));
+
+		var filterScore = score(files, filterLeak);
+
+		assertThat(filterScore.queries().get(3).filterViolationCount()).isOne();
+		assertThat(filterScore.aggregate().filterViolationCount()).isOne();
+		assertGate(filterScore,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_FILTER_VIOLATION_COUNT,
+				false);
+	}
+
+	@Test
+	void anAuthorBaselineHitMayAppearAnywhereInTheFrozenControlTopTen()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var passing = passingRankingObservation(verified);
+		String relevant = verified.rankingCorpus().corpus().candidates().get(0).key();
+		String irrelevant = verified.rankingCorpus().corpus().candidates().get(2).key();
+		var rankTwoRelevant = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(irrelevant, 2.0d),
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(relevant, 1.0d)),
+				List.of(
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(irrelevant, 2.0d),
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(relevant, 1.0d)),
+				List.of(),
+				List.of(),
+				List.of(
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(irrelevant, 2.0d),
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(relevant, 1.0d)));
+		var observation = replaceQuery(
+				passing,
+				4,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						passing.queryOrder().get(4),
+						rankTwoRelevant,
+						rankTwoRelevant,
+						hiddenFor(rankTwoRelevant)));
+
+		var result = score(files, observation);
+
+		assertThat(result.queries().get(4).authorRelevantBaselineHit()).isTrue();
+		assertThat(result.queries().get(4).rankOneIrrelevant()).isTrue();
+		assertThat(result.structural().authorRelevantBaselineFailureCount()).isZero();
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.AUTHOR_CONTROL_RELEVANT_BASELINE_HIT,
+				true);
+	}
+
+	@Test
+	void scorerUsesTheFrozenGradedMetricsCutoffAndNoRelevantRules()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var observation = passingRankingObservation(verified);
+		var candidates = verified.rankingCorpus().corpus().candidates();
+
+		var gradeTwo = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(1).key(), 3.0d);
+		var unjudgedOtherOwner = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(30).key(), 2.0d);
+		var gradeThree = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(0).key(), 1.0d);
+		var gradedOrder = List.of(gradeTwo, unjudgedOtherOwner, gradeThree);
+		var gradedRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				gradedOrder, gradedOrder, List.of(), List.of(), gradedOrder);
+		observation = replaceQuery(
+				observation,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(0),
+						gradedRun,
+						gradedRun,
+						hiddenFor(gradedRun)));
+
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> cutoffPool =
+				new ArrayList<>();
+		cutoffPool.add(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(1).key(), 20.0d));
+		for (int index = 2; index <= 10; index++) {
+			cutoffPool.add(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+					candidates.get(index).key(), 20.0d - index));
+		}
+		cutoffPool.add(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(0).key(), 1.0d));
+		var cutoffTop = cutoffPool.stream().limit(10).toList();
+		var cutoffRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				cutoffPool, cutoffTop, List.of(), List.of(), cutoffTop);
+		observation = replaceQuery(
+				observation,
+				1,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(1),
+						cutoffRun,
+						cutoffRun,
+						hiddenFor(cutoffRun)));
+
+		var irrelevant = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(0).key(), 1.0d);
+		var noRelevantRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(irrelevant),
+				List.of(irrelevant),
+				List.of(),
+				List.of(),
+				List.of(irrelevant));
+		observation = replaceQuery(
+				observation,
+				7,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(7),
+						noRelevantRun,
+						noRelevantRun,
+						hiddenFor(noRelevantRun)));
+
+		var result = score(files, observation);
+
+		var graded = result.queries().get(0).control();
+		double expectedIdealDcg = 7.0d + 3.0d / (StrictMath.log(3.0d) / StrictMath.log(2.0d));
+		assertThat(graded.relevantCandidateCount()).isEqualTo(2);
+		assertThat(graded.retrievedRelevantCount()).isEqualTo(2);
+		assertThat(graded.recallAt10()).isEqualTo(1.0d);
+		assertThat(graded.ndcgAt10()).isEqualTo(6.5d / expectedIdealDcg);
+		assertThat(graded.precisionAt1()).isEqualTo(1.0d);
+		assertThat(graded.reciprocalRankAt10()).isEqualTo(1.0d);
+		assertThat(result.queries().get(0).ownerScopeViolationCount()).isOne();
+
+		var cutoff = result.queries().get(1).control();
+		assertThat(cutoff.relevantCandidateCount()).isEqualTo(2);
+		assertThat(cutoff.retrievedRelevantCount()).isOne();
+		assertThat(cutoff.recallAt10()).isEqualTo(0.5d);
+		assertThat(cutoff.precisionAt1()).isEqualTo(1.0d);
+		assertThat(cutoff.reciprocalRankAt10()).isEqualTo(1.0d);
+
+		var noRelevant = result.queries().get(7).control();
+		assertThat(noRelevant.relevantCandidateCount()).isZero();
+		assertThat(noRelevant.retrievedRelevantCount()).isZero();
+		assertThat(noRelevant.recallAt10()).isNull();
+		assertThat(noRelevant.ndcgAt10()).isNull();
+		assertThat(noRelevant.precisionAt1()).isZero();
+		assertThat(noRelevant.reciprocalRankAt10()).isNull();
+		assertThat(result.control().recallQueryCount()).isEqualTo(7);
+		assertThat(result.control().precisionAt1QueryCount()).isEqualTo(8);
+	}
+
+	@Test
+	void scorerReportsCounterAdversaryRankOneAndFallbackFailures()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var observation = passingRankingObservation(verified);
+		var candidates = verified.rankingCorpus().corpus().candidates();
+		var relevantOne = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(0).key(), 3.0d);
+		var relevantTwo = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(1).key(), 2.0d);
+		var adversary = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(2).key(), 1.0d);
+		var adversaryRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(relevantOne, relevantTwo, adversary),
+				List.of(relevantOne, relevantTwo, adversary),
+				List.of(),
+				List.of(),
+				List.of(adversary, relevantOne, relevantTwo));
+		observation = replaceQuery(
+				observation,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(0),
+						adversaryRun,
+						adversaryRun,
+						hiddenFor(adversaryRun)));
+
+		var fallbackRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(relevantOne, relevantTwo),
+				List.of(relevantOne, relevantTwo),
+				List.of(),
+				List.of(),
+				List.of(relevantTwo, relevantOne));
+		observation = replaceQuery(
+				observation,
+				7,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(7),
+						fallbackRun,
+						fallbackRun,
+						hiddenFor(fallbackRun)));
+		observation = new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+				observation.candidateRevision(),
+				observation.cutoff(),
+				observation.queryOrder(),
+				observation.queries(),
+				new RelatedTopicReuseHoldoutRankingSnapshot.StructuralCounters(1, 1));
+
+		var result = score(files, observation);
+
+		assertThat(result.queries().get(0).candidateExplicitAdversaryAt10Count()).isOne();
+		assertThat(result.queries().get(0).rankOneIrrelevant()).isTrue();
+		assertThat(result.queries().get(7).exactFallback()).isFalse();
+		assertThat(result.aggregate().providerCallCount()).isOne();
+		assertThat(result.aggregate().experimentalSnapshotWriteCount()).isOne();
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_RANK_ONE_IRRELEVANT_COUNT,
+				false);
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_PROVIDER_CALL_COUNT,
+				false);
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_EXPERIMENTAL_SNAPSHOT_WRITE_COUNT,
+				false);
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.EXACT_FALLBACK_WITHOUT_FEEDBACK,
+				false);
+	}
+
+	@Test
+	void scorerSeparatesNdcgRegressionCountFromMaximumMagnitude()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var passing = passingRankingObservation(verified);
+		var candidates = verified.rankingCorpus().corpus().candidates();
+		var gradeThree = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(0).key(), 2.0d);
+		var gradeTwo = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(1).key(), 1.0d);
+		var regressingRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(gradeThree, gradeTwo),
+				List.of(gradeThree, gradeTwo),
+				List.of(),
+				List.of(),
+				List.of(gradeTwo, gradeThree));
+		var oneRegression = replaceQuery(
+				passing,
+				0,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						passing.queryOrder().get(0),
+						regressingRun,
+						regressingRun,
+						hiddenFor(regressingRun)));
+
+		var one = score(files, oneRegression);
+
+		assertThat(one.aggregate().perQueryNdcgRegressionCount()).isOne();
+		assertThat(one.aggregate().maximumPerQueryNdcgRegression()).isGreaterThan(0.1d);
+		assertGate(one,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_PER_QUERY_NDCG_REGRESSION_COUNT,
+				true);
+		assertGate(one,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_PER_QUERY_NDCG_REGRESSION_MAGNITUDE,
+				false);
+
+		var twoRegressions = replaceQuery(
+				oneRegression,
+				1,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						oneRegression.queryOrder().get(1),
+						regressingRun,
+						regressingRun,
+						hiddenFor(regressingRun)));
+		var two = score(files, twoRegressions);
+
+		assertThat(two.aggregate().perQueryNdcgRegressionCount()).isEqualTo(2);
+		assertGate(two,
+				RelatedTopicReuseHoldoutScoringResult.GateId.MAXIMUM_PER_QUERY_NDCG_REGRESSION_COUNT,
+				false);
+	}
+
+	@Test
+	void authorAndNoSeedControlsRejectAnySeedOrFeedbackSignal()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var observation = passingRankingObservation(verified);
+		var candidates = verified.rankingCorpus().corpus().candidates();
+		String seedKey = candidates.get(0).key();
+		var seed = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(seedKey, 1.0d);
+		var feedbackPaper = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				candidates.get(1).key(), 0.5d);
+		var feedback = new RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool(
+				seedKey, List.of(feedbackPaper));
+		var signaledRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(seed),
+				List.of(seed),
+				List.of(seedKey),
+				List.of(feedback),
+				List.of(seed, feedbackPaper));
+		observation = replaceQuery(
+				observation,
+				4,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(4),
+						signaledRun,
+						signaledRun,
+						hiddenFor(signaledRun)));
+		observation = replaceQuery(
+				observation,
+				7,
+				new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+						observation.queryOrder().get(7),
+						signaledRun,
+						signaledRun,
+						hiddenFor(signaledRun)));
+
+		var result = score(files, observation);
+
+		assertThat(result.queries().get(4).authorRelevantBaselineHit()).isTrue();
+		assertThat(result.queries().get(4).authorZeroEligibleSeedsAndFeedback()).isFalse();
+		assertThat(result.queries().get(7).noSeedZeroEligibleSeedsAndFeedback()).isFalse();
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.AUTHOR_CONTROL_ZERO_ELIGIBLE_SEEDS_AND_FEEDBACK,
+				false);
+		assertGate(result,
+				RelatedTopicReuseHoldoutScoringResult.GateId.NO_SEED_ZERO_ELIGIBLE_SEEDS_AND_FEEDBACK,
+				false);
+	}
+
+	@Test
+	void corpusStageDoesNotParseJudgmentsAndReturnsAPathFreeImmutableValue()
+			throws Exception {
+		BundleFiles files = validBundle();
+		files.replacePayload(JUDGMENTS_FILENAME, "{".getBytes(StandardCharsets.UTF_8));
+
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		RelatedTopicReuseHoldoutBundle.RankingCorpus rankingCorpus =
+				verified.rankingCorpus();
+
+		assertThat(rankingCorpus.protocolId())
+				.isEqualTo(boundPolicy.policy().bundle().protocolId());
+		assertThat(rankingCorpus.bundleId()).isEqualTo(files.bundleId());
+		assertThat(rankingCorpus.corpusId()).isEqualTo(files.corpusId());
+		assertThat(rankingCorpus.policyId()).isEqualTo(boundPolicy.policy().policyId());
+		assertThat(rankingCorpus.policySha256()).isEqualTo(boundPolicy.sha256());
+		assertThat(rankingCorpus.corpusSha256())
+				.isEqualTo(sha256(Files.readAllBytes(files.corpusFile())));
+		assertThat(rankingCorpus.corpus().candidates()).hasSize(40);
+		assertThat(rankingCorpus.corpus().queries()).hasSize(8);
+		assertThat(Arrays.stream(verified.getClass().getDeclaredFields())
+				.anyMatch(field -> Path.class.isAssignableFrom(field.getType())))
+				.isFalse();
+		assertThat(Arrays.stream(verified.getClass().getDeclaredMethods())
+				.anyMatch(method -> Path.class.isAssignableFrom(method.getReturnType())))
+				.isFalse();
+		assertThat(Arrays.stream(rankingCorpus.getClass().getDeclaredFields())
+				.map(field -> field.getName().toLowerCase())
+				.noneMatch(name -> name.contains("judgment")
+						|| name.contains("manifest")
+						|| name.contains("payload")))
+				.isTrue();
+		assertThatThrownBy(() -> rankingCorpus.corpus().candidates().clear())
+				.isInstanceOf(UnsupportedOperationException.class);
+		assertThatThrownBy(() -> rankingCorpus.corpus().candidates().get(0)
+				.authors().add("Mutation"))
+				.isInstanceOf(UnsupportedOperationException.class);
+		assertThatThrownBy(() -> rankingCorpus.corpus().queries().get(3)
+				.filters().languages().add("fr"))
+				.isInstanceOf(UnsupportedOperationException.class);
+
+		var completion = rankingCompletion(verified);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), completion))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_JUDGMENTS_JSON_INVALID");
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), completion))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_FIRST_RUN_ALREADY_CONSUMED");
+	}
+
+	@Test
+	void postRankingStageRequiresASealAndRejectsStagedByteDrift() throws Exception {
+		BundleFiles noSeal = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus noSealCorpus =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, noSeal.directory());
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, noSeal.directory(), null))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_INPUT_INVALID");
+
+		BundleFiles manifestDrift = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus stagedManifest =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, manifestDrift.directory());
+		Files.writeString(
+				manifestDrift.manifestFile(),
+				Files.readString(manifestDrift.manifestFile()) + "\n");
+		assertPostRankingRejected(
+				manifestDrift, stagedManifest, "HOLDOUT_STAGED_MANIFEST_CHANGED");
+
+		BundleFiles corpusDrift = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus stagedCorpus =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, corpusDrift.directory());
+		String changedCorpus = Files.readString(corpusDrift.corpusFile())
+				.replaceFirst("abstract number 1\\.", "abstract number 9.");
+		Files.writeString(corpusDrift.corpusFile(), changedCorpus);
+		assertPostRankingRejected(corpusDrift, stagedCorpus, "HOLDOUT_STAGED_CORPUS_CHANGED");
+
+		BundleFiles judgmentDrift = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus stagedJudgments =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, judgmentDrift.directory());
+		String changedJudgments = Files.readString(judgmentDrift.judgmentsFile())
+				.replaceFirst("holdout-query-1", "holdout-query-9");
+		Files.writeString(judgmentDrift.judgmentsFile(), changedJudgments);
+		assertPostRankingRejected(
+				judgmentDrift, stagedJudgments, "HOLDOUT_PAYLOAD_DIGEST_MISMATCH");
+	}
+
+	@Test
+	void postRankingStageAloneLoadsAndValidatesJudgmentIdentity() throws Exception {
+		BundleFiles files = validBundle();
+		files.judgments().put("corpusId", "different-corpus-identity");
+		files.writePayloadsAndManifest();
+
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+
+		assertPostRankingRejected(files, verified, "HOLDOUT_DOCUMENT_IDENTITY_INVALID");
+	}
+
+	@Test
+	void coordinatorCompletionBindsTheExactCommitmentsAndRankedKeys() throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		boolean[] rankingPhaseCalled = {false};
+		RelatedTopicReuseHoldoutBundle.CompletedRanking validCompletion =
+				RelatedTopicReuseHoldoutBundle.completeRanking(verified, corpus -> {
+					rankingPhaseCalled[0] = true;
+					assertThat(corpus).isSameAs(verified.rankingCorpus());
+					return emptyRankingObservation(verified);
+				});
+		RelatedTopicReuseHoldoutRankingSnapshot valid =
+				validCompletion.rankingSnapshot();
+		assertThat(rankingPhaseCalled[0]).isTrue();
+		assertThat(valid.manifestSha256())
+				.isEqualTo(sha256(Files.readAllBytes(files.manifestFile())));
+		assertThat(valid.judgmentsSha256())
+				.isEqualTo(sha256(Files.readAllBytes(files.judgmentsFile())));
+		assertThat(valid.judgmentsBytes()).isEqualTo(Files.size(files.judgmentsFile()));
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, ignored -> null))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_RANKING_OBSERVATION_INVALID");
+
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation wrongRevision =
+				new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+						"f".repeat(40),
+						valid.cutoff(),
+						valid.queryOrder(),
+						valid.queries(),
+						valid.counters());
+		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongIdentity =
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						verified, ignored -> wrongRevision);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), wrongIdentity))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_RANKING_SEAL_IDENTITY_INVALID");
+
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> reorderedQueries =
+				new ArrayList<>(valid.queries());
+		java.util.Collections.swap(reorderedQueries, 0, 1);
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation reordered =
+				new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+						valid.candidateRevision(),
+						valid.cutoff(),
+						reorderedQueries.stream()
+								.map(RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking::queryKey)
+								.toList(),
+						reorderedQueries,
+						valid.counters());
+		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongQueryOrder =
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						verified, ignored -> reordered);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), wrongQueryOrder))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_RANKING_SEAL_IDENTITY_INVALID");
+
+		var outside = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				"outside-corpus", 1.0d);
+		var outsideRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(outside),
+				List.of(outside),
+				List.of(),
+				List.of(),
+				List.of(outside));
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> outsideQueries =
+				new ArrayList<>(valid.queries());
+		outsideQueries.set(0, new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+				valid.queryOrder().getFirst(),
+				outsideRun,
+				outsideRun,
+				new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+						"hidden-other-owner",
+						"hidden-catalog-only",
+						List.of(),
+						List.of(outside))));
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation wrongScopeObservation =
+				new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+						valid.candidateRevision(),
+						valid.cutoff(),
+						valid.queryOrder(),
+						outsideQueries,
+						valid.counters());
+		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongScope =
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						verified, ignored -> wrongScopeObservation);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), wrongScope))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+	}
+
+	@Test
+	void onlyACoordinatorIssuedCompletionCanReachJudgmentLoading() {
+		var verifyMethods = Arrays.stream(
+				RelatedTopicReuseHoldoutBundle.class.getDeclaredMethods())
+				.filter(method -> method.getName().equals("verifyAfterRanking"))
+				.toList();
+		assertThat(verifyMethods).singleElement().satisfies(method ->
+				assertThat(method.getParameterTypes()).containsExactly(
+						ObjectMapper.class,
+						Path.class,
+						RelatedTopicReuseHoldoutBundle.CompletedRanking.class));
+		assertThat(RelatedTopicReuseHoldoutBundle.CompletedRanking.class
+				.getDeclaredConstructors()).allSatisfy(constructor ->
+						assertThat(Modifier.isPrivate(constructor.getModifiers())).isTrue());
+	}
+
+	@Test
+	void aVerifiedCorpusReleasesJudgmentsForOnlyItsFirstValidRanking()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		var observation = passingRankingObservation(verified);
+		var firstCompletion = RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, ignored -> observation);
+
+		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), firstCompletion);
+
+		assertThat(RelatedTopicReuseHoldoutScorer.score(scoringInputs))
+				.isEqualTo(RelatedTopicReuseHoldoutScorer.score(scoringInputs));
+		var replayedCompletion = RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, ignored -> observation);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), replayedCompletion))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_FIRST_RUN_ALREADY_CONSUMED");
+	}
+
+	@Test
+	void completionCannotBeReplayedAgainstASecondJudgmentCommitment() throws Exception {
+		BundleFiles first = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus firstCorpus =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, first.directory());
+		RelatedTopicReuseHoldoutBundle.CompletedRanking firstCompletion =
+				rankingCompletion(firstCorpus);
+
+		Path alternateParent = temporaryDirectory.resolve("alternate-custody");
+		Files.createDirectory(alternateParent);
+		Path alternateDirectory = alternateParent.resolve(first.bundleId());
+		Files.createDirectory(alternateDirectory);
+		ObjectNode alternateJudgments = first.judgments().deepCopy();
+		grades(alternateJudgments, 0).put(candidateKey(2), 3);
+		BundleFiles second = new BundleFiles(
+				alternateDirectory,
+				first.bundleId(),
+				first.corpusId(),
+				first.corpus().deepCopy(),
+				alternateJudgments);
+		second.writePayloadsAndManifest();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus secondCorpus =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, second.directory());
+		assertThat(secondCorpus.rankingCorpus().corpusSha256())
+				.isEqualTo(firstCorpus.rankingCorpus().corpusSha256());
+		assertThat(rankingCompletion(secondCorpus).rankingSnapshot().judgmentsSha256())
+				.isNotEqualTo(firstCompletion.rankingSnapshot().judgmentsSha256());
+
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, second.directory(), firstCompletion))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_STAGED_MANIFEST_CHANGED");
+	}
+
+	@Test
+	void validatesEveryIndependentlyReachableRankingScope() throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation valid =
+				nonEmptyRankingObservation(verified);
+		RelatedTopicReuseHoldoutBundle.CompletedRanking validCompletion =
+				RelatedTopicReuseHoldoutBundle.completeRanking(verified, ignored -> valid);
+		assertThat(RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), validCompletion)).isNotNull();
+
+		var outside = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				"outside-corpus", 1.0d);
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> outsideControl =
+				new ArrayList<>(controlTen(verified.rankingCorpus()));
+		outsideControl.set(outsideControl.size() - 1, outside);
+		var badControlRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				outsideControl,
+				outsideControl,
+				List.of(),
+				List.of(),
+				outsideControl);
+		var initial = valid.queries().getFirst().initialRun();
+		String firstQuery = valid.queryOrder().getFirst();
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery,
+								badControlRun,
+								initial,
+								hiddenFor(badControlRun))));
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery,
+								initial,
+								badControlRun,
+								hiddenFor(initial))));
+
+		var badFeedbackRun = rankedRun(verified.rankingCorpus(), "outside-corpus");
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery,
+								badFeedbackRun,
+								initial,
+								hiddenFor(badFeedbackRun))));
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery,
+								initial,
+								badFeedbackRun,
+								hiddenFor(initial))));
+
+		String seed = initial.eligibleSeedKeys().getFirst();
+		var hiddenBadFeedback = new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+				"hidden-other-owner",
+				"hidden-catalog-only",
+				List.of(new RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool(
+						seed, List.of(outside))),
+				initial.controlTop10());
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery, initial, initial, hiddenBadFeedback)));
+
+		var hiddenCollision = new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+				verified.rankingCorpus().corpus().candidates().get(30).key(),
+				"hidden-catalog-only",
+				initial.feedbackPools(),
+				initial.candidateTop10());
+		assertScopeRejected(
+				files,
+				verified,
+				replaceFirstQuery(
+						valid,
+						new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								firstQuery, initial, initial, hiddenCollision)));
 	}
 
 	@Test
@@ -171,8 +1090,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		ObjectMapper permissiveMapper = JsonMapper.builder()
 				.enable(JsonReadFeature.ALLOW_JAVA_COMMENTS)
 				.build();
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verify(
-				permissiveMapper, comments.directory()))
+		assertThatThrownBy(() -> verify(permissiveMapper, comments.directory()))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage("HOLDOUT_CORPUS_JSON_INVALID");
 
@@ -184,8 +1102,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		ObjectMapper singleQuoteMapper = JsonMapper.builder()
 				.enable(JsonReadFeature.ALLOW_SINGLE_QUOTES)
 				.build();
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verify(
-				singleQuoteMapper, singleQuotes.directory()))
+		assertThatThrownBy(() -> verify(singleQuoteMapper, singleQuotes.directory()))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage("HOLDOUT_CORPUS_JSON_INVALID");
 
@@ -197,8 +1114,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		ObjectMapper trailingCommaMapper = JsonMapper.builder()
 				.enable(JsonReadFeature.ALLOW_TRAILING_COMMA)
 				.build();
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verify(
-				trailingCommaMapper, trailingComma.directory()))
+		assertThatThrownBy(() -> verify(trailingCommaMapper, trailingComma.directory()))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage("HOLDOUT_CORPUS_JSON_INVALID");
 	}
@@ -520,8 +1436,25 @@ class RelatedTopicReuseHoldoutBundleTests {
 	}
 
 	private RelatedTopicReuseHoldoutBundle verify(BundleFiles files) throws Exception {
-		return RelatedTopicReuseHoldoutBundle.verify(
-				objectMapper, files.directory());
+		return verify(objectMapper, files.directory());
+	}
+
+	private RelatedTopicReuseHoldoutBundle verify(
+			ObjectMapper mapper, Path sourceDirectory) throws Exception {
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(mapper, sourceDirectory);
+		return RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				mapper, sourceDirectory, rankingCompletion(verified)).bundle();
+	}
+
+	private void assertPostRankingRejected(
+			BundleFiles files,
+			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verifiedCorpus,
+			String diagnostic) {
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper, files.directory(), rankingCompletion(verifiedCorpus)))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage(diagnostic);
 	}
 
 	private void assertRejected(BundleFiles files, String diagnostic) {
@@ -529,10 +1462,247 @@ class RelatedTopicReuseHoldoutBundleTests {
 	}
 
 	private void assertRejected(Path sourceDirectory, String diagnostic) {
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verify(
-				objectMapper, sourceDirectory))
+		assertThatThrownBy(() -> verify(objectMapper, sourceDirectory))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage(diagnostic);
+	}
+
+	private static RelatedTopicReuseHoldoutBundle.CompletedRanking rankingCompletion(
+			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) throws IOException {
+		return RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, ignored -> emptyRankingObservation(verified));
+	}
+
+	private void assertScopeRejected(
+			BundleFiles files,
+			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified,
+			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation) {
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper,
+				files.directory(),
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						verified, ignored -> observation)))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation
+			nonEmptyRankingObservation(RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) {
+		RelatedTopicReuseHoldoutBundle.RankingCorpus corpus = verified.rankingCorpus();
+		String feedbackKey = corpus.corpus().candidates().get(10).key();
+		var run = rankedRun(corpus, feedbackKey);
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> queries =
+				corpus.corpus().queries().stream()
+						.map(query -> new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								query.key(), run, run, hiddenFor(run)))
+						.toList();
+		return new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				10,
+				queries.stream()
+						.map(RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking::queryKey)
+						.toList(),
+				queries,
+				new RelatedTopicReuseHoldoutRankingSnapshot.StructuralCounters(0, 0));
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation
+			passingRankingObservation(RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) {
+		RelatedTopicReuseHoldoutBundle.RankingCorpus corpus = verified.rankingCorpus();
+		String firstRelevant = corpus.corpus().candidates().get(0).key();
+		String secondRelevant = corpus.corpus().candidates().get(1).key();
+		var controlPaper = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				firstRelevant, 1.0d);
+		var promotedPaper = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				secondRelevant, 0.5d);
+		var opportunityControl = List.of(controlPaper);
+		var opportunityFeedback = new RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool(
+				firstRelevant, List.of(promotedPaper));
+		var opportunityRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				opportunityControl,
+				opportunityControl,
+				List.of(firstRelevant),
+				List.of(opportunityFeedback),
+				List.of(
+						new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+								firstRelevant, 2.0d),
+						promotedPaper));
+		var authorRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(controlPaper),
+				List.of(controlPaper),
+				List.of(),
+				List.of(),
+				List.of(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+						firstRelevant, 1.0d / 61.0d)));
+		var emptyRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(), List.of(), List.of(), List.of(), List.of());
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> queries =
+				new ArrayList<>();
+		for (int index = 0; index < corpus.corpus().queries().size(); index++) {
+			var query = corpus.corpus().queries().get(index);
+			var run = index <= 3 ? opportunityRun : index <= 6 ? authorRun : emptyRun;
+			queries.add(new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+					query.key(), run, run, hiddenFor(run)));
+		}
+		return new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				10,
+				queries.stream()
+						.map(RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking::queryKey)
+						.toList(),
+				queries,
+				new RelatedTopicReuseHoldoutRankingSnapshot.StructuralCounters(0, 0));
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation replaceFirstQuery(
+			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation,
+			RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking replacement) {
+		return replaceQuery(observation, 0, replacement);
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation replaceQuery(
+			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation,
+			int queryIndex,
+			RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking replacement) {
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> queries =
+				new ArrayList<>(observation.queries());
+		queries.set(queryIndex, replacement);
+		return new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+				observation.candidateRevision(),
+				observation.cutoff(),
+				observation.queryOrder(),
+				queries,
+				observation.counters());
+	}
+
+	private RelatedTopicReuseHoldoutScoringResult score(
+			BundleFiles files,
+			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation)
+			throws Exception {
+		return RelatedTopicReuseHoldoutScorer.score(
+				verifiedScoringInputs(files, observation));
+	}
+
+	private RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs verifiedScoringInputs(
+			BundleFiles files,
+			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation)
+			throws Exception {
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus freshVerification =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
+		return RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
+				objectMapper,
+				files.directory(),
+				RelatedTopicReuseHoldoutBundle.completeRanking(
+						freshVerification, ignored -> observation));
+	}
+
+	private static void assertGate(
+			RelatedTopicReuseHoldoutScoringResult result,
+			RelatedTopicReuseHoldoutScoringResult.GateId gate,
+			boolean passed) {
+		assertThat(result.gates())
+				.filteredOn(outcome -> outcome.gate() == gate)
+				.singleElement()
+				.satisfies(outcome -> assertThat(outcome.passed()).isEqualTo(passed));
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.RankingRun
+			withFirstControlScore(
+					RelatedTopicReuseHoldoutRankingSnapshot.RankingRun run,
+					double score) {
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> control =
+				new ArrayList<>(run.controlPool());
+		control.set(0, new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				control.getFirst().paperKey(), score));
+		return new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				control,
+				control.stream().limit(10).toList(),
+				run.eligibleSeedKeys(),
+				run.feedbackPools(),
+				run.candidateTop10());
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.RankingRun threePaperRun(
+			String seedKey, String promotedKey, String inspectedKey) {
+		var seed = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(seedKey, 1.0d);
+		var inspected = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				inspectedKey, 0.25d);
+		var promoted = new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+				promotedKey, 0.5d);
+		var feedback = new RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool(
+				seedKey, List.of(promoted, inspected));
+		return new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(seed, inspected),
+				List.of(seed, inspected),
+				List.of(seedKey),
+				List.of(feedback),
+				List.of(seed, promoted, inspected));
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.RankingRun rankedRun(
+			RelatedTopicReuseHoldoutBundle.RankingCorpus corpus,
+			String feedbackCandidateKey) {
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> control =
+				controlTen(corpus);
+		String seed = control.getFirst().paperKey();
+		var feedback = new RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool(
+				seed,
+				List.of(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+						feedbackCandidateKey, 0.5d)));
+		return new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				control,
+				control,
+				List.of(seed),
+				List.of(feedback),
+				control);
+	}
+
+	private static List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> controlTen(
+			RelatedTopicReuseHoldoutBundle.RankingCorpus corpus) {
+		List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> control =
+				new ArrayList<>();
+		for (int index = 0; index < 10; index++) {
+			control.add(new RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper(
+					corpus.corpus().candidates().get(index).key(), 100.0d - index));
+		}
+		return List.copyOf(control);
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation hiddenFor(
+			RelatedTopicReuseHoldoutRankingSnapshot.RankingRun run) {
+		return new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+				"hidden-other-owner",
+				"hidden-catalog-only",
+				run.feedbackPools(),
+				run.candidateTop10());
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation
+			emptyRankingObservation(RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) {
+		RelatedTopicReuseHoldoutBundle.RankingCorpus rankingCorpus =
+				verified.rankingCorpus();
+		var emptyRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
+				List.of(), List.of(), List.of(), List.of(), List.of());
+		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> queries =
+				rankingCorpus.corpus().queries().stream()
+						.map(query -> new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
+								query.key(),
+								emptyRun,
+								emptyRun,
+								new RelatedTopicReuseHoldoutRankingSnapshot.HiddenPerturbation(
+										"hidden-other-owner",
+										"hidden-catalog-only",
+										List.of(),
+										List.of())))
+						.toList();
+		return new RelatedTopicReuseHoldoutRankingSnapshot.Observation(
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				10,
+				rankingCorpus.corpus().queries().stream()
+						.map(RelatedTopicReuseHoldoutBundle.Query::key)
+						.toList(),
+				queries,
+				new RelatedTopicReuseHoldoutRankingSnapshot.StructuralCounters(0, 0));
 	}
 
 	private static Path findRepositoryRoot() throws IOException {
@@ -622,6 +1792,42 @@ class RelatedTopicReuseHoldoutBundleTests {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable", exception);
 		}
+	}
+
+	private static RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal
+			syntheticEvaluatorSeal(String candidateRevision) {
+		String evaluatorRevision = "e".repeat(40);
+		List<RelatedTopicReuseHoldoutEvaluatorSeal.SourceFile> evaluatorSources = List.of(
+				new RelatedTopicReuseHoldoutEvaluatorSeal.SourceFile(
+						100644,
+						"backend/src/test/java/HoldoutEvaluator.java",
+						"synthetic evaluator source\n".getBytes(StandardCharsets.UTF_8)));
+		List<RelatedTopicReuseHoldoutEvaluatorSeal.SourceFile> candidateSources = List.of(
+				new RelatedTopicReuseHoldoutEvaluatorSeal.SourceFile(
+						100644,
+						"backend/src/main/java/FrozenCandidate.java",
+						"synthetic candidate source\n".getBytes(StandardCharsets.UTF_8)));
+		String evaluatorSha256 = RelatedTopicReuseHoldoutEvaluatorSeal.sourceSha256(
+				RelatedTopicReuseHoldoutEvaluatorSeal.SourceRole.EVALUATOR,
+				evaluatorRevision,
+				evaluatorSources);
+		String candidateSha256 = RelatedTopicReuseHoldoutEvaluatorSeal.sourceSha256(
+				RelatedTopicReuseHoldoutEvaluatorSeal.SourceRole.CANDIDATE,
+				candidateRevision,
+				candidateSources);
+		return RelatedTopicReuseHoldoutEvaluatorSeal.verify(
+				evaluatorRevision,
+				evaluatorSha256,
+				candidateRevision,
+				candidateSha256,
+				new RelatedTopicReuseHoldoutEvaluatorSeal.RepositoryState(
+						evaluatorRevision,
+						"",
+						candidateRevision,
+						candidateSha256,
+						true),
+				evaluatorSources,
+				candidateSources);
 	}
 
 	private final class BundleFiles {

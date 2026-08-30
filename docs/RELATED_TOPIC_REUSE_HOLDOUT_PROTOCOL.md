@@ -17,8 +17,11 @@ labels and cannot fill that gap.
 
 Policy v1 binds the frozen candidate-policy resource and development fixture at
 repository revision `6b22f6185d9c14a3dd0bf0a80a4b08c045396bff`. The current
-slice does not prove that later evaluator bytecode was built from that revision.
-An evaluator revision and source SHA-256 must be frozen and checked before an
+slice now defines source-seal and canonical-report primitives, but it cannot name
+the current evaluator as a committed revision while those sources remain
+uncommitted. It also does not prove that later evaluator bytecode was built from
+the candidate revision. An evaluator revision and source SHA-256 must be frozen
+from a later clean committed checkout and checked before an
 external custodian releases a real bundle. Until then, external-bundle acceptance
 and custody release are explicitly unauthorized. Once those prerequisites exist,
 the first eligible external run is final for this policy version. A failure may
@@ -137,13 +140,137 @@ The test-only intake boundary rejects a bundle unless all of the following hold:
 
 The verifier is read-only. It does not start Spring, PostgreSQL, Docker, a
 provider client, or a PDF path, and it does not write a report or copy the input
-into the repository. It retains only immutable parsed values and the manifest
-digest, not a source path that downstream code could re-read.
+into the repository. Corpus intake now has an explicit staged boundary:
+`verifyCorpus` validates the external layout, manifest, corpus digest, corpus
+schema, and label-independent semantics without opening or parsing
+`judgments.json`. Its ranker-facing immutable `RankingCorpus` exposes the bundle,
+corpus, policy, corpus digest, and metadata only—no path, manifest digest, payload
+size, judgment digest, judgment size, or label object. The coordinator necessarily
+parses the combined manifest's file table and privately retains its commitment for
+the post-ranking recheck; the ranker receives only `RankingCorpus`, not the
+coordinator's staged object.
 
-There is intentionally no operator command yet. The verifier is a package-private
-test utility exercised with generated temporary fixtures. These schema details are
-for review, not an invitation to release a real bundle; direct operator validation
-arrives with the separately frozen evaluator.
+`RelatedTopicReuseHoldoutRankingSnapshot` freezes the exact ordered query
+partition; control pool and top ten; eligible seeds; per-seed feedback; candidate
+top ten; consecutive repeat; per-query other-owner and catalog-only hidden
+perturbation observation; provider-call and experimental-snapshot counters; and
+every score as raw IEEE-754 bits. The ranking callback receives only
+`RankingCorpus` and returns a label-free observation. After that callback returns,
+the coordinator stamps the immutable snapshot with the bundle, corpus digest,
+holdout policy digest, frozen candidate revision, exact manifest digest, and the
+judgment payload's digest and byte count. It then mints a private
+`CompletedRanking` capability bound by object identity to that exact staged corpus.
+A versioned canonical byte encoding covers every stamped identity, ordered list,
+ranked key, raw score bit pattern, hidden observation, and structural counter in
+that snapshot. The in-memory score identity includes the SHA-256 digest of that
+encoding, so a score is bound to the exact ranking evidence rather than only to
+the corpus and judgments. This digest is an integrity commitment, not an
+evaluator-source identity, signature, or proof of how the callback produced the
+snapshot.
+
+A raw observation or snapshot is insufficient to enter judgment loading. The
+post-ranking stage accepts only that coordinator-issued capability, rejects an
+identity, commitment, cutoff, query-order, or corpus-key mismatch, and then re-reads
+and revalidates the manifest and corpus before it opens and validates the judgment
+file. Successful post-ranking verification mints a second opaque
+`VerifiedScoringInputs` capability that binds those exact revalidated corpus and
+judgment objects, the sealed snapshot, and the frozen policy. The scorer accepts
+only that capability, preventing ordinary callers from mixing rankings and labels
+from different bundles. Judgment release is an atomic one-shot transition on that
+specific `VerifiedCorpus` instance: once the release is claimed, the same staged
+instance cannot open judgments for another completed ranking, even when judgment
+reading or validation subsequently fails. A caller can still invoke
+`verifyCorpus` again and obtain a fresh instance for the same external files. A
+future operator therefore needs a durable first-run ledger keyed to the accepted
+bundle and frozen evaluator before this object-local guard can enforce the
+preregistered first-run rule across processes or fresh intake calls.
+
+The test-only `RelatedTopicReuseHoldoutPostgresRanker` implements the
+label-free callback. A deterministic fixture derives namespace IDs from the
+corpus digest, stages synthetic metadata and owner visibility in ephemeral
+PostgreSQL, executes the production LOCAL control plus owner-scoped feedback and
+frozen RRF paths in fresh read-only ranking transactions, repeats every query,
+injects per-query other-owner and catalog-only hidden maximum matches, records
+provider and snapshot counters, and removes its staged rows on close. Its API
+receives only `RankingCorpus` and returns `Observation`; it has no external path,
+staged capability, judgment, runtime, REST, MCP, or UI entry point.
+
+The test-only `RelatedTopicReuseHoldoutScorer` consumes the opaque post-ranking
+capability and applies the frozen binary64 formulas, no-relevant-query semantics,
+candidate-minus-control deltas, epsilon comparisons, and all 22 policy gates. It
+returns a bounded immutable in-memory result containing ordered per-query metrics,
+macro summaries, structural failure counts, and a complete fixed-order gate list.
+Quality failures return the complete failed result instead of throwing or hiding
+later gates. Owner and filter counts use unique query/candidate pairs across the
+union of the control pool, every feedback pool, and candidate final top ten; repeated
+stability still compares raw score bits, while exact no-feedback fallback compares
+keys and order rather than unlike lexical and baseline-RRF scores. The result
+explicitly keeps reader exposure, external acceptance, custody release, and product
+activation unauthorized.
+
+`RelatedTopicReuseHoldoutEvaluatorSeal` is the pure source-commitment boundary for
+that future freeze. It validates externally gathered clean-HEAD, untracked-aware
+status, candidate-ancestor, and candidate-footprint facts; binds evaluator and
+candidate roles, revisions, Git modes, sorted safe repository-relative paths,
+byte counts, and exact raw source bytes with a versioned domain-separated SHA-256;
+and requires both aggregate digests to match an independently retained freeze
+record. The returned source inventory contains per-file byte counts and SHA-256
+commitments but no absolute paths. This class deliberately does not run Git,
+discover a source inventory, authenticate the supplied repository-state facts,
+or bless the current dirty checkout. Those are future operator responsibilities,
+and the seal itself grants neither external-bundle acceptance nor custody release.
+
+`RelatedTopicReuseHoldoutEvidenceReport` accepts only that opaque verified seal,
+the exact ranking snapshot, and its matching scoring result. It explicitly
+projects the source inventory, complete snapshot, and complete score into bounded
+canonical newline-terminated `evaluator-source.json`, `ranking-snapshot.json`,
+`scoring-result.json`, and `evidence-report.json` artifacts. Every ranking score and metric is
+encoded as its 16-character lowercase raw binary64 bit pattern (or explicit
+`null`), so serialization cannot round values or erase negative zero. A versioned
+scoring-result commitment and content-addressed report ID bind the evaluator and
+candidate revisions/source digests, policy, bundle, corpus, manifest, judgments,
+snapshot, result, artifact hashes, and byte counts. An exact in-memory verifier
+regenerates all four artifacts and rejects missing, reordered, altered, or
+noncanonical bytes. All four authorization flags remain false.
+
+`RelatedTopicReuseHoldoutEvidenceReportBundle` adds a test-only, read-only exact
+verification boundary around those already verified bytes. The closed directory
+is named by the report ID and contains one exact canonical manifest plus the four
+fixed artifacts. Verification accepts only the opaque expected-artifact capability;
+there is deliberately no expectation-free path that trusts a self-consistent
+retained directory. The directory must be outside the repository and have
+enforceable owner-private POSIX permissions plus a Unix link-count view: `0700`
+for the report directory, `0600` for every file, and exactly one hard link per
+file. Stable failures contain no filesystem path, and all
+authorization flags remain false.
+
+Filesystem publication is deliberately deferred. Portable Java NIO does not offer
+an atomic directory install that is also guaranteed to reject an existing target;
+`ATOMIC_MOVE` replacement behavior is provider-specific. A future publisher must
+use a reviewed native exclusive-rename boundary plus descriptor-relative creation,
+verification, synchronization, and cleanup. The repository does not retain a
+publisher that claims stronger no-clobber or hostile-filesystem safety than Java can
+provide.
+
+There is intentionally no operator command yet. The verifier, coordinator,
+ranking evidence, ranker, fixture, and scorer are package-private test utilities
+exercised with generated synthetic data. The coordinator capability proves the
+intended in-process call order, but cannot authenticate which injected callback ran or
+isolate same-process code. The in-memory serialized report schema feeds the
+read-only exact retained-bundle verifier described above. There
+is still no real external bundle, clean-checkout Git collector, durable first-run
+ledger, operator workflow, or frozen evaluator revision/source digest.
+The checked-in ranker tests are mechanics evidence, not an external holdout result.
+These schema details are for review, not an invitation to release a real bundle;
+direct operator validation arrives only after the remaining pieces are implemented
+and frozen.
+
+Run the staged-boundary, immutable-evidence, policy, and PostgreSQL ranking
+contracts from `backend/` with Docker available:
+
+```bash
+./mvnw -Dtest=RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
+```
 
 ## Preregistered decision boundary
 
@@ -177,19 +304,29 @@ per-query recall regression; tightly bounded nDCG regression; opportunity gains;
 zero rank-one irrelevant results; stable repeated output; exact no-feedback
 fallback; and zero owner leaks, filter violations, provider calls, or experimental
 snapshot writes. The author control must retain its single relevant baseline hit
-and produce zero eligible seeds and feedback. The no-seed control must also produce
-zero eligible seeds and feedback, rather than passing merely because two empty or
-equally wrong rankings match. No-control-regression applies to both author and
-no-seed controls and to every applicable Recall@10, nDCG@10, Precision@1, and
-MRR@10 value.
+and produce zero eligible seeds and feedback. For this gate, a baseline hit means
+that the author control's sole grade-`3` relevant paper appears anywhere in the
+control final top ten; it need not be at rank one. Precision@1, the rank-one
+irrelevance gate, and no-control-regression remain separate checks, so this
+definition does not excuse a poor first result. The no-seed control must also
+produce zero eligible seeds and feedback, rather than passing merely because two
+empty or equally wrong rankings match. No-control-regression applies to both
+author and no-seed controls and to every applicable Recall@10, nDCG@10,
+Precision@1, and MRR@10 value.
 
-This slice preregisters and validates inputs only. The next slice must add an
-opt-in PostgreSQL evaluator that capability-separates corpus/ranking from
-judgments/scoring, applies this exact metric contract, checks the candidate
-implementation revision, and freezes its revision and source digest before custody
-release.
-Until that evaluator exists and a genuinely external first run is reviewed, there
-is no holdout result. Even a passing holdout would still require qualified
+This slice now establishes staged corpus-to-judgment isolation,
+commitment-bound ranking evidence, deterministic label-blind PostgreSQL ranking
+mechanics, complete in-memory scoring over the sealed post-ranking capability,
+source-commitment validation, canonical evidence projection, and read-only exact
+replay for already verified synthetic report bytes. It does not
+load a real external bundle, enforce the running checkout revision, or enforce
+first-run finality beyond one staged object instance. The next safe sequence is to
+commit the evaluator/report sources, freeze that exact later revision and source
+digest independently, add the clean-checkout Git collector, and only then add the
+durable first-run ledger. A later native exclusive publisher and operator workflow
+are still required before custody release. Until that frozen evaluator exists and a
+genuinely external first run is reviewed, there is no holdout result. Even a
+passing holdout would still require qualified
 target-deployment performance evidence and a separately reviewed product design.
 
 ## Evidence limits
@@ -202,7 +339,13 @@ declarations can be false. External custody, access history, reviewer identity,
 and the absence of prior disclosure require controls outside this repository.
 Verification also assumes an operator-controlled, non-concurrently-mutated
 filesystem; it is not a hostile-filesystem snapshot, hard-link detector, or
-protection against an ancestor or file being swapped during intake.
+protection against an ancestor or file being swapped during intake. The staged
+types create an in-process API capability boundary, not an OS process, module,
+reflection, or memory-isolation boundary. A future operator runner must preserve
+that call graph and must not pass the private staged coordinator object or external
+path to ranking code. The atomic release flag belongs to one `VerifiedCorpus` object;
+fresh intake calls or another process can create another flag, so it is not the
+durable first-run record required for external custody.
 
 Inline synthetic bundles in ordinary tests are parser and invariant fixtures
 only. They are never holdout evidence, must never be reported as scores, and do

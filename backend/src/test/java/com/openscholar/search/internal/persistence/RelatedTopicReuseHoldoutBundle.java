@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import com.openscholar.paper.DocumentType;
@@ -99,7 +100,7 @@ final class RelatedTopicReuseHoldoutBundle {
 		this.judgments = judgments;
 	}
 
-	static RelatedTopicReuseHoldoutBundle verify(
+	static VerifiedCorpus verifyCorpus(
 			ObjectMapper objectMapper,
 			Path sourceDirectory)
 			throws IOException {
@@ -129,33 +130,237 @@ final class RelatedTopicReuseHoldoutBundle {
 		if (!manifest.bundleId().equals(directory.getFileName().toString())) {
 			throw failure("HOLDOUT_BUNDLE_ID_INVALID");
 		}
+		verifyPayloadSizes(manifest, sizes);
 
-		Map<String, byte[]> payloads = readPayloads(directory, sizes, policy);
-		verifyPayloadIntegrity(manifest, sizes, payloads);
+		byte[] corpusBytes = readObservedFile(
+				directory, CORPUS_FILENAME, sizes, policy);
+		verifyPayloadDigest(manifest, CORPUS_FILENAME, corpusBytes);
 		Corpus corpus = parseCorpus(
 				parseStrict(
 						objectMapper,
-						payloads.get(CORPUS_FILENAME),
+						corpusBytes,
 						"HOLDOUT_CORPUS_JSON_INVALID"),
 				manifest,
 				policy,
 				boundPolicy.sha256());
+		validateCorpusSemantics(policy, corpus, developmentFixture.fixture());
+
+		return new VerifiedCorpus(
+				manifest,
+				sha256(manifestBytes),
+				manifestBytes.length,
+				new RankingCorpus(
+						manifest.protocolId(),
+						manifest.bundleId(),
+						manifest.corpusId(),
+						manifest.policyId(),
+						manifest.policySha256(),
+						sha256(corpusBytes),
+						corpus),
+				corpusBytes.length);
+	}
+
+	static CompletedRanking completeRanking(
+			VerifiedCorpus verifiedCorpus,
+			LabelFreeRankingPhase rankingPhase)
+			throws IOException {
+		if (verifiedCorpus == null || rankingPhase == null) {
+			throw failure("HOLDOUT_INPUT_INVALID");
+		}
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation observation =
+				rankingPhase.rank(verifiedCorpus.rankingCorpus);
+		if (observation == null) {
+			throw failure("HOLDOUT_RANKING_OBSERVATION_INVALID");
+		}
+		ManifestFile judgmentsCommitment = manifestFile(
+				verifiedCorpus.manifest, JUDGMENTS_FILENAME);
+		RelatedTopicReuseHoldoutRankingSnapshot snapshot =
+				RelatedTopicReuseHoldoutRankingSnapshot.seal(
+						verifiedCorpus.rankingCorpus.bundleId(),
+						verifiedCorpus.rankingCorpus.corpusId(),
+						verifiedCorpus.rankingCorpus.policySha256(),
+						verifiedCorpus.rankingCorpus.corpusSha256(),
+						verifiedCorpus.manifestSha256,
+						judgmentsCommitment.sha256(),
+						judgmentsCommitment.bytes(),
+						observation.candidateRevision(),
+						observation.cutoff(),
+						observation.queryOrder(),
+						observation.queries(),
+						observation.counters());
+		return new CompletedRanking(
+				verifiedCorpus,
+				verifiedCorpus.completionAuthority,
+				snapshot);
+	}
+
+	static VerifiedScoringInputs verifyAfterRanking(
+			ObjectMapper objectMapper,
+			Path sourceDirectory,
+			CompletedRanking completedRanking)
+			throws IOException {
+		if (objectMapper == null
+				|| sourceDirectory == null
+				|| completedRanking == null
+				|| !completedRanking.isAuthorized()) {
+			throw failure("HOLDOUT_INPUT_INVALID");
+		}
+		VerifiedCorpus verifiedCorpus = completedRanking.verifiedCorpus;
+		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot =
+				completedRanking.rankingSnapshot;
+
+		FrozenInputs frozenInputs = loadFrozenInputs(objectMapper);
+		RelatedTopicReuseHoldoutPolicy.BoundPolicy boundPolicy = frozenInputs.holdoutPolicy();
+		RelatedTopicReuseEvaluationFixture.BoundFixture developmentFixture =
+				frozenInputs.developmentFixture();
+		RelatedTopicReuseHoldoutPolicy policy = boundPolicy.policy();
+		validateRankingSnapshot(verifiedCorpus, rankingSnapshot, policy);
+		Path directory = verifyExternalDirectory(sourceDirectory);
+		Map<String, Long> sizes = verifyLayoutAndSizes(directory, policy);
+
+		byte[] manifestBytes = readBounded(
+				directory.resolve(MANIFEST_FILENAME),
+				policy.bundle().maximumManifestBytes(),
+				"HOLDOUT_MANIFEST_TOO_LARGE");
+		if (manifestBytes.length != sizes.get(MANIFEST_FILENAME)) {
+			throw failure("HOLDOUT_FILE_CHANGED");
+		}
+		Manifest manifest = parseManifest(
+				parseStrict(objectMapper, manifestBytes, "HOLDOUT_MANIFEST_JSON_INVALID"),
+				policy,
+				boundPolicy.sha256());
+		if (!manifest.bundleId().equals(directory.getFileName().toString())) {
+			throw failure("HOLDOUT_BUNDLE_ID_INVALID");
+		}
+		verifyPayloadSizes(manifest, sizes);
+		if (manifestBytes.length != verifiedCorpus.manifestBytes
+				|| !sha256(manifestBytes).equals(verifiedCorpus.manifestSha256)
+				|| !manifest.equals(verifiedCorpus.manifest)) {
+			throw failure("HOLDOUT_STAGED_MANIFEST_CHANGED");
+		}
+
+		byte[] corpusBytes = readObservedFile(
+				directory, CORPUS_FILENAME, sizes, policy);
+		if (corpusBytes.length != verifiedCorpus.corpusBytes
+				|| !sha256(corpusBytes).equals(verifiedCorpus.rankingCorpus.corpusSha256())) {
+			throw failure("HOLDOUT_STAGED_CORPUS_CHANGED");
+		}
+		verifyPayloadDigest(manifest, CORPUS_FILENAME, corpusBytes);
+		Corpus corpus = parseCorpus(
+				parseStrict(objectMapper, corpusBytes, "HOLDOUT_CORPUS_JSON_INVALID"),
+				manifest,
+				policy,
+				boundPolicy.sha256());
+		if (!corpus.equals(verifiedCorpus.rankingCorpus.corpus())) {
+			throw failure("HOLDOUT_STAGED_CORPUS_CHANGED");
+		}
+		validateCorpusSemantics(policy, corpus, developmentFixture.fixture());
+		if (!verifiedCorpus.judgmentReleaseClaimed.compareAndSet(false, true)) {
+			throw failure("HOLDOUT_FIRST_RUN_ALREADY_CONSUMED");
+		}
+
+		byte[] judgmentBytes = readObservedFile(
+				directory, JUDGMENTS_FILENAME, sizes, policy);
+		verifyPayloadDigest(manifest, JUDGMENTS_FILENAME, judgmentBytes);
 		Judgments judgments = parseJudgments(
 				parseStrict(
 						objectMapper,
-						payloads.get(JUDGMENTS_FILENAME),
+						judgmentBytes,
 						"HOLDOUT_JUDGMENTS_JSON_INVALID"),
 				manifest,
 				policy,
 				boundPolicy.sha256());
-		validateSemantics(policy, corpus, judgments, developmentFixture.fixture());
+		validateJudgmentSemantics(policy, corpus, judgments);
 
-		return new RelatedTopicReuseHoldoutBundle(
+		RelatedTopicReuseHoldoutBundle bundle = new RelatedTopicReuseHoldoutBundle(
 				manifest.bundleId(),
 				manifest.corpusId(),
 				sha256(manifestBytes),
 				corpus,
 				judgments);
+		return new VerifiedScoringInputs(
+				completedRanking,
+				completedRanking.completionAuthority,
+				rankingSnapshot,
+				boundPolicy,
+				bundle);
+	}
+
+	private static void validateRankingSnapshot(
+			VerifiedCorpus verifiedCorpus,
+			RelatedTopicReuseHoldoutRankingSnapshot snapshot,
+			RelatedTopicReuseHoldoutPolicy policy) throws IOException {
+		RankingCorpus rankingCorpus = verifiedCorpus.rankingCorpus;
+		List<String> queryOrder = rankingCorpus.corpus().queries().stream()
+				.map(Query::key)
+				.toList();
+		if (!rankingCorpus.bundleId().equals(snapshot.bundleId())
+				|| !rankingCorpus.corpusId().equals(snapshot.corpusId())
+				|| !rankingCorpus.policySha256().equals(snapshot.policySha256())
+				|| !rankingCorpus.corpusSha256().equals(snapshot.corpusSha256())
+				|| !verifiedCorpus.manifestSha256.equals(snapshot.manifestSha256())
+				|| !judgmentsCommitment(verifiedCorpus).sha256()
+						.equals(snapshot.judgmentsSha256())
+				|| judgmentsCommitment(verifiedCorpus).bytes() != snapshot.judgmentsBytes()
+				|| !policy.candidateFreezeRevision().equals(snapshot.candidateRevision())
+				|| policy.evaluation().cutoff() != snapshot.cutoff()
+				|| !queryOrder.equals(snapshot.queryOrder())) {
+			throw failure("HOLDOUT_RANKING_SEAL_IDENTITY_INVALID");
+		}
+
+		Set<String> corpusKeys = rankingCorpus.corpus().candidates().stream()
+				.map(Candidate::key)
+				.collect(java.util.stream.Collectors.toUnmodifiableSet());
+		for (RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking query : snapshot.queries()) {
+			validateRankingRunKeys(query.initialRun(), corpusKeys);
+			validateRankingRunKeys(query.repeatedRun(), corpusKeys);
+			validateVisibleFeedbackKeys(
+					query.hiddenPerturbation().visibleFeedbackPools(), corpusKeys);
+			validateRankedKeys(
+					query.hiddenPerturbation().visibleCandidateTop10(), corpusKeys);
+			if (corpusKeys.contains(query.hiddenPerturbation().otherOwnerCandidateKey())
+					|| corpusKeys.contains(query.hiddenPerturbation().catalogOnlyCandidateKey())) {
+				throw failure("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+			}
+		}
+	}
+
+	private static ManifestFile judgmentsCommitment(VerifiedCorpus verifiedCorpus)
+			throws IOException {
+		return manifestFile(verifiedCorpus.manifest, JUDGMENTS_FILENAME);
+	}
+
+	private static void validateRankingRunKeys(
+			RelatedTopicReuseHoldoutRankingSnapshot.RankingRun run,
+			Set<String> corpusKeys) throws IOException {
+		validateRankedKeys(run.controlPool(), corpusKeys);
+		validateRankedKeys(run.controlTop10(), corpusKeys);
+		if (!corpusKeys.containsAll(run.eligibleSeedKeys())) {
+			throw failure("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+		}
+		validateVisibleFeedbackKeys(run.feedbackPools(), corpusKeys);
+		validateRankedKeys(run.candidateTop10(), corpusKeys);
+	}
+
+	private static void validateVisibleFeedbackKeys(
+			List<RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool> feedbackPools,
+			Set<String> corpusKeys) throws IOException {
+		for (RelatedTopicReuseHoldoutRankingSnapshot.FeedbackPool pool : feedbackPools) {
+			if (!corpusKeys.contains(pool.seedPaperKey())) {
+				throw failure("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+			}
+			validateRankedKeys(pool.candidates(), corpusKeys);
+		}
+	}
+
+	private static void validateRankedKeys(
+			List<RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper> papers,
+			Set<String> corpusKeys) throws IOException {
+		if (papers.stream()
+				.map(RelatedTopicReuseHoldoutRankingSnapshot.RankedPaper::paperKey)
+				.anyMatch(key -> !corpusKeys.contains(key))) {
+			throw failure("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
+		}
 	}
 
 	private static FrozenInputs loadFrozenInputs(ObjectMapper objectMapper) throws IOException {
@@ -309,22 +514,19 @@ final class RelatedTopicReuseHoldoutBundle {
 		};
 	}
 
-	private static Map<String, byte[]> readPayloads(
+	private static byte[] readObservedFile(
 			Path directory,
+			String filename,
 			Map<String, Long> observedSizes,
 			RelatedTopicReuseHoldoutPolicy policy) throws IOException {
-		Map<String, byte[]> result = new LinkedHashMap<>();
-		for (String filename : PAYLOAD_FILENAMES) {
-			byte[] bytes = readBounded(
-					directory.resolve(filename),
-					maximumBytes(filename, policy),
-					"HOLDOUT_BUNDLE_TOO_LARGE");
-			if (bytes.length != observedSizes.get(filename)) {
-				throw failure("HOLDOUT_FILE_CHANGED");
-			}
-			result.put(filename, bytes);
+		byte[] bytes = readBounded(
+				directory.resolve(filename),
+				maximumBytes(filename, policy),
+				"HOLDOUT_BUNDLE_TOO_LARGE");
+		if (bytes.length != observedSizes.get(filename)) {
+			throw failure("HOLDOUT_FILE_CHANGED");
 		}
-		return Collections.unmodifiableMap(result);
+		return bytes;
 	}
 
 	private static byte[] readBounded(Path path, long maximum, String diagnostic)
@@ -460,9 +662,8 @@ final class RelatedTopicReuseHoldoutBundle {
 		}
 	}
 
-	private static void verifyPayloadIntegrity(
-			Manifest manifest, Map<String, Long> observedSizes, Map<String, byte[]> payloads)
-			throws IOException {
+	private static void verifyPayloadSizes(
+			Manifest manifest, Map<String, Long> observedSizes) throws IOException {
 		long observedPayloadBytes = 0;
 		for (String filename : PAYLOAD_FILENAMES) {
 			observedPayloadBytes += observedSizes.get(filename);
@@ -471,11 +672,25 @@ final class RelatedTopicReuseHoldoutBundle {
 			throw failure("HOLDOUT_PAYLOAD_SIZE_MISMATCH");
 		}
 		for (ManifestFile file : manifest.files()) {
-			if (!Objects.equals(observedSizes.get(file.filename()), file.bytes())
-					|| !sha256(payloads.get(file.filename())).equals(file.sha256())) {
-				throw failure("HOLDOUT_PAYLOAD_DIGEST_MISMATCH");
+			if (!Objects.equals(observedSizes.get(file.filename()), file.bytes())) {
+				throw failure("HOLDOUT_PAYLOAD_SIZE_MISMATCH");
 			}
 		}
+	}
+
+	private static void verifyPayloadDigest(
+			Manifest manifest, String filename, byte[] bytes) throws IOException {
+		if (!sha256(bytes).equals(manifestFile(manifest, filename).sha256())) {
+			throw failure("HOLDOUT_PAYLOAD_DIGEST_MISMATCH");
+		}
+	}
+
+	private static ManifestFile manifestFile(Manifest manifest, String filename)
+			throws IOException {
+		return manifest.files().stream()
+				.filter(file -> file.filename().equals(filename))
+				.findFirst()
+				.orElseThrow(() -> failure("HOLDOUT_MANIFEST_FILES_INVALID"));
 	}
 
 	private static Corpus parseCorpus(
@@ -667,10 +882,9 @@ final class RelatedTopicReuseHoldoutBundle {
 		return List.copyOf(result);
 	}
 
-	private static void validateSemantics(
+	private static void validateCorpusSemantics(
 			RelatedTopicReuseHoldoutPolicy policy,
 			Corpus corpus,
-			Judgments judgments,
 			RelatedTopicReuseEvaluationFixture development) throws IOException {
 		var boundary = policy.corpus();
 		if (corpus.queries().size() < boundary.minimumQueryCount()
@@ -682,10 +896,6 @@ final class RelatedTopicReuseHoldoutBundle {
 		Map<String, Lineage> lineages = uniqueByKey(corpus.lineages(), "lineage");
 		Map<String, Candidate> candidates = uniqueByKey(corpus.candidates(), "candidate");
 		Map<String, Query> queries = uniqueByKey(corpus.queries(), "query");
-		Map<String, QueryJudgments> queryJudgments = uniqueByKey(judgments.queries(), "judgments query");
-		if (!queries.keySet().equals(queryJudgments.keySet())) {
-			throw failure("HOLDOUT_QUERY_JUDGMENTS_INCOMPLETE");
-		}
 
 		Map<LineageKind, Integer> lineageCandidateCounts = new EnumMap<>(LineageKind.class);
 		for (Candidate candidate : candidates.values()) {
@@ -709,24 +919,22 @@ final class RelatedTopicReuseHoldoutBundle {
 			throw failure("HOLDOUT_REQUIRED_LINEAGE_KIND_MISSING");
 		}
 
-		Set<String> targetVisible = candidates.values().stream()
+		long targetVisibleCount = candidates.values().stream()
 				.filter(candidate -> lineages.get(candidate.lineageKey()).kind().targetVisible())
-				.map(Candidate::key)
-				.collect(java.util.stream.Collectors.toUnmodifiableSet());
+				.count();
 		long otherOwnerCount = candidates.values().stream()
 				.filter(candidate -> lineages.get(candidate.lineageKey()).kind().otherOwner())
 				.count();
 		long catalogOnlyCount = candidates.values().stream()
 				.filter(candidate -> lineages.get(candidate.lineageKey()).kind() == LineageKind.CATALOG_ONLY)
 				.count();
-		if (targetVisible.size() < boundary.minimumTargetVisibleCandidateCount()
+		if (targetVisibleCount < boundary.minimumTargetVisibleCandidateCount()
 				|| otherOwnerCount < boundary.minimumOtherOwnerCandidateCount()
 				|| catalogOnlyCount < boundary.minimumCatalogOnlyCandidateCount()) {
 			throw failure("HOLDOUT_VISIBILITY_SHAPE_INVALID");
 		}
 
 		Map<QueryKind, Integer> queryKindCounts = new EnumMap<>(QueryKind.class);
-		EnumSet<AdversaryKind> representedAdversaries = EnumSet.noneOf(AdversaryKind.class);
 		int fullyFiltered = 0;
 		int opportunities = 0;
 		int controls = 0;
@@ -758,13 +966,6 @@ final class RelatedTopicReuseHoldoutBundle {
 			else if (!query.filters().isEmpty()) {
 				throw failure("HOLDOUT_UNEXPECTED_QUERY_FILTER");
 			}
-			QueryJudgments labels = queryJudgments.get(query.key());
-			if (!labels.grades().keySet().equals(targetVisible)) {
-				throw failure("HOLDOUT_TARGET_JUDGMENTS_INCOMPLETE");
-			}
-			validateQueryJudgments(query, labels.grades());
-			validateAdversaries(
-					query, labels, candidates, lineages, representedAdversaries);
 		}
 		Set<String> requiredQueries = names(boundary.requiredQueryKinds());
 		Set<String> actualQueries = queryKindCounts.keySet().stream()
@@ -777,6 +978,37 @@ final class RelatedTopicReuseHoldoutBundle {
 				|| noSeedControls < boundary.minimumNoSeedControlCount()) {
 			throw failure("HOLDOUT_QUERY_KIND_SHAPE_INVALID");
 		}
+		validateDevelopmentDisjointness(corpus, development);
+	}
+
+	private static void validateJudgmentSemantics(
+			RelatedTopicReuseHoldoutPolicy policy,
+			Corpus corpus,
+			Judgments judgments) throws IOException {
+		Map<String, Lineage> lineages = uniqueByKey(corpus.lineages(), "lineage");
+		Map<String, Candidate> candidates = uniqueByKey(corpus.candidates(), "candidate");
+		Map<String, Query> queries = uniqueByKey(corpus.queries(), "query");
+		Map<String, QueryJudgments> queryJudgments = uniqueByKey(
+				judgments.queries(), "judgments query");
+		if (!queries.keySet().equals(queryJudgments.keySet())) {
+			throw failure("HOLDOUT_QUERY_JUDGMENTS_INCOMPLETE");
+		}
+
+		Set<String> targetVisible = candidates.values().stream()
+				.filter(candidate -> lineages.get(candidate.lineageKey()).kind().targetVisible())
+				.map(Candidate::key)
+				.collect(java.util.stream.Collectors.toUnmodifiableSet());
+		EnumSet<AdversaryKind> representedAdversaries = EnumSet.noneOf(AdversaryKind.class);
+		for (Query query : queries.values()) {
+			QueryJudgments labels = queryJudgments.get(query.key());
+			if (!labels.grades().keySet().equals(targetVisible)) {
+				throw failure("HOLDOUT_TARGET_JUDGMENTS_INCOMPLETE");
+			}
+			validateQueryJudgments(query, labels.grades());
+			validateAdversaries(
+					query, labels, candidates, lineages, representedAdversaries);
+		}
+
 		Set<String> requiredAdversaries = names(policy.judgments().requiredAdversaryKinds());
 		Set<String> actualAdversaries = representedAdversaries.stream()
 				.map(Enum::name)
@@ -784,7 +1016,6 @@ final class RelatedTopicReuseHoldoutBundle {
 		if (!actualAdversaries.containsAll(requiredAdversaries)) {
 			throw failure("HOLDOUT_ADVERSARY_KIND_MISSING");
 		}
-		validateDevelopmentDisjointness(corpus, development);
 	}
 
 	private static void validateQueryJudgments(Query query, Map<String, Integer> grades)
@@ -873,7 +1104,8 @@ final class RelatedTopicReuseHoldoutBundle {
 		if (query.kind() == QueryKind.FILTERED_LEXICAL_BRIDGE_OPPORTUNITY) {
 			for (Map.Entry<String, Integer> grade : labels.grades().entrySet()) {
 				if (grade.getValue() > 0
-						&& !candidateSatisfies(candidates.get(grade.getKey()), query.filters())) {
+						&& !RelatedTopicReuseHoldoutCandidateFilters.matches(
+								candidates.get(grade.getKey()), query.filters())) {
 					throw failure("HOLDOUT_FILTERED_RELEVANT_INVALID");
 				}
 			}
@@ -890,21 +1122,6 @@ final class RelatedTopicReuseHoldoutBundle {
 				|| labels.grades().getOrDefault(candidate.key(), -1) != 0) {
 			throw failure("HOLDOUT_TARGET_GRADE_ZERO_REQUIRED");
 		}
-	}
-
-	private static boolean candidateSatisfies(Candidate candidate, Filter filter) {
-		return (filter.yearFrom() == null
-					|| candidate.publicationYear() != null
-					&& candidate.publicationYear() >= filter.yearFrom())
-				&& (filter.yearTo() == null
-						|| candidate.publicationYear() != null
-						&& candidate.publicationYear() <= filter.yearTo())
-				&& (filter.documentTypes().isEmpty()
-						|| filter.documentTypes().contains(candidate.documentType()))
-				&& (!filter.openAccessOnly() || candidate.reportedOpenAccess())
-				&& (candidate.citationCount() == null ? 0 : candidate.citationCount())
-						>= filter.minimumCitations()
-				&& (filter.languages().isEmpty() || filter.languages().contains(candidate.language()));
 	}
 
 	private static EnumSet<FilterDimension> violatedDimensions(
@@ -1175,6 +1392,129 @@ final class RelatedTopicReuseHoldoutBundle {
 	private record FrozenInputs(
 			RelatedTopicReuseHoldoutPolicy.BoundPolicy holdoutPolicy,
 			RelatedTopicReuseEvaluationFixture.BoundFixture developmentFixture) {
+	}
+
+	@FunctionalInterface
+	interface LabelFreeRankingPhase {
+
+		RelatedTopicReuseHoldoutRankingSnapshot.Observation rank(RankingCorpus corpus)
+				throws IOException;
+	}
+
+	static final class VerifiedCorpus {
+
+		private final Object completionAuthority = new Object();
+		private final AtomicBoolean judgmentReleaseClaimed = new AtomicBoolean();
+		private final Manifest manifest;
+		private final String manifestSha256;
+		private final long manifestBytes;
+		private final RankingCorpus rankingCorpus;
+		private final long corpusBytes;
+
+		private VerifiedCorpus(
+				Manifest manifest,
+				String manifestSha256,
+				long manifestBytes,
+				RankingCorpus rankingCorpus,
+				long corpusBytes) {
+			this.manifest = Objects.requireNonNull(manifest);
+			this.manifestSha256 = Objects.requireNonNull(manifestSha256);
+			this.manifestBytes = manifestBytes;
+			this.rankingCorpus = Objects.requireNonNull(rankingCorpus);
+			this.corpusBytes = corpusBytes;
+		}
+
+		RankingCorpus rankingCorpus() {
+			return rankingCorpus;
+		}
+	}
+
+	static final class CompletedRanking {
+
+		private final VerifiedCorpus verifiedCorpus;
+		private final Object completionAuthority;
+		private final RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot;
+
+		private CompletedRanking(
+				VerifiedCorpus verifiedCorpus,
+				Object completionAuthority,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot) {
+			this.verifiedCorpus = Objects.requireNonNull(verifiedCorpus);
+			this.completionAuthority = Objects.requireNonNull(completionAuthority);
+			this.rankingSnapshot = Objects.requireNonNull(rankingSnapshot);
+		}
+
+		private boolean isAuthorized() {
+			return verifiedCorpus.completionAuthority == completionAuthority;
+		}
+
+		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot() {
+			return rankingSnapshot;
+		}
+	}
+
+	/**
+	 * Opaque post-ranking capability that binds the exact sealed ranking to the
+	 * revalidated corpus, judgments, and frozen policy used for scoring.
+	 */
+	static final class VerifiedScoringInputs {
+
+		private final CompletedRanking completedRanking;
+		private final Object scoringAuthority;
+		private final RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot;
+		private final RelatedTopicReuseHoldoutPolicy.BoundPolicy boundPolicy;
+		private final RelatedTopicReuseHoldoutBundle bundle;
+
+		private VerifiedScoringInputs(
+				CompletedRanking completedRanking,
+				Object scoringAuthority,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot,
+				RelatedTopicReuseHoldoutPolicy.BoundPolicy boundPolicy,
+				RelatedTopicReuseHoldoutBundle bundle) {
+			this.completedRanking = Objects.requireNonNull(completedRanking);
+			this.scoringAuthority = Objects.requireNonNull(scoringAuthority);
+			this.rankingSnapshot = Objects.requireNonNull(rankingSnapshot);
+			this.boundPolicy = Objects.requireNonNull(boundPolicy);
+			this.bundle = Objects.requireNonNull(bundle);
+		}
+
+		boolean isAuthorized() {
+			return completedRanking.isAuthorized()
+					&& completedRanking.completionAuthority == scoringAuthority
+					&& completedRanking.rankingSnapshot == rankingSnapshot;
+		}
+
+		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot() {
+			return rankingSnapshot;
+		}
+
+		RelatedTopicReuseHoldoutPolicy.BoundPolicy boundPolicy() {
+			return boundPolicy;
+		}
+
+		RelatedTopicReuseHoldoutBundle bundle() {
+			return bundle;
+		}
+	}
+
+	record RankingCorpus(
+			String protocolId,
+			String bundleId,
+			String corpusId,
+			String policyId,
+			String policySha256,
+			String corpusSha256,
+			Corpus corpus) {
+
+		RankingCorpus {
+			protocolId = Objects.requireNonNull(protocolId, "protocolId");
+			bundleId = Objects.requireNonNull(bundleId, "bundleId");
+			corpusId = Objects.requireNonNull(corpusId, "corpusId");
+			policyId = Objects.requireNonNull(policyId, "policyId");
+			policySha256 = Objects.requireNonNull(policySha256, "policySha256");
+			corpusSha256 = Objects.requireNonNull(corpusSha256, "corpusSha256");
+			corpus = Objects.requireNonNull(corpus, "corpus");
+		}
 	}
 
 	private record Manifest(
