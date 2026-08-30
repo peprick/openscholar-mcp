@@ -149,6 +149,7 @@ final class RelatedTopicReuseHoldoutBundle {
 				manifest,
 				sha256(manifestBytes),
 				manifestBytes.length,
+				policy.evaluation().protocolId(),
 				new RankingCorpus(
 						manifest.protocolId(),
 						manifest.bundleId(),
@@ -162,10 +163,20 @@ final class RelatedTopicReuseHoldoutBundle {
 
 	static CompletedRanking completeRanking(
 			VerifiedCorpus verifiedCorpus,
+			RelatedTopicReuseHoldoutPostgresFirstRunLedger.CommittedFirstRun
+					committedFirstRun,
 			LabelFreeRankingPhase rankingPhase)
 			throws IOException {
-		if (verifiedCorpus == null || rankingPhase == null) {
+		if (verifiedCorpus == null
+				|| committedFirstRun == null
+				|| rankingPhase == null) {
 			throw failure("HOLDOUT_INPUT_INVALID");
+		}
+		try {
+			committedFirstRun.consumeForRanking(verifiedCorpus);
+		}
+		catch (RelatedTopicReuseHoldoutPostgresFirstRunLedger.LedgerException exception) {
+			throw failure("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
 		}
 		RelatedTopicReuseHoldoutRankingSnapshot.Observation observation =
 				rankingPhase.rank(verifiedCorpus.rankingCorpus);
@@ -1410,11 +1421,13 @@ final class RelatedTopicReuseHoldoutBundle {
 		private final long manifestBytes;
 		private final RankingCorpus rankingCorpus;
 		private final long corpusBytes;
+		private final VerifiedFirstRunCommitment firstRunCommitment;
 
 		private VerifiedCorpus(
 				Manifest manifest,
 				String manifestSha256,
 				long manifestBytes,
+				String evaluationProtocolId,
 				RankingCorpus rankingCorpus,
 				long corpusBytes) {
 			this.manifest = Objects.requireNonNull(manifest);
@@ -1422,10 +1435,145 @@ final class RelatedTopicReuseHoldoutBundle {
 			this.manifestBytes = manifestBytes;
 			this.rankingCorpus = Objects.requireNonNull(rankingCorpus);
 			this.corpusBytes = corpusBytes;
+			ManifestFile judgmentCommitment = manifest.files().get(1);
+			if (!JUDGMENTS_FILENAME.equals(judgmentCommitment.filename())) {
+				throw new IllegalArgumentException("verified corpus judgment commitment is invalid");
+			}
+			this.firstRunCommitment = new VerifiedFirstRunCommitment(
+					completionAuthority,
+					evaluationProtocolId,
+					manifest.protocolId(),
+					manifest.bundleId(),
+					manifest.corpusId(),
+					manifest.policyId(),
+					manifest.policySha256(),
+					manifestSha256,
+					manifestBytes,
+					rankingCorpus.corpusSha256(),
+					corpusBytes,
+					judgmentCommitment.sha256(),
+					judgmentCommitment.bytes());
 		}
 
 		RankingCorpus rankingCorpus() {
 			return rankingCorpus;
+		}
+
+		VerifiedFirstRunCommitment firstRunCommitment() {
+			return firstRunCommitment;
+		}
+	}
+
+	/** Label-free immutable commitment used only to claim the durable first run. */
+	static final class VerifiedFirstRunCommitment {
+
+		private final String evaluationProtocolId;
+		private final Object corpusAuthority;
+		private final String bundleProtocolId;
+		private final String bundleId;
+		private final String corpusId;
+		private final String policyId;
+		private final String policySha256;
+		private final String manifestSha256;
+		private final long manifestBytes;
+		private final String corpusSha256;
+		private final long corpusBytes;
+		private final String judgmentsSha256;
+		private final long judgmentsBytes;
+
+		private VerifiedFirstRunCommitment(
+				Object corpusAuthority,
+				String evaluationProtocolId,
+				String bundleProtocolId,
+				String bundleId,
+				String corpusId,
+				String policyId,
+				String policySha256,
+				String manifestSha256,
+				long manifestBytes,
+				String corpusSha256,
+				long corpusBytes,
+				String judgmentsSha256,
+				long judgmentsBytes) {
+			this.corpusAuthority = Objects.requireNonNull(corpusAuthority, "corpusAuthority");
+			this.evaluationProtocolId = Objects.requireNonNull(
+					evaluationProtocolId, "evaluationProtocolId");
+			this.bundleProtocolId = Objects.requireNonNull(
+					bundleProtocolId, "bundleProtocolId");
+			this.bundleId = Objects.requireNonNull(bundleId, "bundleId");
+			this.corpusId = Objects.requireNonNull(corpusId, "corpusId");
+			this.policyId = Objects.requireNonNull(policyId, "policyId");
+			this.policySha256 = Objects.requireNonNull(policySha256, "policySha256");
+			this.manifestSha256 = Objects.requireNonNull(
+					manifestSha256, "manifestSha256");
+			if (manifestBytes < 1) {
+				throw new IllegalArgumentException("invalid manifest commitment size");
+			}
+			this.manifestBytes = manifestBytes;
+			this.corpusSha256 = Objects.requireNonNull(corpusSha256, "corpusSha256");
+			if (corpusBytes < 1) {
+				throw new IllegalArgumentException("invalid corpus commitment size");
+			}
+			this.corpusBytes = corpusBytes;
+			this.judgmentsSha256 = Objects.requireNonNull(
+					judgmentsSha256, "judgmentsSha256");
+			if (judgmentsBytes < 1) {
+				throw new IllegalArgumentException("invalid judgment commitment size");
+			}
+			this.judgmentsBytes = judgmentsBytes;
+		}
+
+		String evaluationProtocolId() {
+			return evaluationProtocolId;
+		}
+
+		String bundleProtocolId() {
+			return bundleProtocolId;
+		}
+
+		String bundleId() {
+			return bundleId;
+		}
+
+		String corpusId() {
+			return corpusId;
+		}
+
+		String policyId() {
+			return policyId;
+		}
+
+		String policySha256() {
+			return policySha256;
+		}
+
+		String manifestSha256() {
+			return manifestSha256;
+		}
+
+		long manifestBytes() {
+			return manifestBytes;
+		}
+
+		String corpusSha256() {
+			return corpusSha256;
+		}
+
+		long corpusBytes() {
+			return corpusBytes;
+		}
+
+		String judgmentsSha256() {
+			return judgmentsSha256;
+		}
+
+		long judgmentsBytes() {
+			return judgmentsBytes;
+		}
+
+		boolean authorizes(VerifiedCorpus verifiedCorpus) {
+			return verifiedCorpus != null
+					&& verifiedCorpus.completionAuthority == corpusAuthority;
 		}
 	}
 

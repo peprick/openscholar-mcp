@@ -20,8 +20,8 @@ repository revision `6b22f6185d9c14a3dd0bf0a80a4b08c045396bff`. Source-seal and
 canonical-report primitives were subsequently committed, but that intermediate
 revision is not the evaluator freeze: it did not yet contain a canonical source
 inventory, clean-checkout collector, durable ledger, or operator workflow. The
-collector described below, the future ledger, and the future operator must be
-reviewed and committed before the final runnable revision is frozen. The expected
+collector and ledger described below, plus the future operator, must be reviewed
+and committed before the final runnable revision is frozen. The expected
 revision and source SHA-256 values must then be calculated and retained
 independently outside the tree they bind; embedding them in that same commit would
 be self-referential. The collector also does not prove that evaluator bytecode was
@@ -185,10 +185,12 @@ from different bundles. Judgment release is an atomic one-shot transition on tha
 specific `VerifiedCorpus` instance: once the release is claimed, the same staged
 instance cannot open judgments for another completed ranking, even when judgment
 reading or validation subsequently fails. A caller can still invoke
-`verifyCorpus` again and obtain a fresh instance for the same external files. A
-future operator therefore needs a durable first-run ledger keyed to the accepted
-bundle and frozen evaluator before this object-local guard can enforce the
-preregistered first-run rule across processes or fresh intake calls.
+`verifyCorpus` again and obtain a fresh instance for the same external files. The
+PostgreSQL first-run ledger supplies the durable cross-process guard: the supported
+`completeRanking` coordinator requires the exact opaque `CommittedFirstRun`
+capability minted only after that ledger commits, and consumes it before invoking
+the ranking callback. The object-local judgment flag remains a separate later-stage
+defense.
 
 The test-only `RelatedTopicReuseHoldoutPostgresRanker` implements the
 label-free callback. A deterministic fixture derives namespace IDs from the
@@ -246,6 +248,67 @@ executable via `openscholar.holdout.git-executable` or
 repository-controlled relative `PATH`. The returned opaque seal still grants
 neither external bundle acceptance nor custody release.
 
+The collector now wraps that pure seal in a collector-only
+`VerifiedCleanCheckout` capability. The ledger accepts this
+capability rather than a bare caller-assembled source seal, retaining the external
+freeze schema and inventory identity alongside the evaluator and candidate source
+commitments.
+
+`RelatedTopicReuseHoldoutPostgresFirstRunLedger` supplies the durable finality
+boundary. More precisely, it provides durable runtime-append-only cross-process
+finality under the database trust assumptions below; it does not make storage
+immutable to an owner, administrator, or infrastructure operator. It is a
+package-private operator utility, not a Spring bean, and its
+versioned SQL lives in the isolated `db/holdout-ledger` resource location rather
+than application Flyway. Provisioning requires the fixed dedicated
+`openscholar_holdout_ledger_v1` database, a fixed schema, a no-login owner, an
+INSERT-only runtime role, and a SELECT-only auditor. The runtime has no table reads,
+updates, deletes, truncation, schema/database creation, or temporary-object
+privilege in the ledger database. Production provisioning must also ensure that its
+cluster-level login cannot connect to the application or any other database, either
+by using a separate PostgreSQL cluster or by explicitly revoking and auditing
+cross-database access. The verifier does not inspect other databases and therefore
+does not yet prove the required separation. The migration assumes that the
+dedicated database and roles already exist; a reviewed production runbook for
+creating those principals, distributing credentials, applying the isolated
+migration, and validating both local and cross-database grants is still pending.
+
+After clean-checkout verification and label-free corpus intake—but before any
+ranking callback—the ledger derives a domain-separated, length-prefixed SHA-256
+run key over the policy, bundle, manifest, corpus, judgment commitment, source
+inventory, evaluator, and candidate identities. The runtime-append-only row is
+final on
+`(evaluationProtocolId, policyId)`, so changing a bundle, evaluator, or candidate
+cannot manufacture another attempt under policy v1. Claiming uses one targetless
+`INSERT ... ON CONFLICT DO NOTHING RETURNING 1` transaction, which preserves the
+runtime role's column-level INSERT-only privilege. The ledger requires PostgreSQL
+17, `fsync=on`, `synchronous_commit=on`, the exact permanent table/column/constraint
+shape, fixed role/database identity, and no user trigger or rewrite rule. It mints
+an opaque one-shot ranking capability only after `commit()` acknowledges success.
+There is no read, retry, reset, delete, update, lease, expiry, heartbeat, status, or
+completion API. A committed claim remains final if the process crashes or any later
+ranking, judgment, scoring, reporting, or publication step fails. A lost commit
+acknowledgment returns no capability and must never be retried automatically.
+
+The catalog verifier deliberately compares canonical PostgreSQL-rendered defaults,
+constraints, and index definitions exactly. The mechanics tests use the
+repository's digest-pinned PostgreSQL 17 image. A production operator must likewise
+pin and validate one exact server image/build; an unreviewed minor-version
+formatting change is expected to fail closed until the catalog contract is reviewed
+and updated.
+
+The ledger validates the connected database catalog and session, but the supplied
+`DataSource` remains an operator trust boundary. Catalog identity does not
+authenticate the remote endpoint, DNS or socket route, TLS peer, server
+certificate, administrator, or underlying storage. The future operator must pin
+and authenticate the intended endpoint and TLS/server identity, protect the owner
+and administrative authorities, and use separately governed persistent storage.
+The ledger sets and verifies a 15-second JDBC network timeout after it acquires a
+connection, in addition to transaction-local statement and lock limits. It cannot
+bound pool acquisition or initial connection setup, so the operator must still
+configure bounded pool-acquisition, connect, and socket timeouts and verify the
+selected driver/pool behavior under a stalled endpoint.
+
 `RelatedTopicReuseHoldoutEvidenceReport` accepts only that opaque verified seal,
 the exact ranking snapshot, and its matching scoring result. It explicitly
 projects the source inventory, complete snapshot, and complete score into bounded
@@ -284,9 +347,13 @@ exercised with generated synthetic data. The coordinator capability proves the
 intended in-process call order, but cannot authenticate which injected callback ran or
 isolate same-process code. The in-memory serialized report schema feeds the
 read-only exact retained-bundle verifier described above. The clean-checkout
-collector is package-private and is not an operator entry point. There is still no
-real external bundle, durable first-run ledger, operator workflow, frozen evaluator
-revision/source digest, or custody-authorized publisher.
+collector and durable ledger are package-private mechanics, not an operator entry
+point. The `completeRanking` coordinator now requires and consumes the exact
+committed ledger capability before invoking its ranking callback. There is still no
+real external bundle; no operator command that composes standalone clean-checkout
+collection, ledger claim, build, ranking, and scoring in one mandatory workflow; no
+reviewed dedicated database/role provisioning runbook; no frozen evaluator
+revision/source digest; and no custody-authorized publisher.
 The checked-in ranker tests are mechanics evidence, not an external holdout result.
 These schema details are for review, not an invitation to release a real bundle;
 direct operator validation arrives only after the remaining pieces are implemented
@@ -296,7 +363,7 @@ Run the staged-boundary, immutable-evidence, policy, and PostgreSQL ranking
 contracts from `backend/` with Docker available:
 
 ```bash
-./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
+./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutFirstRunIdentityTests,RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
 ```
 
 ## Preregistered decision boundary
@@ -346,11 +413,14 @@ commitment-bound ranking evidence, deterministic label-blind PostgreSQL ranking
 mechanics, complete in-memory scoring over the sealed post-ranking capability,
 source-commitment validation, canonical evidence projection, and read-only exact
 replay for already verified synthetic report bytes. It also establishes a
-fail-closed clean-checkout collector for an externally frozen source inventory. It
-does not load a real external bundle, durably enforce first-run finality, or provide
-the isolated operator that must build and run from the same verified checkout. The
-next safe sequence is to add the durable first-run ledger and operator workflow;
-commit and review that complete runnable evaluator; then independently retain its
+fail-closed clean-checkout collector for an externally frozen source inventory and
+an INSERT-only durable PostgreSQL first-run claim whose one-shot capability is
+mandatory at the ranking coordinator. It does not load a real external bundle or
+provide the isolated operator that must compose collection, claim, build, and run
+from the same verified standalone clean checkout. The dedicated database/role
+provisioning runbook and bounded pool-acquisition/connect/socket configuration also remain
+pending. The next safe sequence is to add those operator controls; commit and
+review the complete runnable evaluator; then independently retain its
 exact revision, inventory identity, and source digests outside the repository. A
 later native exclusive publisher or separately reviewed external custody handoff
 is still required before custody release. Until that frozen evaluator exists and a
@@ -377,8 +447,18 @@ not an OS process, module,
 reflection, or memory-isolation boundary. A future operator runner must preserve
 that call graph and must not pass the private staged coordinator object or external
 path to ranking code. The atomic release flag belongs to one `VerifiedCorpus` object;
-fresh intake calls or another process can create another flag, so it is not the
-durable first-run record required for external custody.
+fresh intake calls or another process can create another flag. The PostgreSQL ledger
+provides durable runtime-append-only cross-process finality through the mandatory
+committed capability, but only for callers that preserve the supported composition
+and database trust boundary. Its `fsync` and synchronous-commit checks establish
+local WAL acknowledgment, not endpoint or TLS/server identity, trusted time,
+administrator integrity, storage honesty, immutable retention, backup durability,
+or disaster recovery. An owner, superuser, or storage administrator remains capable
+of altering or removing the evidence. Testcontainers proves mechanics only; a real
+first run must use separately governed persistent storage, authenticated server
+configuration, bounded pool-acquisition/connect/socket timeouts, and the pending reviewed
+provisioning and clean-checkout operator runbooks, never the ephemeral test
+container.
 
 Inline synthetic bundles in ordinary tests are parser and invariant fixtures
 only. They are never holdout evidence, must never be reported as scores, and do

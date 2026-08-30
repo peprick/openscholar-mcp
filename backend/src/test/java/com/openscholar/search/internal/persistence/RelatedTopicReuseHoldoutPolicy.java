@@ -49,6 +49,8 @@ record RelatedTopicReuseHoldoutPolicy(
 	static final String RESOURCE_PATH =
 			"search/relevance/related-topic-reuse-holdout-policy-v1.json";
 	static final String POLICY_ID = "related-topic-reuse-holdout-policy-v1";
+	static final String EVALUATION_PROTOCOL_ID =
+			"related-topic-reuse-holdout-evaluation-v1";
 	static final String CANDIDATE_FREEZE_REVISION =
 			"6b22f6185d9c14a3dd0bf0a80a4b08c045396bff";
 	static final String POLICY_SHA256 =
@@ -635,7 +637,7 @@ record RelatedTopicReuseHoldoutPolicy(
 		}
 
 		EvaluationContract evaluation = policy.evaluation();
-		if (!"related-topic-reuse-holdout-evaluation-v1".equals(evaluation.protocolId())
+		if (!EVALUATION_PROTOCOL_ID.equals(evaluation.protocolId())
 				|| evaluation.cutoff() != 10
 				|| evaluation.relevanceThreshold() != 1
 				|| !"UNIQUE_KEYS_WITH_UNJUDGED_KEYS_GRADED_ZERO_AND_RECORDED_AS_SCOPE_VIOLATIONS"

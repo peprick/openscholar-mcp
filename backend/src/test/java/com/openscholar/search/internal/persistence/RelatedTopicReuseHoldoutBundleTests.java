@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -91,7 +92,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		BundleFiles files = validBundle();
 		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
 				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
-		var completion = RelatedTopicReuseHoldoutBundle.completeRanking(
+		var completion = completeRanking(
 				verified, ignored -> passingRankingObservation(verified));
 		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), completion);
@@ -145,7 +146,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper,
 				files.directory(),
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						verified, ignored -> emptyRankingObservation(verified)));
 
 		var result = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
@@ -743,7 +744,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
 		boolean[] rankingPhaseCalled = {false};
 		RelatedTopicReuseHoldoutBundle.CompletedRanking validCompletion =
-				RelatedTopicReuseHoldoutBundle.completeRanking(verified, corpus -> {
+				completeRanking(verified, corpus -> {
 					rankingPhaseCalled[0] = true;
 					assertThat(corpus).isSameAs(verified.rankingCorpus());
 					return emptyRankingObservation(verified);
@@ -756,7 +757,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		assertThat(valid.judgmentsSha256())
 				.isEqualTo(sha256(Files.readAllBytes(files.judgmentsFile())));
 		assertThat(valid.judgmentsBytes()).isEqualTo(Files.size(files.judgmentsFile()));
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.completeRanking(
+		assertThatThrownBy(() -> completeRanking(
 				verified, ignored -> null))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage("HOLDOUT_RANKING_OBSERVATION_INVALID");
@@ -769,7 +770,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 						valid.queries(),
 						valid.counters());
 		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongIdentity =
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						verified, ignored -> wrongRevision);
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), wrongIdentity))
@@ -789,7 +790,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 						reorderedQueries,
 						valid.counters());
 		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongQueryOrder =
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						verified, ignored -> reordered);
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), wrongQueryOrder))
@@ -823,7 +824,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 						outsideQueries,
 						valid.counters());
 		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongScope =
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						verified, ignored -> wrongScopeObservation);
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), wrongScope))
@@ -833,6 +834,16 @@ class RelatedTopicReuseHoldoutBundleTests {
 
 	@Test
 	void onlyACoordinatorIssuedCompletionCanReachJudgmentLoading() {
+		var completionMethods = Arrays.stream(
+				RelatedTopicReuseHoldoutBundle.class.getDeclaredMethods())
+				.filter(method -> method.getName().equals("completeRanking"))
+				.toList();
+		assertThat(completionMethods).singleElement().satisfies(method ->
+				assertThat(method.getParameterTypes()).containsExactly(
+						RelatedTopicReuseHoldoutBundle.VerifiedCorpus.class,
+						RelatedTopicReuseHoldoutPostgresFirstRunLedger
+								.CommittedFirstRun.class,
+						RelatedTopicReuseHoldoutBundle.LabelFreeRankingPhase.class));
 		var verifyMethods = Arrays.stream(
 				RelatedTopicReuseHoldoutBundle.class.getDeclaredMethods())
 				.filter(method -> method.getName().equals("verifyAfterRanking"))
@@ -848,13 +859,67 @@ class RelatedTopicReuseHoldoutBundleTests {
 	}
 
 	@Test
+	void committedFirstRunIsExactlyBoundOneShotAndConsumedBeforeRanking()
+			throws Exception {
+		BundleFiles files = validBundle();
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(
+						objectMapper, files.directory());
+		RelatedTopicReuseHoldoutBundle.VerifiedCorpus independentlyVerified =
+				RelatedTopicReuseHoldoutBundle.verifyCorpus(
+						objectMapper, files.directory());
+		var committedFirstRun = syntheticCommittedFirstRun(verified);
+		int[] rankingCalls = {0};
+
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.completeRanking(
+				independentlyVerified,
+				committedFirstRun,
+				ignored -> {
+					rankingCalls[0]++;
+					return emptyRankingObservation(independentlyVerified);
+				}))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
+		assertThat(rankingCalls[0]).isZero();
+
+		var completion = RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified,
+				committedFirstRun,
+				ignored -> {
+					rankingCalls[0]++;
+					assertThatThrownBy(() ->
+							RelatedTopicReuseHoldoutBundle.completeRanking(
+									verified,
+									committedFirstRun,
+									nested -> emptyRankingObservation(verified)))
+							.isInstanceOf(
+									RelatedTopicReuseHoldoutBundle.VerificationException.class)
+							.hasMessage("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
+					return emptyRankingObservation(verified);
+				});
+
+		assertThat(completion).isNotNull();
+		assertThat(rankingCalls[0]).isOne();
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified,
+				committedFirstRun,
+				ignored -> {
+					rankingCalls[0]++;
+					return emptyRankingObservation(verified);
+				}))
+				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
+				.hasMessage("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
+		assertThat(rankingCalls[0]).isOne();
+	}
+
+	@Test
 	void aVerifiedCorpusReleasesJudgmentsForOnlyItsFirstValidRanking()
 			throws Exception {
 		BundleFiles files = validBundle();
 		RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified =
 				RelatedTopicReuseHoldoutBundle.verifyCorpus(objectMapper, files.directory());
 		var observation = passingRankingObservation(verified);
-		var firstCompletion = RelatedTopicReuseHoldoutBundle.completeRanking(
+		var firstCompletion = completeRanking(
 				verified, ignored -> observation);
 
 		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
@@ -862,7 +927,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 
 		assertThat(RelatedTopicReuseHoldoutScorer.score(scoringInputs))
 				.isEqualTo(RelatedTopicReuseHoldoutScorer.score(scoringInputs));
-		var replayedCompletion = RelatedTopicReuseHoldoutBundle.completeRanking(
+		var replayedCompletion = completeRanking(
 				verified, ignored -> observation);
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), replayedCompletion))
@@ -912,7 +977,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		RelatedTopicReuseHoldoutRankingSnapshot.Observation valid =
 				nonEmptyRankingObservation(verified);
 		RelatedTopicReuseHoldoutBundle.CompletedRanking validCompletion =
-				RelatedTopicReuseHoldoutBundle.completeRanking(verified, ignored -> valid);
+				completeRanking(verified, ignored -> valid);
 		assertThat(RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), validCompletion)).isNotNull();
 
@@ -1469,8 +1534,57 @@ class RelatedTopicReuseHoldoutBundleTests {
 
 	private static RelatedTopicReuseHoldoutBundle.CompletedRanking rankingCompletion(
 			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) throws IOException {
-		return RelatedTopicReuseHoldoutBundle.completeRanking(
+		return completeRanking(
 				verified, ignored -> emptyRankingObservation(verified));
+	}
+
+	private static RelatedTopicReuseHoldoutBundle.CompletedRanking completeRanking(
+			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified,
+			RelatedTopicReuseHoldoutBundle.LabelFreeRankingPhase rankingPhase)
+			throws IOException {
+		return RelatedTopicReuseHoldoutBundle.completeRanking(
+				verified, syntheticCommittedFirstRun(verified), rankingPhase);
+	}
+
+	private static RelatedTopicReuseHoldoutPostgresFirstRunLedger.CommittedFirstRun
+			syntheticCommittedFirstRun(
+					RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) {
+		try {
+			var evaluatorSeal = syntheticEvaluatorSeal(
+					RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION);
+			var freeze = new RelatedTopicReuseHoldoutGitCollector.FreezeRecord(
+					RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION,
+					RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID,
+					evaluatorSeal.evaluatorRevision(),
+					evaluatorSeal.evaluatorSourceSha256(),
+					evaluatorSeal.candidateRevision(),
+					evaluatorSeal.candidateSourceSha256());
+			Constructor<RelatedTopicReuseHoldoutGitCollector.VerifiedCleanCheckout>
+					checkoutConstructor = RelatedTopicReuseHoldoutGitCollector
+							.VerifiedCleanCheckout.class.getDeclaredConstructor(
+									RelatedTopicReuseHoldoutGitCollector.FreezeRecord.class,
+									RelatedTopicReuseHoldoutEvaluatorSeal
+											.VerifiedEvaluatorSeal.class);
+			checkoutConstructor.setAccessible(true);
+			var checkout = checkoutConstructor.newInstance(freeze, evaluatorSeal);
+			var identity = RelatedTopicReuseHoldoutFirstRunIdentity.fromVerified(
+					verified.firstRunCommitment(), checkout);
+			Constructor<RelatedTopicReuseHoldoutPostgresFirstRunLedger.CommittedFirstRun>
+					capabilityConstructor = RelatedTopicReuseHoldoutPostgresFirstRunLedger
+							.CommittedFirstRun.class.getDeclaredConstructor(
+									RelatedTopicReuseHoldoutFirstRunIdentity.class,
+									RelatedTopicReuseHoldoutBundle
+											.VerifiedFirstRunCommitment.class,
+									RelatedTopicReuseHoldoutGitCollector
+											.VerifiedCleanCheckout.class);
+			capabilityConstructor.setAccessible(true);
+			return capabilityConstructor.newInstance(
+					identity, verified.firstRunCommitment(), checkout);
+		}
+		catch (ReflectiveOperationException exception) {
+			throw new IllegalStateException(
+					"synthetic committed first-run capability is unavailable", exception);
+		}
 	}
 
 	private void assertScopeRejected(
@@ -1480,7 +1594,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper,
 				files.directory(),
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						verified, ignored -> observation)))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
 				.hasMessage("HOLDOUT_RANKING_SEAL_SCOPE_INVALID");
@@ -1592,7 +1706,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 		return RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper,
 				files.directory(),
-				RelatedTopicReuseHoldoutBundle.completeRanking(
+				completeRanking(
 						freshVerification, ignored -> observation));
 	}
 

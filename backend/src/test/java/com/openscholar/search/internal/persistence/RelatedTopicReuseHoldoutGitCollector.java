@@ -109,13 +109,13 @@ final class RelatedTopicReuseHoldoutGitCollector {
 	private RelatedTopicReuseHoldoutGitCollector() {
 	}
 
-	static VerifiedEvaluatorSeal verifyCleanCheckout(
+	static VerifiedCleanCheckout verifyCleanCheckout(
 			Path repositoryRoot, FreezeRecord externallyRetainedFreeze)
 			throws IOException {
 		return verifyCleanCheckout(repositoryRoot, externallyRetainedFreeze, SYSTEM_GIT);
 	}
 
-	static VerifiedEvaluatorSeal verifyCleanCheckout(
+	static VerifiedCleanCheckout verifyCleanCheckout(
 			Path repositoryRoot,
 			FreezeRecord externallyRetainedFreeze,
 			GitRunner git)
@@ -182,7 +182,8 @@ final class RelatedTopicReuseHoldoutGitCollector {
 					observedCandidateSha256,
 					true);
 			try {
-				return RelatedTopicReuseHoldoutEvaluatorSeal.verify(
+				VerifiedEvaluatorSeal evaluatorSeal =
+						RelatedTopicReuseHoldoutEvaluatorSeal.verify(
 						initialHead,
 						externallyRetainedFreeze.evaluatorSourceSha256(),
 						candidateRevision,
@@ -190,6 +191,8 @@ final class RelatedTopicReuseHoldoutGitCollector {
 						repositoryState,
 						evaluator.sources(),
 						candidateAtHead.sources());
+				return new VerifiedCleanCheckout(
+						externallyRetainedFreeze, evaluatorSeal);
 			}
 			catch (IllegalArgumentException | ArithmeticException exception) {
 				throw failure("HOLDOUT_GIT_SOURCE_SEAL_REJECTED");
@@ -873,6 +876,76 @@ final class RelatedTopicReuseHoldoutGitCollector {
 					|| !SHA256.matcher(candidateSourceSha256).matches()) {
 				throw new IllegalArgumentException("invalid external holdout freeze record");
 			}
+		}
+	}
+
+	/**
+	 * Opaque proof that the collector, rather than only the pure source-seal
+	 * helper, verified a clean checkout against an externally retained freeze.
+	 */
+	static final class VerifiedCleanCheckout {
+
+		private final FreezeRecord freeze;
+		private final VerifiedEvaluatorSeal evaluatorSeal;
+
+		private VerifiedCleanCheckout(
+				FreezeRecord freeze, VerifiedEvaluatorSeal evaluatorSeal) {
+			this.freeze = Objects.requireNonNull(freeze, "freeze");
+			this.evaluatorSeal = Objects.requireNonNull(evaluatorSeal, "evaluatorSeal");
+			if (freeze.schemaVersion() != FREEZE_SCHEMA_VERSION
+					|| !INVENTORY_ID.equals(freeze.inventoryId())
+					|| !freeze.evaluatorRevision().equals(evaluatorSeal.evaluatorRevision())
+					|| !constantTimeEquals(
+							freeze.evaluatorSourceSha256(),
+							evaluatorSeal.evaluatorSourceSha256())
+					|| !freeze.candidateRevision().equals(evaluatorSeal.candidateRevision())
+					|| !constantTimeEquals(
+							freeze.candidateSourceSha256(),
+							evaluatorSeal.candidateSourceSha256())
+					|| evaluatorSeal.externalBundleAcceptanceAuthorized()
+					|| evaluatorSeal.custodyReleaseAuthorized()) {
+				throw new IllegalArgumentException("invalid verified clean checkout");
+			}
+		}
+
+		int freezeSchemaVersion() {
+			return freeze.schemaVersion();
+		}
+
+		String inventoryId() {
+			return freeze.inventoryId();
+		}
+
+		String evaluatorRevision() {
+			return evaluatorSeal.evaluatorRevision();
+		}
+
+		String evaluatorSourceSha256() {
+			return evaluatorSeal.evaluatorSourceSha256();
+		}
+
+		String candidateRevision() {
+			return evaluatorSeal.candidateRevision();
+		}
+
+		String candidateSourceSha256() {
+			return evaluatorSeal.candidateSourceSha256();
+		}
+
+		List<RelatedTopicReuseHoldoutEvaluatorSeal.SourceFileCommitment> files() {
+			return evaluatorSeal.files();
+		}
+
+		VerifiedEvaluatorSeal evaluatorSeal() {
+			return evaluatorSeal;
+		}
+
+		boolean externalBundleAcceptanceAuthorized() {
+			return false;
+		}
+
+		boolean custodyReleaseAuthorized() {
+			return false;
 		}
 	}
 

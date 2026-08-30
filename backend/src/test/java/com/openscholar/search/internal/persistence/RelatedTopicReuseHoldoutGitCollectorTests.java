@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,6 +49,10 @@ class RelatedTopicReuseHoldoutGitCollectorTests {
 		var verified = RelatedTopicReuseHoldoutGitCollector.verifyCleanCheckout(
 				state.root(), state.freeze(), processGitRunner());
 
+		assertThat(verified.freezeSchemaVersion())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION);
+		assertThat(verified.inventoryId())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID);
 		assertThat(verified.evaluatorRevision()).isEqualTo(state.evaluatorRevision());
 		assertThat(verified.evaluatorSourceSha256())
 				.isEqualTo(state.freeze().evaluatorSourceSha256());
@@ -65,6 +70,12 @@ class RelatedTopicReuseHoldoutGitCollectorTests {
 				.hasSize(state.candidateSources().size());
 		assertThat(verified.externalBundleAcceptanceAuthorized()).isFalse();
 		assertThat(verified.custodyReleaseAuthorized()).isFalse();
+		assertThat(verified.evaluatorSeal().evaluatorRevision())
+				.isEqualTo(verified.evaluatorRevision());
+		assertThat(Arrays.stream(verified.getClass().getDeclaredConstructors()))
+				.singleElement()
+				.satisfies(constructor ->
+						assertThat(Modifier.isPrivate(constructor.getModifiers())).isTrue());
 	}
 
 	@Test
