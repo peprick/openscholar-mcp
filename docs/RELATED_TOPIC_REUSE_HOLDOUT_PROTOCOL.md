@@ -16,14 +16,19 @@ helped produce. The separate 100,000-paper scale diagnostic has no relevance
 labels and cannot fill that gap.
 
 Policy v1 binds the frozen candidate-policy resource and development fixture at
-repository revision `6b22f6185d9c14a3dd0bf0a80a4b08c045396bff`. The current
-slice now defines source-seal and canonical-report primitives, but it cannot name
-the current evaluator as a committed revision while those sources remain
-uncommitted. It also does not prove that later evaluator bytecode was built from
-the candidate revision. An evaluator revision and source SHA-256 must be frozen
-from a later clean committed checkout and checked before an
-external custodian releases a real bundle. Until then, external-bundle acceptance
-and custody release are explicitly unauthorized. Once those prerequisites exist,
+repository revision `6b22f6185d9c14a3dd0bf0a80a4b08c045396bff`. Source-seal and
+canonical-report primitives were subsequently committed, but that intermediate
+revision is not the evaluator freeze: it did not yet contain a canonical source
+inventory, clean-checkout collector, durable ledger, or operator workflow. The
+collector described below, the future ledger, and the future operator must be
+reviewed and committed before the final runnable revision is frozen. The expected
+revision and source SHA-256 values must then be calculated and retained
+independently outside the tree they bind; embedding them in that same commit would
+be self-referential. The collector also does not prove that evaluator bytecode was
+built reproducibly from those sources. The external freeze must be checked from
+its exact clean checkout before a custodian releases a real bundle. Until then,
+external-bundle acceptance and custody release are explicitly unauthorized. Once
+those prerequisites exist,
 the first eligible external run is final for this policy version. A failure may
 lead to a new development cycle and newly versioned holdout; it must not lead to
 tuning against this holdout and rescoring it as though it were still blind.
@@ -215,10 +220,31 @@ candidate roles, revisions, Git modes, sorted safe repository-relative paths,
 byte counts, and exact raw source bytes with a versioned domain-separated SHA-256;
 and requires both aggregate digests to match an independently retained freeze
 record. The returned source inventory contains per-file byte counts and SHA-256
-commitments but no absolute paths. This class deliberately does not run Git,
-discover a source inventory, authenticate the supplied repository-state facts,
-or bless the current dirty checkout. Those are future operator responsibilities,
-and the seal itself grants neither external-bundle acceptance nor custody release.
+commitments but no absolute paths. This pure class deliberately does not run Git,
+discover a source inventory, or authenticate supplied repository-state facts.
+
+`RelatedTopicReuseHoldoutGitCollector` supplies that missing collection boundary.
+Its only accepting operation requires an independently retained freeze record with
+the exact inventory identity, evaluator revision and source digest, and frozen
+candidate revision and source digest. The candidate inventory recursively covers
+`backend/src/main` plus the exact evaluation policy, fixture, rank-fusion, local
+adapter, and contract sources used by the candidate. The evaluator inventory
+recursively covers `backend/src` and `backend/.mvn`, plus the Maven launchers, POM,
+repository attributes/ignore rules, and this protocol. It reads the committed tree
+and blobs in bounded NUL-safe and length-framed Git batches, requires the candidate
+tree at the evaluator revision to equal the frozen candidate tree, and compares the
+evaluator checkout with the sealed committed bytes. The required CRLF projection
+for `mvnw.cmd` is checked explicitly rather than skipped.
+
+Collection requires a standalone clean clone with a real `.git` directory, rejects
+replacement objects and repository-local grafts, disables commit-graph,
+filesystem-monitor, untracked-cache, and submodule recursion behavior, checks both
+ordinary and ignored source status, and brackets collection with repeated HEAD and
+status checks. Git must be provided as an operator-configured canonical absolute
+executable via `openscholar.holdout.git-executable` or
+`OPENSCHOLAR_HOLDOUT_GIT_EXECUTABLE`; the collector never resolves a
+repository-controlled relative `PATH`. The returned opaque seal still grants
+neither external bundle acceptance nor custody release.
 
 `RelatedTopicReuseHoldoutEvidenceReport` accepts only that opaque verified seal,
 the exact ranking snapshot, and its matching scoring result. It explicitly
@@ -257,9 +283,10 @@ ranking evidence, ranker, fixture, and scorer are package-private test utilities
 exercised with generated synthetic data. The coordinator capability proves the
 intended in-process call order, but cannot authenticate which injected callback ran or
 isolate same-process code. The in-memory serialized report schema feeds the
-read-only exact retained-bundle verifier described above. There
-is still no real external bundle, clean-checkout Git collector, durable first-run
-ledger, operator workflow, or frozen evaluator revision/source digest.
+read-only exact retained-bundle verifier described above. The clean-checkout
+collector is package-private and is not an operator entry point. There is still no
+real external bundle, durable first-run ledger, operator workflow, frozen evaluator
+revision/source digest, or custody-authorized publisher.
 The checked-in ranker tests are mechanics evidence, not an external holdout result.
 These schema details are for review, not an invitation to release a real bundle;
 direct operator validation arrives only after the remaining pieces are implemented
@@ -269,7 +296,7 @@ Run the staged-boundary, immutable-evidence, policy, and PostgreSQL ranking
 contracts from `backend/` with Docker available:
 
 ```bash
-./mvnw -Dtest=RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
+./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
 ```
 
 ## Preregistered decision boundary
@@ -318,13 +345,15 @@ This slice now establishes staged corpus-to-judgment isolation,
 commitment-bound ranking evidence, deterministic label-blind PostgreSQL ranking
 mechanics, complete in-memory scoring over the sealed post-ranking capability,
 source-commitment validation, canonical evidence projection, and read-only exact
-replay for already verified synthetic report bytes. It does not
-load a real external bundle, enforce the running checkout revision, or enforce
-first-run finality beyond one staged object instance. The next safe sequence is to
-commit the evaluator/report sources, freeze that exact later revision and source
-digest independently, add the clean-checkout Git collector, and only then add the
-durable first-run ledger. A later native exclusive publisher and operator workflow
-are still required before custody release. Until that frozen evaluator exists and a
+replay for already verified synthetic report bytes. It also establishes a
+fail-closed clean-checkout collector for an externally frozen source inventory. It
+does not load a real external bundle, durably enforce first-run finality, or provide
+the isolated operator that must build and run from the same verified checkout. The
+next safe sequence is to add the durable first-run ledger and operator workflow;
+commit and review that complete runnable evaluator; then independently retain its
+exact revision, inventory identity, and source digests outside the repository. A
+later native exclusive publisher or separately reviewed external custody handoff
+is still required before custody release. Until that frozen evaluator exists and a
 genuinely external first run is reviewed, there is no holdout result. Even a
 passing holdout would still require qualified
 target-deployment performance evidence and a separately reviewed product design.
@@ -337,10 +366,14 @@ authenticity, trusted time, confidentiality, immutable retention, or semantic
 disjointness. SHA-256 is an integrity binding, not a signature. Procedural
 declarations can be false. External custody, access history, reviewer identity,
 and the absence of prior disclosure require controls outside this repository.
-Verification also assumes an operator-controlled, non-concurrently-mutated
-filesystem; it is not a hostile-filesystem snapshot, hard-link detector, or
-protection against an ancestor or file being swapped during intake. The staged
-types create an in-process API capability boundary, not an OS process, module,
+Collector verification is a bounded sequence of checks, not an atomic or hostile
+filesystem snapshot. A checkout that changes from one state and back between
+checks, post-verification mutation, and build/run substitution remain possible
+without operator isolation. Supplying a canonical absolute Git path avoids relative
+`PATH` capture but does not authenticate the executable; the operator must pin the
+Git, JDK, Maven distribution, dependencies, settings, toolchains, environment, and
+network/cache inputs. The staged types create an in-process API capability boundary,
+not an OS process, module,
 reflection, or memory-isolation boundary. A future operator runner must preserve
 that call graph and must not pass the private staged coordinator object or external
 path to ranking code. The atomic release flag belongs to one `VerifiedCorpus` object;
