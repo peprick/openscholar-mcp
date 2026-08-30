@@ -10,7 +10,7 @@ COPY src src
 RUN --mount=type=cache,target=/root/.m2 \
     ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
-FROM gcr.io/distroless/java21-debian13:nonroot@sha256:15e24b3e7b4563992cb6956feee510e647616fcd5a714c6e29743e6fde53f3f5
+FROM gcr.io/distroless/java21-debian13:nonroot@sha256:bb0b3c7edc4417acdf76ea0f52bb5fae28881fe05aae6cc55af4cc4cb0200d2d
 
 LABEL org.opencontainers.image.title="OpenScholar Backend" \
       org.opencontainers.image.description="Spring Boot research discovery and MCP backend" \
