@@ -1,5 +1,7 @@
 package com.openscholar.search.internal.persistence;
 
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.createReport;
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.verifyExactReport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -267,9 +269,9 @@ final class RelatedTopicReuseHoldoutRetentionTestFixture {
 		RelatedTopicReuseHoldoutScoringResult scoringResult = scoringResult(
 				snapshot, queryKey);
 		RelatedTopicReuseHoldoutEvidenceReport report =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						evaluatorSeal, snapshot, scoringResult);
-		return RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		return verifyExactReport(
 				evaluatorSeal, snapshot, scoringResult, report.artifacts());
 	}
 

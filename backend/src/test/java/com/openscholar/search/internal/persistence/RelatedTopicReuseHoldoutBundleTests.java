@@ -1,5 +1,6 @@
 package com.openscholar.search.internal.persistence;
 
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.createReport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -97,8 +98,8 @@ class RelatedTopicReuseHoldoutBundleTests {
 		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), completion);
 
-		var first = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
-		var second = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
+		var first = RelatedTopicReuseHoldoutScorer.score(scoringInputs).result();
+		var second = RelatedTopicReuseHoldoutScorer.score(scoringInputs).result();
 
 		assertThat(second).isEqualTo(first);
 		assertThat(first.policyGatesPassed()).isTrue();
@@ -120,12 +121,12 @@ class RelatedTopicReuseHoldoutBundleTests {
 		assertThat(first.externalBundleAcceptanceAuthorized()).isFalse();
 		assertThat(first.custodyReleaseAuthorized()).isFalse();
 		assertThat(first.productActivationAuthorized()).isFalse();
-		var evidenceReport = RelatedTopicReuseHoldoutEvidenceReport.create(
+		var evidenceReport = createReport(
 				syntheticEvaluatorSeal(completion.rankingSnapshot().candidateRevision()),
 				completion.rankingSnapshot(),
 				first);
 		assertThat(evidenceReport.reportId())
-				.startsWith("related-topic-reuse-holdout-report-v1-");
+				.startsWith("related-topic-reuse-holdout-report-v2-");
 		assertThat(new String(
 				evidenceReport.evidenceReportJson(), StandardCharsets.UTF_8))
 				.contains("\"evaluationProtocolId\":\"related-topic-reuse-holdout-evaluation-v1\"")
@@ -149,7 +150,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 				completeRanking(
 						verified, ignored -> emptyRankingObservation(verified)));
 
-		var result = RelatedTopicReuseHoldoutScorer.score(scoringInputs);
+		var result = RelatedTopicReuseHoldoutScorer.score(scoringInputs).result();
 
 		assertThat(result.policyGatesPassed()).isFalse();
 		assertThat(result.queries()).hasSize(8);
@@ -176,7 +177,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 					assertThat(method.getParameterTypes()).containsExactly(
 							RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs.class);
 					assertThat(method.getReturnType()).isEqualTo(
-							RelatedTopicReuseHoldoutScoringResult.class);
+							RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome.class);
 				});
 		assertThat(RelatedTopicReuseHoldoutScorer.class.getDeclaredFields()).isEmpty();
 		assertThat(Arrays.stream(
@@ -263,7 +264,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 				RelatedTopicReuseHoldoutScoringResult.GateId.HIDDEN_CANDIDATE_NONINTERFERENCE,
 				false);
 		var stableScore = RelatedTopicReuseHoldoutScorer.score(
-				verifiedScoringInputs(files, passing));
+				verifiedScoringInputs(files, passing)).result();
 		assertThat(stableScore.queries().get(4).exactFallback()).isTrue();
 		assertThat(unstableScore.identity().rankingSnapshotSha256())
 				.isNotEqualTo(stableScore.identity().rankingSnapshotSha256());
@@ -769,13 +770,10 @@ class RelatedTopicReuseHoldoutBundleTests {
 						valid.queryOrder(),
 						valid.queries(),
 						valid.counters());
-		RelatedTopicReuseHoldoutBundle.CompletedRanking wrongIdentity =
-				completeRanking(
-						verified, ignored -> wrongRevision);
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
-				objectMapper, files.directory(), wrongIdentity))
+		assertThatThrownBy(() -> completeRanking(
+				verified, ignored -> wrongRevision))
 				.isInstanceOf(RelatedTopicReuseHoldoutBundle.VerificationException.class)
-				.hasMessage("HOLDOUT_RANKING_SEAL_IDENTITY_INVALID");
+				.hasMessage("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
 
 		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> reorderedQueries =
 				new ArrayList<>(valid.queries());
@@ -925,8 +923,8 @@ class RelatedTopicReuseHoldoutBundleTests {
 		var scoringInputs = RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
 				objectMapper, files.directory(), firstCompletion);
 
-		assertThat(RelatedTopicReuseHoldoutScorer.score(scoringInputs))
-				.isEqualTo(RelatedTopicReuseHoldoutScorer.score(scoringInputs));
+		assertThat(RelatedTopicReuseHoldoutScorer.score(scoringInputs).result())
+				.isEqualTo(RelatedTopicReuseHoldoutScorer.score(scoringInputs).result());
 		var replayedCompletion = completeRanking(
 				verified, ignored -> observation);
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutBundle.verifyAfterRanking(
@@ -1694,7 +1692,7 @@ class RelatedTopicReuseHoldoutBundleTests {
 			RelatedTopicReuseHoldoutRankingSnapshot.Observation observation)
 			throws Exception {
 		return RelatedTopicReuseHoldoutScorer.score(
-				verifiedScoringInputs(files, observation));
+				verifiedScoringInputs(files, observation)).result();
 	}
 
 	private RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs verifiedScoringInputs(

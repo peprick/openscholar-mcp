@@ -46,7 +46,7 @@ final class RelatedTopicReuseHoldoutEvidenceReportBundle {
 
 	private static final int SCHEMA_VERSION = 1;
 	private static final Pattern REPORT_ID = Pattern.compile(
-			"related-topic-reuse-holdout-report-v1-[0-9a-f]{64}");
+			"related-topic-reuse-holdout-report-v2-[0-9a-f]{64}");
 	private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 	private static final List<String> ARTIFACT_FILENAMES = List.of(
 			RelatedTopicReuseHoldoutEvidenceReport.EVALUATOR_SOURCE_FILENAME,

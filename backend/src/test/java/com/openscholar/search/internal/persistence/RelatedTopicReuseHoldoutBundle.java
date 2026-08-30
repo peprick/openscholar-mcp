@@ -199,10 +199,19 @@ final class RelatedTopicReuseHoldoutBundle {
 						observation.queryOrder(),
 						observation.queries(),
 						observation.counters());
+		RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence firstRunEvidence;
+		try {
+			firstRunEvidence = committedFirstRun.bindCompletedRanking(
+					verifiedCorpus, snapshot);
+		}
+		catch (RelatedTopicReuseHoldoutPostgresFirstRunLedger.LedgerException exception) {
+			throw failure("HOLDOUT_FIRST_RUN_CLAIM_INVALID");
+		}
 		return new CompletedRanking(
 				verifiedCorpus,
 				verifiedCorpus.completionAuthority,
-				snapshot);
+				snapshot,
+				firstRunEvidence);
 	}
 
 	static VerifiedScoringInputs verifyAfterRanking(
@@ -1582,14 +1591,22 @@ final class RelatedTopicReuseHoldoutBundle {
 		private final VerifiedCorpus verifiedCorpus;
 		private final Object completionAuthority;
 		private final RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot;
+		private final RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+				firstRunEvidence;
 
 		private CompletedRanking(
 				VerifiedCorpus verifiedCorpus,
 				Object completionAuthority,
-				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot) {
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot,
+				RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+						firstRunEvidence) {
 			this.verifiedCorpus = Objects.requireNonNull(verifiedCorpus);
 			this.completionAuthority = Objects.requireNonNull(completionAuthority);
 			this.rankingSnapshot = Objects.requireNonNull(rankingSnapshot);
+			this.firstRunEvidence = Objects.requireNonNull(firstRunEvidence);
+			if (!this.firstRunEvidence.authorizes(this.rankingSnapshot)) {
+				throw new IllegalArgumentException("completed ranking first-run evidence is invalid");
+			}
 		}
 
 		private boolean isAuthorized() {
@@ -1598,6 +1615,11 @@ final class RelatedTopicReuseHoldoutBundle {
 
 		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot() {
 			return rankingSnapshot;
+		}
+
+		RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+				firstRunEvidence() {
+			return firstRunEvidence;
 		}
 	}
 
@@ -1634,6 +1656,11 @@ final class RelatedTopicReuseHoldoutBundle {
 
 		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot() {
 			return rankingSnapshot;
+		}
+
+		RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+				firstRunEvidence() {
+			return completedRanking.firstRunEvidence;
 		}
 
 		RelatedTopicReuseHoldoutPolicy.BoundPolicy boundPolicy() {

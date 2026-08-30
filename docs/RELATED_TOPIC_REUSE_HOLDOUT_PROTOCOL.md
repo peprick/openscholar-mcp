@@ -20,16 +20,17 @@ repository revision `6b22f6185d9c14a3dd0bf0a80a4b08c045396bff`. Source-seal and
 canonical-report primitives were subsequently committed, but that intermediate
 revision is not the evaluator freeze: it did not yet contain a canonical source
 inventory, clean-checkout collector, durable ledger, or operator workflow. The
-collector and ledger described below, plus the future operator, must be reviewed
-and committed before the final runnable revision is frozen. The expected
-revision and source SHA-256 values must then be calculated and retained
+current mechanics add that collector and ledger plus a package-private in-memory
+operator workflow, but not a live isolated command. The complete runnable slice
+must be reviewed and committed before the final evaluator revision is frozen. The
+expected revision and source SHA-256 values must then be calculated and retained
 independently outside the tree they bind; embedding them in that same commit would
 be self-referential. The collector also does not prove that evaluator bytecode was
 built reproducibly from those sources. The external freeze must be checked from
 its exact clean checkout before a custodian releases a real bundle. Until then,
 external-bundle acceptance and custody release are explicitly unauthorized. Once
-those prerequisites exist,
-the first eligible external run is final for this policy version. A failure may
+those prerequisites exist, the first eligible external run is final for this
+policy version. A failure may
 lead to a new development cycle and newly versioned holdout; it must not lead to
 tuning against this holdout and rescoring it as though it were still blind.
 
@@ -269,9 +270,11 @@ cluster-level login cannot connect to the application or any other database, eit
 by using a separate PostgreSQL cluster or by explicitly revoking and auditing
 cross-database access. The verifier does not inspect other databases and therefore
 does not yet prove the required separation. The migration assumes that the
-dedicated database and roles already exist; a reviewed production runbook for
-creating those principals, distributing credentials, applying the isolated
-migration, and validating both local and cross-database grants is still pending.
+dedicated database and roles already exist. The
+[operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) now documents
+the administrator-managed role, credential, isolated-migration, TLS, and
+cross-database requirements; it is not provisioning automation or evidence that
+any production ledger has been deployed.
 
 After clean-checkout verification and label-free corpus intake—but before any
 ranking callback—the ledger derives a domain-separated, length-prefixed SHA-256
@@ -300,27 +303,41 @@ and updated.
 The ledger validates the connected database catalog and session, but the supplied
 `DataSource` remains an operator trust boundary. Catalog identity does not
 authenticate the remote endpoint, DNS or socket route, TLS peer, server
-certificate, administrator, or underlying storage. The future operator must pin
-and authenticate the intended endpoint and TLS/server identity, protect the owner
-and administrative authorities, and use separately governed persistent storage.
+certificate, administrator, or underlying storage. The future live operator and
+connection factory must pin and authenticate the intended endpoint and TLS/server
+identity, protect the owner and administrative authorities, and use separately
+governed persistent storage.
 The ledger sets and verifies a 15-second JDBC network timeout after it acquires a
 connection, in addition to transaction-local statement and lock limits. It cannot
-bound pool acquisition or initial connection setup, so the operator must still
-configure bounded pool-acquisition, connect, and socket timeouts and verify the
-selected driver/pool behavior under a stalled endpoint.
+bound pool acquisition or initial connection setup, so the future live connection
+factory must still configure bounded pool-acquisition, connect, and socket
+timeouts and verify the selected driver/pool behavior under a stalled endpoint.
 
-`RelatedTopicReuseHoldoutEvidenceReport` accepts only that opaque verified seal,
-the exact ranking snapshot, and its matching scoring result. It explicitly
-projects the source inventory, complete snapshot, and complete score into bounded
-canonical newline-terminated `evaluator-source.json`, `ranking-snapshot.json`,
-`scoring-result.json`, and `evidence-report.json` artifacts. Every ranking score and metric is
-encoded as its 16-character lowercase raw binary64 bit pattern (or explicit
-`null`), so serialization cannot round values or erase negative zero. A versioned
-scoring-result commitment and content-addressed report ID bind the evaluator and
-candidate revisions/source digests, policy, bundle, corpus, manifest, judgments,
-snapshot, result, artifact hashes, and byte counts. An exact in-memory verifier
-regenerates all four artifacts and rejects missing, reordered, altered, or
-noncanonical bytes. All four authorization flags remain false.
+After the ranking callback completes, the consumed committed claim can mint one
+opaque `FirstRunEvidence` capability exactly once. It binds the durable first-run
+run key, evaluation protocol and policy, collector freeze schema and inventory ID,
+verified evaluator seal, and that exact ranking-snapshot object. It cannot be
+reused with an equal-but-distinct snapshot.
+
+Post-ranking verification produces an opaque scoring input, and the deterministic
+scorer returns a privately constructed `VerifiedScoringOutcome` that binds that
+`FirstRunEvidence`, its identical ranking snapshot, and the exact result minted by
+the scorer. `RelatedTopicReuseHoldoutEvidenceReport` schema v2 accepts only this
+scorer-issued outcome; it has no package-visible creation or verification overload
+for a raw snapshot or caller-constructed scoring result. It projects the source
+inventory, complete snapshot, and complete score
+into bounded canonical newline-terminated `evaluator-source.json`,
+`ranking-snapshot.json`, `scoring-result.json`, and `evidence-report.json`
+artifacts. The v2 source artifact and report bindings carry the first-run run key,
+evaluation protocol ID, policy ID, freeze schema version, and source inventory ID;
+the content-addressed `related-topic-reuse-holdout-report-v2-*` identity also
+commits to those values, the exact snapshot's semantic and artifact digests, and
+the existing evaluator, candidate, bundle, corpus, manifest, judgments, scoring,
+artifact-hash, and byte-count bindings. Every ranking score and metric is encoded
+as its 16-character lowercase raw binary64 bit pattern (or explicit `null`), so
+serialization cannot round values or erase negative zero. An exact in-memory
+verifier regenerates all four artifacts and rejects missing, reordered, altered,
+or noncanonical bytes. All four authorization flags remain false.
 
 `RelatedTopicReuseHoldoutEvidenceReportBundle` adds a test-only, read-only exact
 verification boundary around those already verified bytes. The closed directory
@@ -341,29 +358,37 @@ verification, synchronization, and cleanup. The repository does not retain a
 publisher that claims stronger no-clobber or hostile-filesystem safety than Java can
 provide.
 
-There is intentionally no operator command yet. The verifier, coordinator,
-ranking evidence, ranker, fixture, and scorer are package-private test utilities
-exercised with generated synthetic data. The coordinator capability proves the
-intended in-process call order, but cannot authenticate which injected callback ran or
-isolate same-process code. The in-memory serialized report schema feeds the
-read-only exact retained-bundle verifier described above. The clean-checkout
-collector and durable ledger are package-private mechanics, not an operator entry
-point. The `completeRanking` coordinator now requires and consumes the exact
-committed ledger capability before invoking its ranking callback. There is still no
-real external bundle; no operator command that composes standalone clean-checkout
-collection, ledger claim, build, ranking, and scoring in one mandatory workflow; no
-reviewed dedicated database/role provisioning runbook; no frozen evaluator
-revision/source digest; and no custody-authorized publisher.
+There is intentionally no live operator command yet.
+`RelatedTopicReuseHoldoutOperatorWorkflow` is a package-private, in-memory,
+filesystem-write-free composition boundary. Its single raw-input execution path
+collects the standalone clean checkout, stages the corpus, commits the ledger
+claim, ranks, performs post-ranking judgment verification, scores, creates and
+exactly verifies schema-v2 evidence, and returns an opaque non-authorizing
+`PendingPublication`. It distinguishes pre-claim, rejected, ambiguous-commit, and
+committed-final failure states and exposes no retry, reset, resume, mutation, or
+publication operation. This centralizes the supported in-process call order, but
+does not authenticate which injected callback or data source ran and does not
+isolate same-process code.
+
+The workflow is not a build launcher, OS/process sandbox, TLS connection factory,
+provisioner, filesystem publisher, REST/MCP/UI entry point, or live command. There
+is still no real external bundle; no isolated command that builds and executes the
+frozen evaluator with an exact toolchain; no automated dedicated-cluster or role
+provisioning; no bounded initial-acquisition/connect/socket implementation; no
+authenticated endpoint/TLS/server-identity deployment; no frozen evaluator
+revision/source digest; and no custody-authorized publisher. The remaining
+production requirements and execution ordering are specified in the
+[operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md).
 The checked-in ranker tests are mechanics evidence, not an external holdout result.
 These schema details are for review, not an invitation to release a real bundle;
-direct operator validation arrives only after the remaining pieces are implemented
-and frozen.
+live isolated operator validation arrives only after the remaining pieces are
+implemented and frozen.
 
 Run the staged-boundary, immutable-evidence, policy, and PostgreSQL ranking
 contracts from `backend/` with Docker available:
 
 ```bash
-./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutFirstRunIdentityTests,RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
+./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutFirstRunIdentityTests,RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutOperatorWorkflowTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
 ```
 
 ## Preregistered decision boundary
@@ -415,12 +440,16 @@ source-commitment validation, canonical evidence projection, and read-only exact
 replay for already verified synthetic report bytes. It also establishes a
 fail-closed clean-checkout collector for an externally frozen source inventory and
 an INSERT-only durable PostgreSQL first-run claim whose one-shot capability is
-mandatory at the ranking coordinator. It does not load a real external bundle or
-provide the isolated operator that must compose collection, claim, build, and run
-from the same verified standalone clean checkout. The dedicated database/role
-provisioning runbook and bounded pool-acquisition/connect/socket configuration also remain
-pending. The next safe sequence is to add those operator controls; commit and
-review the complete runnable evaluator; then independently retain its
+mandatory at the ranking coordinator. The package-private workflow now composes
+collection through exact schema-v2 evidence verification in memory and returns no
+filesystem output. It does not load a real external bundle or provide the live
+isolated command that must build and run the same verified standalone checkout.
+The [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents
+the dedicated-cluster and role contract, but provisioning automation, the TLS
+connection factory, authenticated endpoint isolation, and bounded initial
+acquisition/connect/socket behavior remain pending. The next safe sequence is to
+implement and verify those live operator controls; commit and review the complete
+runnable evaluator; then independently retain its
 exact revision, inventory identity, and source digests outside the repository. A
 later native exclusive publisher or separately reviewed external custody handoff
 is still required before custody release. Until that frozen evaluator exists and a
@@ -444,9 +473,10 @@ without operator isolation. Supplying a canonical absolute Git path avoids relat
 Git, JDK, Maven distribution, dependencies, settings, toolchains, environment, and
 network/cache inputs. The staged types create an in-process API capability boundary,
 not an OS process, module,
-reflection, or memory-isolation boundary. A future operator runner must preserve
-that call graph and must not pass the private staged coordinator object or external
-path to ranking code. The atomic release flag belongs to one `VerifiedCorpus` object;
+reflection, or memory-isolation boundary. The package-private workflow preserves
+that call graph in memory; a future live isolated runner must use it without
+passing the private staged coordinator object or external path to ranking code.
+The atomic release flag belongs to one `VerifiedCorpus` object;
 fresh intake calls or another process can create another flag. The PostgreSQL ledger
 provides durable runtime-append-only cross-process finality through the mandatory
 committed capability, but only for callers that preserve the supported composition

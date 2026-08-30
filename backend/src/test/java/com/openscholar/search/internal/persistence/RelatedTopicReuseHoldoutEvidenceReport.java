@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 final class RelatedTopicReuseHoldoutEvidenceReport {
 
-	static final int SCHEMA_VERSION = 1;
+	static final int SCHEMA_VERSION = 2;
 	static final int RESULT_DIGEST_VERSION = 1;
 	static final int MAXIMUM_SOURCE_ARTIFACT_BYTES = 2 * 1024 * 1024;
 	static final int MAXIMUM_SNAPSHOT_ARTIFACT_BYTES = 8 * 1024 * 1024;
@@ -50,7 +50,7 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 	private static final String REPORT_ID_DOMAIN =
 			"openscholar-related-topic-reuse-holdout-evidence-report";
 	private static final String REPORT_ID_PREFIX =
-			"related-topic-reuse-holdout-report-v1-";
+			"related-topic-reuse-holdout-report-v2-";
 	private static final Pattern GIT_REVISION = Pattern.compile("[0-9a-f]{40}");
 	private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 	private static final HexFormat HEX = HexFormat.of();
@@ -61,6 +61,9 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 			.without(SerializationFeature.INDENT_OUTPUT);
 
 	private final String reportId;
+	private final String firstRunKey;
+	private final int freezeSchemaVersion;
+	private final String sourceInventoryId;
 	private final String evaluatorRevision;
 	private final String evaluatorSourceSha256;
 	private final String candidateRevision;
@@ -78,6 +81,9 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 
 	private RelatedTopicReuseHoldoutEvidenceReport(
 			String reportId,
+			String firstRunKey,
+			int freezeSchemaVersion,
+			String sourceInventoryId,
 			String evaluatorRevision,
 			String evaluatorSourceSha256,
 			String candidateRevision,
@@ -93,6 +99,9 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 			byte[] scoringResultArtifact,
 			byte[] evidenceReportArtifact) {
 		this.reportId = reportId;
+		this.firstRunKey = firstRunKey;
+		this.freezeSchemaVersion = freezeSchemaVersion;
+		this.sourceInventoryId = sourceInventoryId;
 		this.evaluatorRevision = evaluatorRevision;
 		this.evaluatorSourceSha256 = evaluatorSourceSha256;
 		this.candidateRevision = candidateRevision;
@@ -115,34 +124,44 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 	}
 
 	static RelatedTopicReuseHoldoutEvidenceReport create(
-			RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal evaluatorSeal,
-			RelatedTopicReuseHoldoutRankingSnapshot snapshot,
-			RelatedTopicReuseHoldoutScoringResult scoringResult) {
-		RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal frozenSeal =
-				Objects.requireNonNull(evaluatorSeal, "evaluatorSeal");
+			RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome scoringOutcome) {
+		RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome frozenOutcome =
+				Objects.requireNonNull(scoringOutcome, "scoringOutcome");
+		RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence frozenEvidence =
+				frozenOutcome.firstRunEvidence();
 		RelatedTopicReuseHoldoutRankingSnapshot frozenSnapshot =
-				Objects.requireNonNull(snapshot, "snapshot");
+				frozenOutcome.rankingSnapshot();
+		RelatedTopicReuseHoldoutScoringResult frozenResult = frozenOutcome.result();
+		if (!frozenOutcome.authorizes(frozenSnapshot, frozenResult)
+				|| !frozenEvidence.authorizes(frozenSnapshot)) {
+			throw new IllegalArgumentException(
+					"verified scoring outcome is not bound to the completed first run");
+		}
+		RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal frozenSeal =
+				frozenEvidence.evaluatorSeal();
 		if (!frozenSeal.candidateRevision().equals(frozenSnapshot.candidateRevision())) {
 			throw new IllegalArgumentException(
 					"evaluator seal and ranking snapshot candidate revisions must match");
 		}
 		return create(
+				frozenEvidence.runKey(),
+				frozenEvidence.evaluationProtocolId(),
+				frozenEvidence.policyId(),
+				frozenEvidence.freezeSchemaVersion(),
+				frozenEvidence.inventoryId(),
 				frozenSeal.evaluatorRevision(),
 				frozenSeal.evaluatorSourceSha256(),
 				frozenSeal.candidateRevision(),
 				frozenSeal.candidateSourceSha256(),
 				frozenSeal.files(),
 				frozenSnapshot,
-				scoringResult);
+				frozenResult);
 	}
 
 	static VerifiedArtifacts verifyExact(
-			RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal evaluatorSeal,
-			RelatedTopicReuseHoldoutRankingSnapshot snapshot,
-			RelatedTopicReuseHoldoutScoringResult scoringResult,
+			RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome scoringOutcome,
 			Map<String, byte[]> observedArtifacts) {
-		RelatedTopicReuseHoldoutEvidenceReport expected = create(
-				evaluatorSeal, snapshot, scoringResult);
+		RelatedTopicReuseHoldoutEvidenceReport expected = create(scoringOutcome);
 		Objects.requireNonNull(observedArtifacts, "observedArtifacts");
 		Map<String, byte[]> frozenObservedArtifacts = new LinkedHashMap<>();
 		observedArtifacts.forEach((filename, bytes) -> frozenObservedArtifacts.put(
@@ -172,6 +191,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 	}
 
 	private static RelatedTopicReuseHoldoutEvidenceReport create(
+			String firstRunKey,
+			String claimedEvaluationProtocolId,
+			String claimedPolicyId,
+			int freezeSchemaVersion,
+			String sourceInventoryId,
 			String evaluatorRevision,
 			String evaluatorSourceSha256,
 			String sealedCandidateRevision,
@@ -180,6 +204,17 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 					sourceCommitments,
 			RelatedTopicReuseHoldoutRankingSnapshot snapshot,
 			RelatedTopicReuseHoldoutScoringResult scoringResult) {
+		String frozenFirstRunKey = requirePattern(
+				firstRunKey, "firstRunKey", SHA256);
+		if (!EVALUATION_PROTOCOL_ID.equals(claimedEvaluationProtocolId)
+				|| !RelatedTopicReuseHoldoutPolicy.POLICY_ID.equals(claimedPolicyId)
+				|| freezeSchemaVersion
+						!= RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION
+				|| !RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID.equals(
+						sourceInventoryId)) {
+			throw new IllegalArgumentException(
+					"first-run evidence does not match the frozen operator contract");
+		}
 		String frozenEvaluatorRevision = requirePattern(
 				evaluatorRevision, "evaluatorRevision", GIT_REVISION);
 		String frozenEvaluatorSource = requirePattern(
@@ -197,9 +232,19 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 		RelatedTopicReuseHoldoutScoringResult frozenResult =
 				Objects.requireNonNull(scoringResult, "scoringResult");
 		validateBindings(frozenSnapshot, frozenResult);
+		if (!claimedEvaluationProtocolId.equals(
+				frozenResult.identity().evaluationProtocolId())) {
+			throw new IllegalArgumentException(
+					"first-run evidence and score protocol must match");
+		}
 
 		String snapshotSha256 = frozenSnapshot.evidenceSha256();
 		byte[] sourceArtifact = canonicalBytes(sourceProjection(
+				frozenFirstRunKey,
+				claimedEvaluationProtocolId,
+				claimedPolicyId,
+				freezeSchemaVersion,
+				sourceInventoryId,
 				frozenEvaluatorRevision,
 				frozenEvaluatorSource,
 				frozenSealedCandidateRevision,
@@ -225,6 +270,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 		String resultArtifactSha256 = sha256(resultArtifact);
 		String resultSha256 = resultDigest(resultArtifact);
 		String reportId = reportId(
+				frozenFirstRunKey,
+				claimedEvaluationProtocolId,
+				claimedPolicyId,
+				freezeSchemaVersion,
+				sourceInventoryId,
 				frozenEvaluatorRevision,
 				frozenEvaluatorSource,
 				frozenSnapshot.candidateRevision(),
@@ -247,6 +297,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 				resultArtifact.length);
 		byte[] reportArtifact = canonicalBytes(reportProjection(
 				reportId,
+				frozenFirstRunKey,
+				claimedEvaluationProtocolId,
+				claimedPolicyId,
+				freezeSchemaVersion,
+				sourceInventoryId,
 				frozenEvaluatorRevision,
 				frozenEvaluatorSource,
 				frozenCandidateSource,
@@ -266,6 +321,9 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 				MAXIMUM_REPORT_ARTIFACT_BYTES);
 		return new RelatedTopicReuseHoldoutEvidenceReport(
 				reportId,
+				frozenFirstRunKey,
+				freezeSchemaVersion,
+				sourceInventoryId,
 				frozenEvaluatorRevision,
 				frozenEvaluatorSource,
 				frozenSnapshot.candidateRevision(),
@@ -288,6 +346,18 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 
 	String reportId() {
 		return reportId;
+	}
+
+	String firstRunKey() {
+		return firstRunKey;
+	}
+
+	int freezeSchemaVersion() {
+		return freezeSchemaVersion;
+	}
+
+	String sourceInventoryId() {
+		return sourceInventoryId;
 	}
 
 	String evaluatorRevision() {
@@ -451,6 +521,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 	}
 
 	private static Map<String, Object> sourceProjection(
+			String firstRunKey,
+			String evaluationProtocolId,
+			String policyId,
+			int freezeSchemaVersion,
+			String sourceInventoryId,
 			String evaluatorRevision,
 			String evaluatorSourceSha256,
 			String candidateRevision,
@@ -459,6 +534,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 		Map<String, Object> root = orderedMap();
 		root.put("schemaVersion", SCHEMA_VERSION);
 		root.put("artifactType", SOURCE_ARTIFACT_TYPE);
+		root.put("firstRunKey", firstRunKey);
+		root.put("evaluationProtocolId", evaluationProtocolId);
+		root.put("policyId", policyId);
+		root.put("freezeSchemaVersion", freezeSchemaVersion);
+		root.put("sourceInventoryId", sourceInventoryId);
 		root.put("evaluatorRevision", evaluatorRevision);
 		root.put("evaluatorSourceSha256", evaluatorSourceSha256);
 		root.put("candidateRevision", candidateRevision);
@@ -716,6 +796,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 
 	private static Map<String, Object> reportProjection(
 			String reportId,
+			String firstRunKey,
+			String evaluationProtocolId,
+			String policyId,
+			int freezeSchemaVersion,
+			String sourceInventoryId,
 			String evaluatorRevision,
 			String evaluatorSourceSha256,
 			String candidateSourceSha256,
@@ -730,7 +815,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 			String resultArtifactSha256,
 			long resultBytes) {
 		Map<String, Object> bindings = orderedMap();
-		bindings.put("evaluationProtocolId", result.identity().evaluationProtocolId());
+		bindings.put("firstRunKey", firstRunKey);
+		bindings.put("evaluationProtocolId", evaluationProtocolId);
+		bindings.put("policyId", policyId);
+		bindings.put("freezeSchemaVersion", freezeSchemaVersion);
+		bindings.put("sourceInventoryId", sourceInventoryId);
 		bindings.put("evaluatorRevision", evaluatorRevision);
 		bindings.put("evaluatorSourceSha256", evaluatorSourceSha256);
 		bindings.put("candidateRevision", snapshot.candidateRevision());
@@ -793,6 +882,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 	}
 
 	private static String reportId(
+			String firstRunKey,
+			String claimedEvaluationProtocolId,
+			String claimedPolicyId,
+			int freezeSchemaVersion,
+			String sourceInventoryId,
 			String evaluatorRevision,
 			String evaluatorSourceSha256,
 			String candidateRevision,
@@ -818,6 +912,11 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 		updateInt(digest, SCHEMA_VERSION);
 		updateString(digest, ARTIFACT_TYPE);
 		updateString(digest, EVIDENCE_REPORT_FILENAME);
+		updateString(digest, firstRunKey);
+		updateString(digest, claimedEvaluationProtocolId);
+		updateString(digest, claimedPolicyId);
+		updateInt(digest, freezeSchemaVersion);
+		updateString(digest, sourceInventoryId);
 		updateString(digest, evaluatorRevision);
 		updateString(digest, evaluatorSourceSha256);
 		updateString(digest, candidateRevision);
@@ -966,7 +1065,7 @@ final class RelatedTopicReuseHoldoutEvidenceReport {
 				Map<String, byte[]> artifacts) {
 			if (reportId == null
 					|| !reportId.matches(
-							"related-topic-reuse-holdout-report-v1-[0-9a-f]{64}")
+							"related-topic-reuse-holdout-report-v2-[0-9a-f]{64}")
 					|| totalBytes < 1) {
 				throw new IllegalArgumentException("invalid verified evidence identity");
 			}

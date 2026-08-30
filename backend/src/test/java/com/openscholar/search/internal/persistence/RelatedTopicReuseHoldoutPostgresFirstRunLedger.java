@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.sql.DataSource;
 
@@ -825,6 +826,8 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 		private final VerifiedFirstRunCommitment commitment;
 		private final VerifiedCleanCheckout checkout;
 		private final AtomicBoolean rankingStarted = new AtomicBoolean();
+		private final AtomicReference<RelatedTopicReuseHoldoutRankingSnapshot>
+				completedRanking = new AtomicReference<>();
 
 		private CommittedFirstRun(
 				RelatedTopicReuseHoldoutFirstRunIdentity identity,
@@ -850,6 +853,35 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 			}
 		}
 
+		FirstRunEvidence bindCompletedRanking(
+				RelatedTopicReuseHoldoutBundle.VerifiedCorpus verifiedCorpus,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot)
+				throws LedgerException {
+			RelatedTopicReuseHoldoutRankingSnapshot snapshot = Objects.requireNonNull(
+					rankingSnapshot, "rankingSnapshot");
+			if (!rankingStarted.get()
+					|| !commitment.authorizes(verifiedCorpus)
+					|| !snapshotMatchesCommitment(snapshot)
+					|| !completedRanking.compareAndSet(null, snapshot)) {
+				throw new ClaimCapabilityException();
+			}
+			return new FirstRunEvidence(identity, checkout, snapshot);
+		}
+
+		private boolean snapshotMatchesCommitment(
+				RelatedTopicReuseHoldoutRankingSnapshot snapshot) {
+			return commitment.evaluationProtocolId().equals(
+						RelatedTopicReuseHoldoutPolicy.EVALUATION_PROTOCOL_ID)
+					&& commitment.bundleId().equals(snapshot.bundleId())
+					&& commitment.corpusId().equals(snapshot.corpusId())
+					&& commitment.policySha256().equals(snapshot.policySha256())
+					&& commitment.manifestSha256().equals(snapshot.manifestSha256())
+					&& commitment.corpusSha256().equals(snapshot.corpusSha256())
+					&& commitment.judgmentsSha256().equals(snapshot.judgmentsSha256())
+					&& commitment.judgmentsBytes() == snapshot.judgmentsBytes()
+					&& checkout.candidateRevision().equals(snapshot.candidateRevision());
+		}
+
 		String runKey() {
 			return identity.runKey();
 		}
@@ -868,6 +900,152 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 
 		boolean productActivationAuthorized() {
 			return false;
+		}
+	}
+
+	/**
+	 * Opaque evidence that one exact ranking snapshot followed the acknowledged
+	 * durable claim made from the collector-verified checkout.
+	 */
+	static final class FirstRunEvidence {
+
+		private final String runKey;
+		private final String evaluationProtocolId;
+		private final String policyId;
+		private final int freezeSchemaVersion;
+		private final String inventoryId;
+		private final RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal
+				evaluatorSeal;
+		private final RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot;
+
+		private FirstRunEvidence(
+				RelatedTopicReuseHoldoutFirstRunIdentity identity,
+				VerifiedCleanCheckout checkout,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot) {
+			this(evidenceSeed(identity, checkout), rankingSnapshot);
+		}
+
+		private FirstRunEvidence(
+				EvidenceSeed seed,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot) {
+			this(
+					seed.runKey(),
+					seed.evaluationProtocolId(),
+					seed.policyId(),
+					seed.freezeSchemaVersion(),
+					seed.inventoryId(),
+					seed.evaluatorSeal(),
+					rankingSnapshot);
+		}
+
+		private FirstRunEvidence(
+				String runKey,
+				String evaluationProtocolId,
+				String policyId,
+				int freezeSchemaVersion,
+				String inventoryId,
+				RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal evaluatorSeal,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot) {
+			if (runKey == null
+					|| !runKey.matches("[0-9a-f]{64}")
+					|| !RelatedTopicReuseHoldoutPolicy.EVALUATION_PROTOCOL_ID.equals(
+							evaluationProtocolId)
+					|| !RelatedTopicReuseHoldoutPolicy.POLICY_ID.equals(policyId)
+					|| freezeSchemaVersion
+							!= RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION
+					|| !RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID.equals(inventoryId)) {
+				throw new IllegalArgumentException("invalid first-run evidence");
+			}
+			RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal frozenSeal =
+					Objects.requireNonNull(evaluatorSeal, "evaluatorSeal");
+			RelatedTopicReuseHoldoutRankingSnapshot frozenSnapshot =
+					Objects.requireNonNull(rankingSnapshot, "rankingSnapshot");
+			if (!frozenSeal.candidateRevision().equals(
+					frozenSnapshot.candidateRevision())) {
+				throw new IllegalArgumentException(
+						"evaluator seal and ranking snapshot candidate revisions must match");
+			}
+			if (frozenSeal.externalBundleAcceptanceAuthorized()
+					|| frozenSeal.custodyReleaseAuthorized()) {
+				throw new IllegalArgumentException("invalid first-run evidence");
+			}
+			this.runKey = runKey;
+			this.evaluationProtocolId = evaluationProtocolId;
+			this.policyId = policyId;
+			this.freezeSchemaVersion = freezeSchemaVersion;
+			this.inventoryId = inventoryId;
+			this.evaluatorSeal = frozenSeal;
+			this.rankingSnapshot = frozenSnapshot;
+		}
+
+		private static EvidenceSeed evidenceSeed(
+				RelatedTopicReuseHoldoutFirstRunIdentity identity,
+				VerifiedCleanCheckout checkout) {
+			RelatedTopicReuseHoldoutFirstRunIdentity frozenIdentity =
+					Objects.requireNonNull(identity, "identity");
+			VerifiedCleanCheckout frozenCheckout = Objects.requireNonNull(
+					checkout, "checkout");
+			if (frozenIdentity.checkout() != frozenCheckout) {
+				throw new IllegalArgumentException("invalid first-run evidence");
+			}
+			RelatedTopicReuseHoldoutFirstRunIdentity.FinalityKey finalityKey =
+					frozenIdentity.finalityKey();
+			return new EvidenceSeed(
+					frozenIdentity.runKey(),
+					finalityKey.evaluationProtocolId(),
+					finalityKey.policyId(),
+					frozenCheckout.freezeSchemaVersion(),
+					frozenCheckout.inventoryId(),
+					frozenCheckout.evaluatorSeal());
+		}
+
+		String runKey() {
+			return runKey;
+		}
+
+		String evaluationProtocolId() {
+			return evaluationProtocolId;
+		}
+
+		String policyId() {
+			return policyId;
+		}
+
+		int freezeSchemaVersion() {
+			return freezeSchemaVersion;
+		}
+
+		String inventoryId() {
+			return inventoryId;
+		}
+
+		RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal evaluatorSeal() {
+			return evaluatorSeal;
+		}
+
+		boolean authorizes(RelatedTopicReuseHoldoutRankingSnapshot snapshot) {
+			return snapshot != null && rankingSnapshot == snapshot;
+		}
+
+		boolean externalBundleAcceptanceAuthorized() {
+			return false;
+		}
+
+		boolean custodyReleaseAuthorized() {
+			return false;
+		}
+
+		boolean productActivationAuthorized() {
+			return false;
+		}
+
+		private record EvidenceSeed(
+				String runKey,
+				String evaluationProtocolId,
+				String policyId,
+				int freezeSchemaVersion,
+				String inventoryId,
+				RelatedTopicReuseHoldoutEvaluatorSeal.VerifiedEvaluatorSeal evaluatorSeal) {
 		}
 	}
 

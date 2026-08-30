@@ -29,7 +29,7 @@ final class RelatedTopicReuseHoldoutScorer {
 	private RelatedTopicReuseHoldoutScorer() {
 	}
 
-	static RelatedTopicReuseHoldoutScoringResult score(
+	static VerifiedScoringOutcome score(
 			RelatedTopicReuseHoldoutBundle.VerifiedScoringInputs input) {
 		if (input == null || !input.isAuthorized()) {
 			throw new IllegalArgumentException("verified holdout scoring input is required");
@@ -78,31 +78,34 @@ final class RelatedTopicReuseHoldoutScorer {
 		AggregateMetrics aggregate = aggregate(queryScores, control, candidate, snapshot, epsilon);
 		StructuralAssessment structural = structural(queryScores);
 		List<GateOutcome> gates = gates(policy.gates(), aggregate, structural, epsilon);
-		return new RelatedTopicReuseHoldoutScoringResult(
-				new ScoreIdentity(
-						policy.evaluation().protocolId(),
-						snapshot.bundleId(),
-						snapshot.corpusId(),
-						snapshot.policySha256(),
-						snapshot.corpusSha256(),
-						snapshot.manifestSha256(),
-						snapshot.judgmentsSha256(),
-						snapshot.evidenceSha256(),
-						snapshot.judgmentsBytes(),
-						snapshot.candidateRevision(),
-						snapshot.cutoff(),
-						snapshot.queryOrder()),
-				queryScores,
-				control,
-				candidate,
-				aggregate,
-				structural,
-				gates,
-				gates.stream().allMatch(GateOutcome::passed),
-				false,
-				false,
-				false,
-				false);
+		RelatedTopicReuseHoldoutScoringResult result =
+				new RelatedTopicReuseHoldoutScoringResult(
+						new ScoreIdentity(
+								policy.evaluation().protocolId(),
+								snapshot.bundleId(),
+								snapshot.corpusId(),
+								snapshot.policySha256(),
+								snapshot.corpusSha256(),
+								snapshot.manifestSha256(),
+								snapshot.judgmentsSha256(),
+								snapshot.evidenceSha256(),
+								snapshot.judgmentsBytes(),
+								snapshot.candidateRevision(),
+								snapshot.cutoff(),
+								snapshot.queryOrder()),
+						queryScores,
+						control,
+						candidate,
+						aggregate,
+						structural,
+						gates,
+						gates.stream().allMatch(GateOutcome::passed),
+						false,
+						false,
+						false,
+						false);
+		return new VerifiedScoringOutcome(
+				input.firstRunEvidence(), snapshot, result);
 	}
 
 	private static void validateIdentity(
@@ -532,5 +535,53 @@ final class RelatedTopicReuseHoldoutScorer {
 			throw new IllegalArgumentException("verified input is missing " + kind + ": " + key);
 		}
 		return value;
+	}
+
+	/**
+	 * Opaque proof that the exact post-ranking capability was scored by this
+	 * deterministic scorer and remains bound to its durable first-run evidence.
+	 */
+	static final class VerifiedScoringOutcome {
+
+		private final RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+				firstRunEvidence;
+		private final RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot;
+		private final RelatedTopicReuseHoldoutScoringResult result;
+
+		private VerifiedScoringOutcome(
+				RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+						firstRunEvidence,
+				RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot,
+				RelatedTopicReuseHoldoutScoringResult result) {
+			this.firstRunEvidence = Objects.requireNonNull(
+					firstRunEvidence, "firstRunEvidence");
+			this.rankingSnapshot = Objects.requireNonNull(
+					rankingSnapshot, "rankingSnapshot");
+			this.result = Objects.requireNonNull(result, "result");
+			if (!this.firstRunEvidence.authorizes(this.rankingSnapshot)) {
+				throw new IllegalArgumentException(
+						"scored outcome is not bound to the completed first run");
+			}
+		}
+
+		RelatedTopicReuseHoldoutPostgresFirstRunLedger.FirstRunEvidence
+				firstRunEvidence() {
+			return firstRunEvidence;
+		}
+
+		RelatedTopicReuseHoldoutRankingSnapshot rankingSnapshot() {
+			return rankingSnapshot;
+		}
+
+		RelatedTopicReuseHoldoutScoringResult result() {
+			return result;
+		}
+
+		boolean authorizes(
+				RelatedTopicReuseHoldoutRankingSnapshot snapshot,
+				RelatedTopicReuseHoldoutScoringResult scoringResult) {
+			return rankingSnapshot == snapshot && result == scoringResult
+					&& firstRunEvidence.authorizes(rankingSnapshot);
+		}
 	}
 }

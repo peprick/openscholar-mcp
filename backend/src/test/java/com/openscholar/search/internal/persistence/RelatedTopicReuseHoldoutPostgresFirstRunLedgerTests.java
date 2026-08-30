@@ -272,6 +272,204 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	}
 
 	@Test
+	void operatorWorkflowBindsTheDurableRunToExactVerifiedArtifactsAndRejectsReplay()
+			throws Exception {
+		ObjectMapper objectMapper = new ObjectMapper();
+		Path bundleDirectory = writeValidBundle(
+				objectMapper,
+				temporaryDirectory.resolve("external-operator-holdout"));
+		CleanCheckoutInput checkoutInput = prepareRealCleanCheckout(
+				temporaryDirectory.resolve("operator-evaluator-clone"));
+		AtomicInteger rankingInvocations = new AtomicInteger();
+		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
+				objectMapper,
+				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				corpus -> {
+					rankingInvocations.incrementAndGet();
+					return emptyRankingObservation(corpus);
+				},
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						checkoutInput.gitExecutable()));
+
+		var pending = workflow.execute(
+				checkoutInput.repositoryRoot(),
+				bundleDirectory,
+				checkoutInput.freeze());
+
+		assertThat(durableClaimCount()).isOne();
+		assertThat(pending.runKey()).isEqualTo(singleText("encode(run_key, 'hex')"));
+		assertThat(pending.reportId())
+				.startsWith("related-topic-reuse-holdout-report-v2-");
+		assertThat(pending.reportSha256()).matches("[0-9a-f]{64}");
+		assertThat(pending.policyGatesPassed()).isFalse();
+		assertThat(pending.firstRunEvidence().runKey()).isEqualTo(pending.runKey());
+		assertThat(pending.artifacts().artifact(
+				RelatedTopicReuseHoldoutEvidenceReport.EVALUATOR_SOURCE_FILENAME))
+				.asString(StandardCharsets.UTF_8)
+				.contains(pending.runKey(), RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID);
+		assertThat(pending.readerFacing()).isFalse();
+		assertThat(pending.externalBundleAcceptanceAuthorized()).isFalse();
+		assertThat(pending.custodyReleaseAuthorized()).isFalse();
+		assertThat(pending.productActivationAuthorized()).isFalse();
+		assertThat(rankingInvocations).hasValue(1);
+
+		assertThatThrownBy(() -> workflow.execute(
+				checkoutInput.repositoryRoot(),
+				bundleDirectory,
+				checkoutInput.freeze()))
+				.isInstanceOf(RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException.class)
+				.hasMessage("HOLDOUT_OPERATOR_FIRST_RUN_ALREADY_CLAIMED")
+				.satisfies(exception -> assertThat(
+						((RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException) exception)
+								.claimState())
+						.isEqualTo(RelatedTopicReuseHoldoutOperatorWorkflow.ClaimState.REJECTED));
+		assertThat(rankingInvocations).hasValue(1);
+	}
+
+	@Test
+	void operatorWorkflowFailsBeforeClaimWhenCheckoutCannotBeVerified()
+			throws Exception {
+		AtomicInteger rankingInvocations = new AtomicInteger();
+		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
+				new ObjectMapper(),
+				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				corpus -> {
+					rankingInvocations.incrementAndGet();
+					return emptyRankingObservation(corpus);
+				},
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						locateGitExecutable()));
+		FreezeRecord freeze = syntheticFreezeRecord();
+
+		assertThatThrownBy(() -> workflow.execute(
+				temporaryDirectory.resolve("missing-repository"),
+				temporaryDirectory.resolve("bundle-must-not-be-read"),
+				freeze))
+				.isInstanceOf(RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException.class)
+				.hasMessage("HOLDOUT_OPERATOR_PRECLAIM_FAILED")
+				.satisfies(exception -> assertThat(
+						((RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException) exception)
+								.claimState())
+						.isEqualTo(
+								RelatedTopicReuseHoldoutOperatorWorkflow.ClaimState.NOT_COMMITTED));
+		assertThat(claimCount()).isZero();
+		assertThat(rankingInvocations).hasValue(0);
+	}
+
+	@Test
+	void operatorWorkflowReportsFinalFailureWithoutRetryAfterRankingThrows()
+			throws Exception {
+		ObjectMapper objectMapper = new ObjectMapper();
+		Path bundleDirectory = writeValidBundle(
+				objectMapper,
+				temporaryDirectory.resolve("external-failing-operator-holdout"));
+		CleanCheckoutInput checkoutInput = prepareRealCleanCheckout(
+				temporaryDirectory.resolve("failing-operator-evaluator-clone"));
+		AtomicInteger rankingInvocations = new AtomicInteger();
+		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
+				objectMapper,
+				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				corpus -> {
+					rankingInvocations.incrementAndGet();
+					throw new IOException("synthetic ranking failure");
+				},
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						checkoutInput.gitExecutable()));
+
+		assertThatThrownBy(() -> workflow.execute(
+				checkoutInput.repositoryRoot(),
+				bundleDirectory,
+				checkoutInput.freeze()))
+				.isInstanceOf(RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException.class)
+				.hasMessage("HOLDOUT_OPERATOR_FINAL_RUN_FAILED")
+				.hasNoCause()
+				.satisfies(exception -> assertThat(
+						((RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException) exception)
+								.claimState())
+						.isEqualTo(RelatedTopicReuseHoldoutOperatorWorkflow.ClaimState.COMMITTED));
+		assertThat(durableClaimCount()).isOne();
+		assertThat(rankingInvocations).hasValue(1);
+	}
+
+	@Test
+	void operatorWorkflowRejectsPostRankingBundleMutationAsAFinalRun()
+			throws Exception {
+		ObjectMapper objectMapper = new ObjectMapper();
+		Path bundleDirectory = writeValidBundle(
+				objectMapper,
+				temporaryDirectory.resolve("external-mutated-operator-holdout"));
+		CleanCheckoutInput checkoutInput = prepareRealCleanCheckout(
+				temporaryDirectory.resolve("mutated-operator-evaluator-clone"));
+		AtomicInteger rankingInvocations = new AtomicInteger();
+		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
+				objectMapper,
+				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				corpus -> {
+					rankingInvocations.incrementAndGet();
+					Files.writeString(
+							bundleDirectory.resolve(JUDGMENTS_FILENAME),
+							"{\"tampered\":true}",
+							StandardCharsets.UTF_8);
+					return emptyRankingObservation(corpus);
+				},
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						checkoutInput.gitExecutable()));
+
+		assertThatThrownBy(() -> workflow.execute(
+				checkoutInput.repositoryRoot(),
+				bundleDirectory,
+				checkoutInput.freeze()))
+				.isInstanceOf(RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException.class)
+				.hasMessage("HOLDOUT_OPERATOR_FINAL_RUN_FAILED")
+				.hasNoCause()
+				.satisfies(exception -> assertThat(
+						((RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException) exception)
+								.claimState())
+						.isEqualTo(RelatedTopicReuseHoldoutOperatorWorkflow.ClaimState.COMMITTED));
+		assertThat(durableClaimCount()).isOne();
+		assertThat(rankingInvocations).hasValue(1);
+	}
+
+	@Test
+	void operatorWorkflowPreservesUnknownCommitOutcomeAndNeverRanksOrRetries()
+			throws Exception {
+		ObjectMapper objectMapper = new ObjectMapper();
+		Path bundleDirectory = writeValidBundle(
+				objectMapper,
+				temporaryDirectory.resolve("external-ambiguous-operator-holdout"));
+		CleanCheckoutInput checkoutInput = prepareRealCleanCheckout(
+				temporaryDirectory.resolve("ambiguous-operator-evaluator-clone"));
+		AtomicInteger commits = new AtomicInteger();
+		AtomicInteger rankingInvocations = new AtomicInteger();
+		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
+				objectMapper,
+				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+						commitFailureDataSource(true, commits)),
+				corpus -> {
+					rankingInvocations.incrementAndGet();
+					return emptyRankingObservation(corpus);
+				},
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						checkoutInput.gitExecutable()));
+
+		assertThatThrownBy(() -> workflow.execute(
+				checkoutInput.repositoryRoot(),
+				bundleDirectory,
+				checkoutInput.freeze()))
+				.isInstanceOf(RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException.class)
+				.hasMessage("HOLDOUT_OPERATOR_CLAIM_OUTCOME_UNKNOWN")
+				.hasNoCause()
+				.satisfies(exception -> assertThat(
+						((RelatedTopicReuseHoldoutOperatorWorkflow.OperatorException) exception)
+								.claimState())
+						.isEqualTo(
+								RelatedTopicReuseHoldoutOperatorWorkflow.ClaimState.OUTCOME_UNKNOWN));
+		assertThat(commits).hasValue(1);
+		assertThat(durableClaimCount()).isOne();
+		assertThat(rankingInvocations).hasValue(0);
+	}
+
+	@Test
 	void finalityKeyRejectsRepackagingOrEvaluatorChangesUnderTheSamePolicy()
 			throws Exception {
 		SyntheticRun first = syntheticRun("original");
@@ -882,6 +1080,16 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		return "composed-holdout-query-" + index;
 	}
 
+	private static FreezeRecord syntheticFreezeRecord() {
+		return new FreezeRecord(
+				RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION,
+				RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID,
+				"a".repeat(40),
+				"b".repeat(64),
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				"c".repeat(64));
+	}
+
 	private static void addManifestFile(
 			ArrayNode files, String filename, byte[] bytes) throws Exception {
 		files.addObject()
@@ -891,6 +1099,16 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	}
 
 	private static VerifiedCleanCheckout collectRealCleanCheckout(Path clone)
+			throws Exception {
+		CleanCheckoutInput input = prepareRealCleanCheckout(clone);
+		return RelatedTopicReuseHoldoutGitCollector.verifyCleanCheckout(
+				input.repositoryRoot(),
+				input.freeze(),
+				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(
+						input.gitExecutable()));
+	}
+
+	private static CleanCheckoutInput prepareRealCleanCheckout(Path clone)
 			throws Exception {
 		Path git = locateGitExecutable();
 		Path sourceRoot = findRepositoryRoot();
@@ -932,10 +1150,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 				evaluatorSha256,
 				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
 				candidateSha256);
-		return RelatedTopicReuseHoldoutGitCollector.verifyCleanCheckout(
-				cleanRoot,
-				freeze,
-				new RelatedTopicReuseHoldoutGitCollector.ProcessGitRunner(git));
+		return new CleanCheckoutInput(cleanRoot, freeze, git);
 	}
 
 	private static List<SourceFile> committedSources(
@@ -995,10 +1210,16 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation
 			emptyRankingObservation(
 					RelatedTopicReuseHoldoutBundle.VerifiedCorpus verified) {
+		return emptyRankingObservation(verified.rankingCorpus());
+	}
+
+	private static RelatedTopicReuseHoldoutRankingSnapshot.Observation
+			emptyRankingObservation(
+					RelatedTopicReuseHoldoutBundle.RankingCorpus corpus) {
 		var emptyRun = new RelatedTopicReuseHoldoutRankingSnapshot.RankingRun(
 				List.of(), List.of(), List.of(), List.of(), List.of());
 		List<RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking> queries =
-				verified.rankingCorpus().corpus().queries().stream()
+				corpus.corpus().queries().stream()
 						.map(query -> new RelatedTopicReuseHoldoutRankingSnapshot.QueryRanking(
 								query.key(),
 								emptyRun,
@@ -1370,6 +1591,12 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 			RelatedTopicReuseHoldoutBundle.VerifiedCorpus verifiedCorpus,
 			VerifiedFirstRunCommitment commitment,
 			VerifiedCleanCheckout checkout) {
+	}
+
+	private record CleanCheckoutInput(
+			Path repositoryRoot,
+			FreezeRecord freeze,
+			Path gitExecutable) {
 	}
 
 	private record GitTreeEntry(

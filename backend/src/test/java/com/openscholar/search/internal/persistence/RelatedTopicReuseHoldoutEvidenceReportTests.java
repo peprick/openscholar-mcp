@@ -1,5 +1,9 @@
 package com.openscholar.search.internal.persistence;
 
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.createReport;
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.firstRunEvidence;
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.scoringOutcome;
+import static com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutEvidenceTestFixture.verifyExactReport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -64,13 +68,18 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 		RelatedTopicReuseHoldoutEvidenceReport first = report(firstFixture);
 		RelatedTopicReuseHoldoutEvidenceReport second = report(secondFixture);
 
-		assertThat(first.schemaVersion()).isOne();
+		assertThat(first.schemaVersion()).isEqualTo(2);
 		assertThat(first.reportId())
-				.startsWith("related-topic-reuse-holdout-report-v1-")
-				.matches("related-topic-reuse-holdout-report-v1-[0-9a-f]{64}")
+				.startsWith("related-topic-reuse-holdout-report-v2-")
+				.matches("related-topic-reuse-holdout-report-v2-[0-9a-f]{64}")
 				.isEqualTo(second.reportId())
-				.isEqualTo("related-topic-reuse-holdout-report-v1-"
-						+ "f05b41a1f18d5ddab2e61461eb50b34fb0a90787011b211330d4fb1d831fb83a");
+				.isEqualTo("related-topic-reuse-holdout-report-v2-"
+						+ "939295d73f15bab1e76777deb26729431136b1298a55111310d3c8dfd914562e");
+		assertThat(first.firstRunKey()).isEqualTo("d".repeat(64));
+		assertThat(first.freezeSchemaVersion())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION);
+		assertThat(first.sourceInventoryId())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID);
 		assertThat(first.artifacts().keySet()).containsExactly(
 				RelatedTopicReuseHoldoutEvidenceReport.EVALUATOR_SOURCE_FILENAME,
 				RelatedTopicReuseHoldoutEvidenceReport.RANKING_SNAPSHOT_FILENAME,
@@ -136,7 +145,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 		RelatedTopicReuseHoldoutRankingSnapshot snapshot = sentinelSnapshot();
 		RelatedTopicReuseHoldoutScoringResult result = sentinelScoringResult(snapshot);
 		RelatedTopicReuseHoldoutEvidenceReport report =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						seal(
 								EVALUATOR_REVISION,
 								"sentinel-evaluator",
@@ -154,16 +163,16 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 		Fixture baselineFixture = fixture(CANDIDATE_REVISION, false, 0L);
 		RelatedTopicReuseHoldoutEvidenceReport baseline = report(baselineFixture);
 		RelatedTopicReuseHoldoutEvidenceReport evaluatorRevisionChanged =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						seal("5".repeat(40), "evaluator", CANDIDATE_REVISION, "candidate"),
 						baselineFixture.snapshot(), baselineFixture.result());
 		RelatedTopicReuseHoldoutEvidenceReport evaluatorSourceChanged =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						seal(EVALUATOR_REVISION, "changed-evaluator", CANDIDATE_REVISION,
 								"candidate"),
 						baselineFixture.snapshot(), baselineFixture.result());
 		RelatedTopicReuseHoldoutEvidenceReport candidateSourceChanged =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						seal(EVALUATOR_REVISION, "evaluator", CANDIDATE_REVISION,
 								"changed-candidate"),
 						baselineFixture.snapshot(), baselineFixture.result());
@@ -181,11 +190,96 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 	}
 
 	@Test
+	void bindsTheDurableRunKeyAndCollectorInventoryIntoBothCanonicalIdentities()
+			throws Exception {
+		Fixture fixture = fixture(CANDIDATE_REVISION, false, 0L);
+		var evaluatorSeal = seal(
+				EVALUATOR_REVISION, "evaluator", CANDIDATE_REVISION, "candidate");
+		var firstRun = firstRunEvidence(evaluatorSeal, fixture.snapshot());
+		var changedRun = firstRunEvidence(
+				"e".repeat(64),
+				RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION,
+				RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID,
+				evaluatorSeal,
+				fixture.snapshot());
+		RelatedTopicReuseHoldoutEvidenceReport report =
+				RelatedTopicReuseHoldoutEvidenceReport.create(
+						scoringOutcome(
+								firstRun, fixture.snapshot(), fixture.result()));
+		RelatedTopicReuseHoldoutEvidenceReport changed =
+				RelatedTopicReuseHoldoutEvidenceReport.create(
+						scoringOutcome(
+								changedRun, fixture.snapshot(), fixture.result()));
+
+		assertThat(changed.reportId()).isNotEqualTo(report.reportId());
+		JsonNode source = JSON.readTree(report.evaluatorSourceJson());
+		assertThat(source.required("firstRunKey").asString()).isEqualTo("d".repeat(64));
+		assertThat(source.required("freezeSchemaVersion").asInt())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION);
+		assertThat(source.required("sourceInventoryId").asString())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID);
+		JsonNode bindings = JSON.readTree(report.evidenceReportJson()).required("bindings");
+		assertThat(bindings.required("firstRunKey").asString())
+				.isEqualTo("d".repeat(64));
+		assertThat(bindings.required("sourceInventoryId").asString())
+				.isEqualTo(RelatedTopicReuseHoldoutGitCollector.INVENTORY_ID);
+
+		Fixture equalButDistinct = fixture(CANDIDATE_REVISION, false, 0L);
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+				scoringOutcome(
+						firstRun,
+						equalButDistinct.snapshot(),
+						equalButDistinct.result())))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("completed first run");
+		assertThatThrownBy(() -> firstRunEvidence(
+				"d".repeat(64),
+				RelatedTopicReuseHoldoutGitCollector.FREEZE_SCHEMA_VERSION,
+				"unreviewed-inventory",
+				evaluatorSeal,
+				fixture.snapshot()))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("invalid first-run evidence");
+	}
+
+	@Test
+	void reportCreationRequiresTheOpaqueScorerIssuedOutcome() {
+		assertThat(Arrays.stream(RelatedTopicReuseHoldoutEvidenceReport.class
+				.getDeclaredMethods())
+				.filter(method -> method.getName().equals("create"))
+				.filter(method -> Modifier.isStatic(method.getModifiers()))
+				.filter(method -> !Modifier.isPrivate(method.getModifiers()))
+				.toList())
+				.singleElement()
+				.satisfies(method -> assertThat(method.getParameterTypes())
+						.containsExactly(RelatedTopicReuseHoldoutScorer
+								.VerifiedScoringOutcome.class));
+		assertThat(Arrays.stream(RelatedTopicReuseHoldoutEvidenceReport.class
+				.getDeclaredMethods())
+				.filter(method -> method.getName().equals("verifyExact"))
+				.filter(method -> !Modifier.isPrivate(method.getModifiers()))
+				.toList())
+				.singleElement()
+				.satisfies(method -> assertThat(method.getParameterTypes())
+						.containsExactly(
+								RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome.class,
+								Map.class));
+		assertThat(Arrays.stream(RelatedTopicReuseHoldoutScorer.VerifiedScoringOutcome
+				.class.getDeclaredConstructors()))
+				.allSatisfy(constructor -> assertThat(
+						Modifier.isPrivate(constructor.getModifiers())).isTrue());
+		assertThat(Arrays.stream(RelatedTopicReuseHoldoutPostgresFirstRunLedger
+				.FirstRunEvidence.class.getDeclaredConstructors()))
+				.allSatisfy(constructor -> assertThat(
+						Modifier.isPrivate(constructor.getModifiers())).isTrue());
+	}
+
+	@Test
 	void rejectsSnapshotResultIdentityAndStructuralCounterMismatches() {
 		Fixture baseline = fixture(CANDIDATE_REVISION, false, 0L);
 		RelatedTopicReuseHoldoutScoringResult wrongSnapshotIdentity = scoringResult(
 				baseline.snapshot(), "f".repeat(64), false, 0L);
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+		assertThatThrownBy(() -> createReport(
 				seal(EVALUATOR_REVISION, "evaluator", CANDIDATE_REVISION, "candidate"),
 				baseline.snapshot(),
 				wrongSnapshotIdentity))
@@ -194,7 +288,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 
 		RelatedTopicReuseHoldoutScoringResult wrongCounters = scoringResult(
 				baseline.snapshot(), baseline.snapshot().evidenceSha256(), false, 1L);
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+		assertThatThrownBy(() -> createReport(
 				seal(EVALUATOR_REVISION, "evaluator", CANDIDATE_REVISION, "candidate"),
 				baseline.snapshot(),
 				wrongCounters))
@@ -204,7 +298,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 				"A".repeat(40), "evaluator", CANDIDATE_REVISION, "candidate"))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("revision");
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+		assertThatThrownBy(() -> createReport(
 				seal(
 						EVALUATOR_REVISION,
 						"evaluator",
@@ -243,7 +337,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 			RelatedTopicReuseHoldoutScoringResult changedResult = copyResult(
 					baseline.result(), changedIdentity, changedQueries, baseline.result().aggregate());
 
-			assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+			assertThatThrownBy(() -> createReport(
 					evaluatorSeal, baseline.snapshot(), changedResult))
 					.as(field)
 					.isInstanceOf(IllegalArgumentException.class)
@@ -264,7 +358,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 			RelatedTopicReuseHoldoutScoringResult changedResult = copyResult(
 					baseline.result(), identity, baseline.result().queries(), changedAggregate);
 
-			assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.create(
+			assertThatThrownBy(() -> createReport(
 					evaluatorSeal, baseline.snapshot(), changedResult))
 					.as(field)
 					.isInstanceOf(IllegalArgumentException.class)
@@ -330,10 +424,10 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 				fixture.snapshot().candidateRevision(),
 				"candidate");
 		RelatedTopicReuseHoldoutEvidenceReport report =
-				RelatedTopicReuseHoldoutEvidenceReport.create(
+				createReport(
 						seal, fixture.snapshot(), fixture.result());
 
-		var verified = RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		var verified = verifyExactReport(
 				seal, fixture.snapshot(), fixture.result(), report.artifacts());
 		assertThat(verified.reportId()).isEqualTo(report.reportId());
 		assertThat(verified.artifactSha256()).hasSize(4);
@@ -342,7 +436,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 				report.artifacts().keySet());
 
 		Map<String, byte[]> mutableObserved = mutableArtifacts(report);
-		var frozenVerified = RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		var frozenVerified = verifyExactReport(
 				seal, fixture.snapshot(), fixture.result(), mutableObserved);
 		String frozenFilename = RelatedTopicReuseHoldoutEvidenceReport.SCORING_RESULT_FILENAME;
 		byte expectedFirstByte = frozenVerified.artifact(frozenFilename)[0];
@@ -359,13 +453,13 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 		Map<String, byte[]> tampered = mutableArtifacts(report);
 		tampered.get(RelatedTopicReuseHoldoutEvidenceReport.SCORING_RESULT_FILENAME)[0]
 				^= 0x01;
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		assertThatThrownBy(() -> verifyExactReport(
 				seal, fixture.snapshot(), fixture.result(), tampered))
 				.hasMessageContaining("exact regenerated canonical artifact");
 
 		Map<String, byte[]> missing = mutableArtifacts(report);
 		missing.remove(RelatedTopicReuseHoldoutEvidenceReport.EVIDENCE_REPORT_FILENAME);
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		assertThatThrownBy(() -> verifyExactReport(
 				seal, fixture.snapshot(), fixture.result(), missing))
 				.hasMessageContaining("complete fixed filename order");
 
@@ -374,7 +468,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 				RelatedTopicReuseHoldoutEvidenceReport.EVIDENCE_REPORT_FILENAME,
 				report.evidenceReportJson());
 		report.artifacts().forEach(reordered::putIfAbsent);
-		assertThatThrownBy(() -> RelatedTopicReuseHoldoutEvidenceReport.verifyExact(
+		assertThatThrownBy(() -> verifyExactReport(
 				seal, fixture.snapshot(), fixture.result(), reordered))
 				.hasMessageContaining("fixed filename order");
 	}
@@ -1210,7 +1304,7 @@ class RelatedTopicReuseHoldoutEvidenceReportTests {
 	}
 
 	private static RelatedTopicReuseHoldoutEvidenceReport report(Fixture fixture) {
-		return RelatedTopicReuseHoldoutEvidenceReport.create(
+		return createReport(
 				seal(
 						EVALUATOR_REVISION,
 						"evaluator",
