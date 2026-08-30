@@ -12,6 +12,10 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 FROM gcr.io/distroless/java21-debian13:nonroot@sha256:15e24b3e7b4563992cb6956feee510e647616fcd5a714c6e29743e6fde53f3f5
 
+LABEL org.opencontainers.image.title="OpenScholar Backend" \
+      org.opencontainers.image.description="Spring Boot research discovery and MCP backend" \
+      org.opencontainers.image.source="https://github.com/peprick/openscholar-mcp"
+
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/target/openscholar-backend-*.jar application.jar
 

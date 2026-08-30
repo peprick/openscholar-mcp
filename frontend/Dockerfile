@@ -17,6 +17,11 @@ COPY . .
 RUN pnpm build
 
 FROM node:24.19.0-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS runtime
+
+LABEL org.opencontainers.image.title="OpenScholar Frontend" \
+      org.opencontainers.image.description="Next.js research discovery workspace" \
+      org.opencontainers.image.source="https://github.com/peprick/openscholar-mcp"
+
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

@@ -587,6 +587,10 @@ fi
 
 run_stage "Validate documentation links" \
   "${host_env[@]}" node scripts/validate-docs.mjs
+run_stage "Validate repository licensing metadata" \
+  "${host_env[@]}" node scripts/validate-license-metadata.mjs
+run_stage "Mutation-test repository licensing metadata" \
+  "${host_env[@]}" node scripts/test-license-metadata.mjs
 run_stage "Validate provider-quality capture utility" \
   "${host_env[@]}" node scripts/capture-europe-pmc-quality.mjs --validate-query-set
 run_stage "Exercise provider-quality capture utility" \

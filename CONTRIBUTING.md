@@ -1,15 +1,20 @@
 # Contributing to OpenScholar
 
-Thank you for helping improve OpenScholar. Changes should preserve the project's central promise: useful research discovery with clear provenance and without bypassing access controls.
+OpenScholar welcomes actionable bug reports and focused design discussion. Any approved change should preserve the project's central promise: useful research discovery with clear provenance and without bypassing access controls.
+
+Because the project is source-visible and all rights reserved, code, documentation, and asset contributions are accepted only after the repository owner confirms the contribution terms in writing. Opening an issue does not grant permission to prepare or submit a patch.
 
 ## Before you start
 
 - Use an issue for bugs and focused feature requests.
+- Obtain written confirmation of contribution terms before preparing code, documentation, or assets or opening a pull request.
 - Discuss large scope, new providers, authentication changes, or data-retention changes before implementing them.
 - Never include API keys, access tokens, private research documents, production data, or copied publisher content.
 - Report vulnerabilities through the private process in [.github/SECURITY.md](.github/SECURITY.md).
 
 ## Development setup
+
+The development instructions below apply only after the repository owner has confirmed the applicable contribution and evaluation terms in writing.
 
 The simplest full-stack workflow requires Git and Docker Compose:
 
@@ -25,7 +30,7 @@ For component development:
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the complete workflow and local configuration.
 
-## Make a focused change
+## Prepare an approved, focused change
 
 1. Branch from an up-to-date `main` with a short name such as `fix/access-fallback` or `feat/provider-name`.
 2. Keep commits scoped and descriptive.
@@ -61,6 +66,8 @@ Documentation changes should validate local targets from the repository root:
 
 ```bash
 node scripts/validate-docs.mjs
+node scripts/validate-license-metadata.mjs
+node scripts/test-license-metadata.mjs
 ```
 
 Deployment, shell, workflow, or supply-chain changes should run the matching scripts under `scripts/`; CI runs the complete policy set.
@@ -102,4 +109,4 @@ Deployment, shell, workflow, or supply-chain changes should run the matching scr
 - [ ] Provider/legal, security, privacy, and data-retention implications were considered.
 - [ ] No credentials, private documents, generated build output, or production data are included.
 
-The repository does not currently use a contributor licence agreement or an open-source licence. Before merging a third-party contribution, the repository owner and contributor must agree on the terms under which that contribution is provided.
+The repository does not currently publish a contributor licence agreement or an open-source licence. Do not submit code, documentation, or assets until the repository owner has confirmed the applicable contribution terms in writing; unsolicited contributions will not be merged. Reporting a bug or discussing a proposal does not transfer ownership of either party's material.

@@ -6,7 +6,19 @@ on:
     paths:
       - "**/*.md"
       - "docs/**"
+      - ".gitattributes"
+      - "LICENSE"
+      - "LICENSES/**"
+      - "backend/.mvn/wrapper/maven-wrapper.properties"
+      - "backend/mvnw"
+      - "backend/mvnw.cmd"
+      - "**/Dockerfile*"
+      - "**/*.Dockerfile"
+      - "**/package.json"
+      - "backend/pom.xml"
       - "scripts/validate-docs.mjs"
+      - "scripts/validate-license-metadata.mjs"
+      - "scripts/test-license-metadata.mjs"
       - "scripts/capture-europe-pmc-quality.mjs"
       - "scripts/test-capture-europe-pmc-quality.mjs"
       - "backend/src/test/resources/search/provider-quality/europe-pmc-live-queries-v1.json"
@@ -15,7 +27,19 @@ on:
     paths:
       - "**/*.md"
       - "docs/**"
+      - ".gitattributes"
+      - "LICENSE"
+      - "LICENSES/**"
+      - "backend/.mvn/wrapper/maven-wrapper.properties"
+      - "backend/mvnw"
+      - "backend/mvnw.cmd"
+      - "**/Dockerfile*"
+      - "**/*.Dockerfile"
+      - "**/package.json"
+      - "backend/pom.xml"
       - "scripts/validate-docs.mjs"
+      - "scripts/validate-license-metadata.mjs"
+      - "scripts/test-license-metadata.mjs"
       - "scripts/capture-europe-pmc-quality.mjs"
       - "scripts/test-capture-europe-pmc-quality.mjs"
       - "backend/src/test/resources/search/provider-quality/europe-pmc-live-queries-v1.json"
@@ -47,6 +71,12 @@ jobs:
 
       - name: Validate local documentation links
         run: node scripts/validate-docs.mjs
+
+      - name: Validate repository licensing metadata
+        run: node scripts/validate-license-metadata.mjs
+
+      - name: Mutation-test repository licensing metadata
+        run: node scripts/test-license-metadata.mjs
 
       - name: Validate provider-quality capture utility
         run: node scripts/capture-europe-pmc-quality.mjs --validate-query-set

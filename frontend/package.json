@@ -2,6 +2,16 @@
   "name": "openscholar-frontend",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peprick/openscholar-mcp.git",
+    "directory": "frontend"
+  },
+  "homepage": "https://github.com/peprick/openscholar-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/peprick/openscholar-mcp/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "engines": {

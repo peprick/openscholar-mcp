@@ -2,6 +2,16 @@
   "name": "@openscholar/mcp-conformance-tooling",
   "version": "0.0.0",
   "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peprick/openscholar-mcp.git",
+    "directory": "tools/mcp-conformance"
+  },
+  "homepage": "https://github.com/peprick/openscholar-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/peprick/openscholar-mcp/issues"
+  },
   "description": "Locked conformance and client dependencies used by OpenScholar MCP validation.",
   "packageManager": "pnpm@11.19.0",
   "engines": {

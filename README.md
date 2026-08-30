@@ -4,10 +4,13 @@
 [![Frontend CI](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-ci.yml)
 [![End-to-end tests](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-e2e.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/frontend-e2e.yml)
 [![Security](https://github.com/peprick/openscholar-mcp/actions/workflows/security.yml/badge.svg)](https://github.com/peprick/openscholar-mcp/actions/workflows/security.yml)
+[![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-6b7280.svg)](LICENSE)
 
 OpenScholar is a self-hosted research discovery workspace and MCP server. It searches scholarly metadata, combines duplicate records, caches reusable results, verifies legal open-access links, and helps readers organize papers and export citations.
 
 OpenScholar stores metadata, search and library state, and verified links—not research PDFs. It does not scrape publisher pages, bypass paywalls, or proxy document bytes.
+
+The setup, operation, and development instructions below are for copyright holders and people who have received prior written permission. Public source availability does not authorize running, hosting, modifying, or redistributing OpenScholar; see [LICENSE](LICENSE).
 
 ![OpenScholar search results with canonical papers and source provenance](docs/images/readme-preview.png)
 
@@ -44,7 +47,7 @@ Offline use is deliberately narrow: one selected collection can be saved as a re
 
 ## Quick start
 
-You need Git and Docker Desktop or Docker Engine with Compose v2.
+If you have the required written permission, the local stack needs Git and Docker Desktop or Docker Engine with Compose v2.
 
 ```bash
 git clone https://github.com/peprick/openscholar-mcp.git
@@ -218,4 +221,4 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report vu
 
 ## License
 
-No open-source license has been selected. Until the repository owner adds one, normal copyright rules apply; public source availability does not grant permission to copy, modify, or redistribute the project.
+OpenScholar is source-visible and **all rights reserved**. No open-source licence or permission to use, modify, host, or redistribute the project is granted. See [LICENSE](LICENSE) for the controlling notice and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for directly retained third-party material. Other third-party components remain under their respective licences.
