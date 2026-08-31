@@ -645,7 +645,9 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 		assertThat(probe.commits()).isZero();
 		assertThat(probe.queryTimeouts()).isEmpty();
 		assertThat(probe.queries())
-				.anySatisfy(sql -> assertThat(sql).contains("pg_stat_ssl"))
+				.anySatisfy(sql -> assertThat(sql).contains(
+						"pg_stat_ssl",
+						"pg_catalog.host(pg_catalog.inet_server_addr())"))
 				.anySatisfy(sql -> assertThat(sql).contains("pg_database"))
 				.anySatisfy(sql -> assertThat(sql).contains("pg_auth_members"))
 				.anySatisfy(sql -> assertThat(sql).contains("pg_db_role_setting"))

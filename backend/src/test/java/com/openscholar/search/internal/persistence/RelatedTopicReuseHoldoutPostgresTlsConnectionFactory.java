@@ -522,7 +522,7 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			       current_setting('transaction_read_only'),
 			       current_setting('transaction_isolation'),
 			       current_setting('statement_timeout'),
-			       pg_catalog.inet_server_addr()::text,
+			       pg_catalog.host(pg_catalog.inet_server_addr()),
 				       pg_catalog.inet_server_port(),
 				       ssl.ssl,
 				       ssl.version,

@@ -1,0 +1,230 @@
+name: openscholar-holdout-tls-test
+
+x-postgres-image: &postgres-image pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+x-postgres-security: &postgres-security
+  platform: linux/amd64
+  read_only: true
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 30s
+  shm_size: 128m
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+    - /var/run/postgresql:size=16m,uid=999,gid=999,mode=0775
+
+services:
+  materials:
+    image: *postgres-image
+    platform: linux/amd64
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    entrypoint: ["/bin/sh", "/holdout/scripts/install-materials.sh"]
+    environment:
+      HOLDOUT_CERTIFICATE_HOST: ledger.holdout.test
+      HOLDOUT_RUNNER_UID: "10001"
+      HOLDOUT_RUNNER_GID: "10001"
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - ./install-materials.sh:/holdout/scripts/install-materials.sh:ro
+      - ca-materials:/materials/ca
+      - server-materials:/materials/server
+      - tls-private:/materials/tls-private
+      - plaintext-private:/materials/plaintext-private
+      - runtime-secret:/materials/runtime-secret
+      - metadata:/materials/metadata
+      - runner-target:/materials/runner-target
+    restart: "no"
+
+  tls-postgres:
+    <<: *postgres-security
+    image: *postgres-image
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /holdout/private/bootstrap-password
+      POSTGRES_INITDB_ARGS: --auth-local=trust --auth-host=scram-sha-256
+      HOLDOUT_TRANSPORT: tls
+    command:
+      - postgres
+      - -c
+      - listen_addresses=0.0.0.0
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - fsync=on
+      - -c
+      - synchronous_commit=on
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/holdout/server/server.crt
+      - -c
+      - ssl_key_file=/holdout/server/server.key
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - ssl_max_protocol_version=TLSv1.2
+      - -c
+      - ssl_ciphers=ECDHE-RSA-AES256-GCM-SHA384
+      - -c
+      - hba_file=/holdout/config/pg_hba.conf
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --quiet --username postgres --dbname postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      materials:
+        condition: service_completed_successfully
+    volumes:
+      - tls-data:/var/lib/postgresql/data
+      - tls-private:/holdout/private:ro
+      - server-materials:/holdout/server:ro
+      - ./provision-ledger.sh:/docker-entrypoint-initdb.d/20-provision-ledger.sh:ro
+      - ../resources/db/holdout-ledger/V1__create_related_topic_reuse_first_run_ledger.sql:/holdout/bootstrap/V1__create_related_topic_reuse_first_run_ledger.sql:ro
+      - ./pg_hba.conf:/holdout/config/pg_hba.conf:ro
+    networks:
+      holdout-database:
+        ipv4_address: ${HOLDOUT_TLS_SERVER_ADDRESS:-172.30.237.10}
+        aliases:
+          - ledger.holdout.test
+          - wrong-name.holdout.test
+
+  plaintext-postgres:
+    <<: *postgres-security
+    image: *postgres-image
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /holdout/private/bootstrap-password
+      POSTGRES_INITDB_ARGS: --auth-local=trust --auth-host=scram-sha-256
+      HOLDOUT_TRANSPORT: plaintext
+    command:
+      - postgres
+      - -c
+      - listen_addresses=0.0.0.0
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - fsync=on
+      - -c
+      - synchronous_commit=on
+      - -c
+      - ssl=off
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --quiet --username postgres --dbname postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      materials:
+        condition: service_completed_successfully
+    volumes:
+      - plaintext-data:/var/lib/postgresql/data
+      - plaintext-private:/holdout/private:ro
+      - ./provision-ledger.sh:/docker-entrypoint-initdb.d/20-provision-ledger.sh:ro
+      - ../resources/db/holdout-ledger/V1__create_related_topic_reuse_first_run_ledger.sql:/holdout/bootstrap/V1__create_related_topic_reuse_first_run_ledger.sql:ro
+    networks:
+      holdout-database:
+        ipv4_address: ${HOLDOUT_PLAINTEXT_SERVER_ADDRESS:-172.30.237.11}
+        aliases:
+          - plaintext.holdout.test
+
+  runner:
+    build:
+      context: ../../..
+      dockerfile: src/test/holdout-tls/Dockerfile.runner
+      args:
+        HOLDOUT_RUNNER_UID: "10001"
+        HOLDOUT_RUNNER_GID: "10001"
+    platform: linux/amd64
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    working_dir: /workspace
+    command:
+      - --offline
+      - --batch-mode
+      - --no-transfer-progress
+      - -Dtest=RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT
+      - test
+    environment:
+      MAVEN_OPTS: -Djansi.tmpdir=/workspace/target
+      HOLDOUT_REPOSITORY_ROOT: /repository
+      HOLDOUT_TLS_HOST: ledger.holdout.test
+      HOLDOUT_TLS_PORT: "5432"
+      HOLDOUT_TLS_SERVER_ADDRESS: ${HOLDOUT_TLS_SERVER_ADDRESS:-172.30.237.10}
+      HOLDOUT_PLAINTEXT_HOST: plaintext.holdout.test
+      HOLDOUT_PLAINTEXT_PORT: "5432"
+      HOLDOUT_PLAINTEXT_SERVER_ADDRESS: ${HOLDOUT_PLAINTEXT_SERVER_ADDRESS:-172.30.237.11}
+      HOLDOUT_TLS_WRONG_SAN_HOST: wrong-name.holdout.test
+      HOLDOUT_TLS_PROTOCOL: TLSv1.2
+      HOLDOUT_TLS_CIPHER: ECDHE-RSA-AES256-GCM-SHA384
+      HOLDOUT_TLS_BITS: "256"
+      HOLDOUT_CA_CERTIFICATE: /holdout/ca/ca.crt
+      HOLDOUT_UNTRUSTED_CA_CERTIFICATE: /holdout/ca/untrusted-ca.crt
+      HOLDOUT_RUNTIME_PASSWORD_FILE: /run/holdout-secret/runtime-password
+      HOLDOUT_WRONG_PASSWORD_FILE: /run/holdout-secret/wrong-runtime-password
+      HOLDOUT_SERVER_VERSION_FILE: /holdout/metadata/server-version
+      HOLDOUT_EXPECTED_CA_OWNER: root
+      HOLDOUT_EXPECTED_OWNER: holdout
+    tmpfs:
+      - /tmp:size=64m,uid=10001,gid=10001,mode=0700
+    depends_on:
+      tls-postgres:
+        condition: service_healthy
+      plaintext-postgres:
+        condition: service_healthy
+    volumes:
+      - ../../..:/workspace:ro
+      - ../../../..:/repository:ro
+      - runner-target:/workspace/target
+      - ca-materials:/holdout/ca:ro
+      - runtime-secret:/run/holdout-secret:ro
+      - metadata:/holdout/metadata:ro
+    networks:
+      - holdout-database
+    restart: "no"
+
+networks:
+  holdout-database:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${HOLDOUT_TLS_SUBNET:-172.30.237.0/24}
+
+volumes:
+  ca-materials:
+  server-materials:
+  tls-private:
+  plaintext-private:
+  runtime-secret:
+  metadata:
+  runner-target:
+  tls-data:
+  plaintext-data:

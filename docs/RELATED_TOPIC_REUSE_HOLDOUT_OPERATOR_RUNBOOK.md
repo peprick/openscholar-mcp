@@ -220,10 +220,13 @@ the network endpoint.
 
 The endpoint record currently binds the canonical CA digest and observed TLS
 properties but does not independently extract and pin the leaf-certificate
-fingerprint. That remains required before a live run. The repository also has no
-real TLS-enabled target/container proof; its local and synthetic connection
-mechanics are not evidence that a production endpoint, `pg_hba.conf`, firewall,
-or DNS route satisfies this section.
+fingerprint. That remains required before a live run. The explicit-only
+`scripts/test-related-topic-reuse-holdout-tls.sh` harness now exercises the
+factory against disposable real PostgreSQL 17 TLS and plaintext containers,
+runtime-generated certificates, Linux POSIX owners and modes, and the fixed
+catalog on an internal test network. That local proof is not evidence that a
+production endpoint, `pg_hba.conf`, firewall, DNS route, administrator, or
+storage boundary satisfies this section.
 
 Record the server certificate fingerprint, issuer, subject alternative name,
 validity interval, CA digest, endpoint, and exact server build before release.
@@ -567,7 +570,14 @@ or proof of independent authorship.
   TOCTOU/administrator trust boundary. It does not pin the leaf-certificate
   fingerprint, provision a cluster, inspect `pg_hba.conf`, prove
   firewall/DNS/storage/administrator integrity, impose a process-supervisor
-  deadline, or supply real target evidence.
+  deadline, or supply production target evidence.
+- [`test-related-topic-reuse-holdout-tls.sh`](../scripts/test-related-topic-reuse-holdout-tls.sh)
+  composes a disposable pinned PostgreSQL TLS target, a reachable plaintext
+  negative target, generated materials, test-only ledger provisioning, and a
+  non-root explicit Maven `*IT` runner. It publishes no database port and removes
+  generated volumes after the run. It is local integration evidence only: it is
+  not a live evaluator, supported deployment, reusable credential provisioner,
+  persistent ledger, firewall/DNS attestation, or custody boundary.
 - [`RelatedTopicReuseHoldoutOperatorWorkflow`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutOperatorWorkflow.java)
   preserves the supported claim-to-evidence call graph and failure states in
   memory without publishing files; it is package-private and supplies no live
@@ -583,6 +593,7 @@ or proof of independent authorship.
   controls. They do not turn the application production stack into a holdout
   environment.
 
-Testcontainers and synthetic fixtures prove mechanics only. They do not establish
-a real TLS endpoint, external custody, production provisioning, a genuine blind
-result, or operational authorization.
+Testcontainers, synthetic fixtures, and the disposable real-TLS harness prove
+local mechanics only. They do not establish a production TLS endpoint, external
+custody, production provisioning, a genuine blind result, or operational
+authorization.

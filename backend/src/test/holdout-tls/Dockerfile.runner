@@ -1,0 +1,62 @@
+FROM eclipse-temurin:21-jdk@sha256:32a5f68f3bb3ace880243c9e55c89ad8fb09e5de904b6c8990693b103840c4d3
+
+ARG HOLDOUT_RUNNER_UID=10001
+ARG HOLDOUT_RUNNER_GID=10001
+
+LABEL org.opencontainers.image.title="OpenScholar holdout TLS integration-test runner" \
+      org.opencontainers.image.description="Offline, non-root runner for the explicitly selected PostgreSQL TLS live test" \
+      org.opencontainers.image.source="https://github.com/peprick/openscholar-mcp"
+
+RUN groupadd --gid "${HOLDOUT_RUNNER_GID}" holdout \
+    && useradd \
+        --uid "${HOLDOUT_RUNNER_UID}" \
+        --gid "${HOLDOUT_RUNNER_GID}" \
+        --create-home \
+        --home-dir /home/holdout \
+        --shell /usr/sbin/nologin \
+        holdout \
+    && install -d \
+        -o "${HOLDOUT_RUNNER_UID}" \
+        -g "${HOLDOUT_RUNNER_GID}" \
+        -m 0755 \
+        /workspace
+
+ENV HOME=/home/holdout
+WORKDIR /workspace
+
+COPY --chown=${HOLDOUT_RUNNER_UID}:${HOLDOUT_RUNNER_GID} .mvn .mvn
+COPY --chown=${HOLDOUT_RUNNER_UID}:${HOLDOUT_RUNNER_GID} mvnw pom.xml ./
+
+USER ${HOLDOUT_RUNNER_UID}:${HOLDOUT_RUNNER_GID}
+
+# Resolve the wrapper, build plugins, and all test-scope dependencies while the
+# image is built. The cache mount survives a failed network transfer; after a
+# successful resolution its contents are copied into the immutable image for the
+# network-isolated live container.
+RUN --mount=type=cache,id=openscholar-holdout-maven,target=/var/cache/holdout-maven,uid=${HOLDOUT_RUNNER_UID},gid=${HOLDOUT_RUNNER_GID} \
+    MAVEN_USER_HOME=/var/cache/holdout-maven \
+    ./mvnw \
+        --batch-mode \
+        --no-transfer-progress \
+        -Dmaven.wagon.http.retryHandler.count=5 \
+        -Dmaven.repo.local=/var/cache/holdout-maven/repository \
+        dependency:go-offline \
+    && MAVEN_USER_HOME=/var/cache/holdout-maven \
+    ./mvnw \
+        --batch-mode \
+        --no-transfer-progress \
+        -Dmaven.wagon.http.retryHandler.count=5 \
+        -Dmaven.repo.local=/var/cache/holdout-maven/repository \
+        dependency:get \
+        -Dartifact=org.apache.maven.surefire:surefire-junit-platform:3.5.6 \
+    && MAVEN_USER_HOME=/var/cache/holdout-maven \
+    ./mvnw \
+        --batch-mode \
+        --no-transfer-progress \
+        -Dmaven.wagon.http.retryHandler.count=5 \
+        -Dmaven.repo.local=/var/cache/holdout-maven/repository \
+        dependency:get \
+        -Dartifact=org.junit.platform:junit-platform-launcher:6.0.3 \
+    && cp -R /var/cache/holdout-maven/. /home/holdout/.m2/
+
+ENTRYPOINT ["./mvnw"]
