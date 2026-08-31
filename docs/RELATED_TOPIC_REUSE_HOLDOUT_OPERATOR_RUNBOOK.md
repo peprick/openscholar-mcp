@@ -12,13 +12,16 @@ filesystem-write-free `RelatedTopicReuseHoldoutOperatorWorkflow`. It composes
 clean-checkout collection, staged bundle intake, the durable claim, ranking,
 post-ranking judgment verification, scoring, schema-v2 evidence creation, and
 exact in-memory verification, then returns an opaque non-authorizing
-`PendingPublication`. It does not build or isolate the evaluator, construct an
-authenticated TLS data source, provision infrastructure, or publish files.
+`PendingPublication`. A separate package-private
+`RelatedTopicReuseHoldoutPostgresTlsConnectionFactory` now implements the local
+typed runtime-file, authenticated PostgreSQL TLS, read-only preflight, and
+single-use Phase-B connection boundary described below. Neither utility builds or
+isolates the evaluator, provisions infrastructure, or publishes files.
 
 This repository still has no supported live operator command, frozen runnable
-evaluator, custody-authorized publisher, or real external bundle. The workflow,
-ledger, collector, ranker, scorer, and report classes remain package-private test
-utilities. Therefore:
+evaluator, custody-authorized publisher, provisioned target ledger, or real
+external bundle. The workflow, connection factory, ledger, collector, ranker,
+scorer, and report classes remain package-private test utilities. Therefore:
 
 - this document does **not** authorize a custodian to release a real bundle;
 - the provisioning steps below do **not** make the in-memory workflow a live
@@ -169,33 +172,58 @@ role attributes, role memberships, per-role/per-database settings, `pg_hba.conf`
 and the fixed database, schema, and table owners. Store sanitized query results
 with the approval record; do not store passwords or connection strings.
 
-Cross-database revocation is an administrator responsibility. The current runtime
-ledger verifier connects to and validates only the ledger database, so its success
-does not prove this cluster-wide condition.
+The package-private TLS connection factory's read-only preflight now enumerates
+exactly `openscholar_holdout_ledger_v1`, `postgres`, `template0`, and `template1`;
+requires runtime and auditor `CONNECT` only on the ledger database; rejects their
+`CREATE` or `TEMPORARY` privilege on every database; and requires `template0` to
+remain non-connectable. It also checks the four fixed role identities, disabled
+bootstrap login, role attributes, zero memberships in either direction, and no
+per-role, per-database, or database-wide default settings. These runtime-visible
+catalog checks do not provision or revoke anything and do not prove
+`pg_hba.conf`, firewall, DNS, administrator, host, or storage controls. The
+administrator remains responsible for those controls and for independently
+retaining the sanitized access review.
 
 ## TLS and server identity
 
 Plaintext database traffic and unauthenticated encryption are prohibited. The
-future live operator must construct its own fixed PostgreSQL data source and
-enforce:
+package-private connection factory now accepts only a closed typed endpoint
+record and closed runtime-file record—never a caller-supplied JDBC URL, query
+parameters, role, socket, pool, or SSL implementation—and configures pgJDBC
+42.7.12 to enforce:
 
 - `sslmode=verify-full`;
 - an absolute, canonical, non-symlink CA file whose SHA-256 equals the externally
   approved endpoint record;
 - a server certificate that chains to that CA and whose subject alternative name
-  matches the exact configured DNS name (or exact IP address when an IP SAN was
-  deliberately approved);
+  matches the exact configured DNS name; the current typed profile does not accept
+  an IP literal as its server name;
 - no user-supplied JDBC query parameters, trust-all manager, `sslmode=require`,
   fallback to plaintext, or alternate Unix socket;
-- `hostssl` rules restricted to the fixed database and two login roles, with an
-  approved authentication method such as SCRAM-SHA-256 or mutually authenticated
-  TLS; and
+- direct PostgreSQL 17 TLS through the fixed LibPQ SSL factory and a fixed verifier
+  that accepts only the exact DNS subject alternative name—never CN fallback or a
+  wildcard—plus SCRAM-SHA-256 authentication only and required channel binding;
+- no ambient client certificate, private key, GSS, JAAS, or SPNEGO credential;
+- separately administered `hostssl` rules restricted to the fixed database and
+  two login roles; and
 - an observed encrypted session, checked through the current session's
   `pg_stat_ssl` row, in addition to driver certificate verification.
 
-`pg_stat_ssl` and catalog values are supplementary evidence. They do not replace
-CA validation and hostname verification, and the database name returned by the
-server does not authenticate the network endpoint.
+The Phase-A preflight validates the exact server address, port, complete server
+version, TLS protocol, cipher and bit count from the same connection, along with
+the fixed database, runtime role, and application name. The current endpoint
+record accepts a canonical IPv4 literal for that expected server address; it does
+not accept IPv6 or a second address. `pg_stat_ssl` and catalog values are
+supplementary evidence. They do not replace the factory's CA and hostname
+verification, and the database name returned by the server does not authenticate
+the network endpoint.
+
+The endpoint record currently binds the canonical CA digest and observed TLS
+properties but does not independently extract and pin the leaf-certificate
+fingerprint. That remains required before a live run. The repository also has no
+real TLS-enabled target/container proof; its local and synthetic connection
+mechanics are not evidence that a production endpoint, `pg_hba.conf`, firewall,
+or DNS route satisfies this section.
 
 Record the server certificate fingerprint, issuer, subject alternative name,
 validity interval, CA digest, endpoint, and exact server build before release.
@@ -224,6 +252,37 @@ and disabled bootstrap role have no runtime password file.
 The CA certificate is public rather than secret, but its file must be immutable to
 the evaluator and checked against the externally retained digest. A private mTLS
 key, when used, follows the `0400` secret-file contract.
+
+The local factory implements this contract for its runtime password: both the
+`0700` parent and `0400` file must have the expected evaluator owner, the file must
+have one hard link, and the canonical absolute password and CA paths must be
+outside the repository. The CA parent and file must have a separate expected
+non-evaluator owner, must reject group/other writes, and every ancestor must reject
+group/other writes plus evaluator-owned owner-write access. The factory rejects
+symlinks and file changes between Phase A and Phase B and checks the CA digest in
+constant time. It binds password content with fresh per-instance keyed bytes rather
+than retaining a password SHA-256 string, then wipes that binding when the Phase-B
+connection is consumed. It rejects non-empty ACLs when Java exposes an
+`AclFileAttributeView` and requires the CA plus every ancestor to be non-writable
+by the evaluator process.
+
+These pathname checks are repeated but are not descriptor-relative opens and do
+not eliminate replacement races by the CA owner, a host administrator, or another
+authority able to mutate an ancestor. Provisioning and custody must prevent that
+pathname TOCTOU; the implementation does not issue, mount, rotate, or remove
+either file.
+
+The Java boundary compares trusted expected-owner names with the names reported by
+the filesystem. It does not bind the evaluator name to the process's numeric
+effective UID, reject a UID-0 evaluator, or detect multiple names for one UID. The
+future launcher must verify and record numeric UIDs, reject root execution, and
+then provide the reviewed names; these are external preconditions, not claims made
+by the current factory.
+
+The launcher must also use native target-filesystem tooling to prove that the CA,
+its ancestry, and the password path have no extra POSIX/NFSv4 ACL grants. Java does
+not expose every Unix ACL implementation, so an absent Java ACL view is not proof
+of ACL absence or of password confidentiality from other principals.
 
 The evaluator environment must not contain application database credentials,
 provider API keys, OIDC credentials, the local MCP key, registry credentials,
@@ -318,12 +377,25 @@ upper bounds before claim:
 | Ledger statement | 10 seconds |
 | Idle ledger transaction | 15 seconds |
 
-The ledger currently sets and verifies the last four transaction/runtime bounds
-after connection acquisition. The future live operator must enforce the first
-three and prove their behavior against a stalled TCP endpoint, stalled TLS
-handshake, and connected server that stops responding. DNS and process startup
-may require a separate supervisor deadline. Expiry after a claim attempt remains
-a consumed or ambiguous run; a timeout is never permission to retry.
+The factory configures a simple pgJDBC source with 10-second login and connection
+timeouts, a 10-second TLS-response timeout, and a 15-second socket timeout. Its
+read-only Phase-A connection and the exact Phase-B connection both set and verify
+the 15-second JDBC network timeout; the ledger independently sets it again before
+the claim and applies the lock, statement, and idle-transaction bounds. The
+10-second statement bound is server-enforced through fixed startup options,
+verified during preflight, and reasserted transaction-locally. JDBC client query
+timeouts remain zero: pgJDBC's cancellation mechanism opens a second plaintext
+CancelRequest socket, which this boundary prohibits. The factory returns a ledger
+already bound to its private one-use connection source.
+The first claim can open exactly one Phase-B connection, revalidates the CA and
+password files first, and preflights that same connection before handing it to the
+ledger claim path. The source is not returned to an ordinary caller.
+
+These configured bounds still lack a real stalled TCP endpoint, stalled TLS
+handshake, non-responsive PostgreSQL target, and process-supervisor proof. DNS and
+process startup require an external hard deadline, and no local Java timeout
+claim should be treated as that supervisor evidence. Expiry after a claim attempt
+remains a consumed or ambiguous run; a timeout is never permission to retry.
 
 Disable driver, pool, orchestration, shell, and service-manager retry. Health
 checks may observe readiness before the bundle is mounted, but they must not issue
@@ -334,6 +406,12 @@ a claim or silently replace the server during an evaluation.
 The future live operator must enforce two phases with an OS-level boundary. A
 written checklist or operator memory is not enough.
 
+The local factory models this order by returning an in-memory ledger bound to a
+private one-use connection source, but it does not itself create the required
+OS/process separation. A future live runner must preserve the fail-closed
+Phase-A-to-Phase-B binding without treating the package-private object as
+isolation evidence.
+
 ### Phase A: before holdout mount
 
 1. Start from the exact standalone clone and verify the external freeze record.
@@ -343,8 +421,12 @@ written checklist or operator memory is not enough.
    gate, and retain the built-artifact digest.
 4. Apply and validate the forward-only ledger migration if it was not already
    applied in the approved maintenance window.
-5. Verify TLS, endpoint identity, storage settings, roles, memberships, database
-   inventory, cross-database revocations, object ACLs, and all timeout behavior.
+5. Run the factory's read-only Phase-A preflight to verify the configured TLS
+   session, endpoint and server identity, exact database inventory, cross-database
+   runtime/auditor privileges, disabled bootstrap, fixed role memberships and
+   settings, and configured connection bounds. Independently verify the migration,
+   `pg_hba.conf`, firewall, leaf-certificate fingerprint, storage, administrator
+   controls, and real timeout behavior that the factory cannot prove.
 6. Remove bootstrap, owner, auditor, application, provider, network, registry,
    build-service, and Docker authorities from the evaluator environment.
 7. Make the verified clone, artifact, dependency cache, and configuration
@@ -359,11 +441,14 @@ commitment was exposed to the evaluator environment.
 1. The custodian exposes one approved external bundle through a read-only,
    absolute, non-repository mount. Do not copy it into the clone, build context,
    cache, image, or ordinary temporary directory.
-2. Reverify the frozen checkout, artifact, environment, endpoint record, and
-   read-only bundle layout. Perform staged label-free corpus intake; do not open
-   judgments before rankings are frozen.
+2. Reverify the frozen checkout, artifact, environment, endpoint record, runtime
+   files, and read-only bundle layout. Use only the bound ledger returned by Phase
+   A; its first claim opens the sole Phase-B connection, revalidates the files, and
+   preflights that exact connection before entering the claim transaction. Perform
+   staged label-free corpus intake; do not open judgments before rankings are
+   frozen.
 3. Derive the exact first-run identity and execute the single durable ledger
-   claim with the runtime role.
+   claim with that runtime connection.
 4. Only after an acknowledged commit returns the opaque claim capability, consume
    that capability and invoke the fixed ranking callback immediately.
 5. Freeze the ranking snapshot, then perform the post-ranking manifest/corpus
@@ -471,14 +556,22 @@ or proof of independent authorship.
   implements staged corpus intake and private judgment release mechanics, not an
   OS isolation boundary.
 - [`RelatedTopicReuseHoldoutPostgresFirstRunLedger`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutPostgresFirstRunLedger.java)
-  verifies and commits the runtime append-only claim, but trusts its supplied data
-  source and cannot prove TLS, cross-database isolation, administrator integrity,
-  storage honesty, backup durability, or initial connection bounds.
+  verifies and commits the runtime append-only claim. The ordinary factory API
+  returns a ledger already bound to its private verified source; the raw
+  `DataSource` constructor and direct source seam are reached only by explicit
+  reflection-based mechanics fixtures.
+- [`RelatedTopicReuseHoldoutPostgresTlsConnectionFactory`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.java)
+  implements closed typed endpoint/runtime-file intake, pgJDBC `verify-full`,
+  runtime-visible Phase-A catalog and TLS preflight, and a returned ledger bound
+  to one revalidated Phase-B connection. Its pathname checks retain the documented
+  TOCTOU/administrator trust boundary. It does not pin the leaf-certificate
+  fingerprint, provision a cluster, inspect `pg_hba.conf`, prove
+  firewall/DNS/storage/administrator integrity, impose a process-supervisor
+  deadline, or supply real target evidence.
 - [`RelatedTopicReuseHoldoutOperatorWorkflow`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutOperatorWorkflow.java)
   preserves the supported claim-to-evidence call graph and failure states in
   memory without publishing files; it is package-private and supplies no live
-  launcher, build isolation, TLS data-source construction, provisioning, or
-  custody boundary.
+  launcher, build isolation, provisioning, or custody boundary.
 - [`RelatedTopicReuseHoldoutEvidenceReport`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutEvidenceReport.java)
   constructs schema-v2 canonical in-memory artifacts only from the opaque durable
   first-run evidence and its exact snapshot. Its report identity binds the run
@@ -491,5 +584,5 @@ or proof of independent authorship.
   environment.
 
 Testcontainers and synthetic fixtures prove mechanics only. They do not establish
-external custody, production provisioning, a genuine blind result, or operational
-authorization.
+a real TLS endpoint, external custody, production provisioning, a genuine blind
+result, or operational authorization.

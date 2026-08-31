@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -49,6 +50,7 @@ import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostg
 import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostgresFirstRunLedger.CommitOutcomeUnknownException;
 import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostgresFirstRunLedger.ContractException;
 import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostgresFirstRunLedger.LedgerException;
+import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.VerifiedRuntimeConnectionSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -189,7 +191,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	@Test
 	void commitsExactlyOnceBeforeMintingAnOpaqueCapability() throws Exception {
 		SyntheticRun run = syntheticRun("first");
-		var ledger = new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource);
+		var ledger = RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource);
 
 		var committed = ledger.claim(run.commitment(), run.checkout());
 
@@ -209,10 +211,22 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		assertThat(singleText("policy_id"))
 				.isEqualTo(RelatedTopicReuseHoldoutPolicy.POLICY_ID);
 
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				runtimeDataSource).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(AlreadyClaimedException.class)
 				.hasMessage("HOLDOUT_LEDGER_FIRST_RUN_ALREADY_CLAIMED");
+		assertThat(claimCount()).isOne();
+	}
+
+	@Test
+	void neverUsesPgJdbcClientSideQueryCancellation() throws Exception {
+		SyntheticRun run = syntheticRun("no-client-cancel");
+
+		var committed = RelatedTopicReuseHoldoutLedgerTestFixture.create(
+				rejectClientQueryTimeouts(runtimeDataSource))
+				.claim(run.commitment(), run.checkout());
+
+		assertThat(committed.runKey()).hasSize(64);
 		assertThat(claimCount()).isOne();
 	}
 
@@ -231,7 +245,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		var checkout = collectRealCleanCheckout(
 				temporaryDirectory.resolve("clean-evaluator-clone"));
 		observedOrder.add("checkout-verified");
-		var committed = new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		var committed = RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				runtimeDataSource).claim(verifiedCorpus.firstRunCommitment(), checkout);
 		observedOrder.add("claim-committed");
 
@@ -283,7 +297,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger rankingInvocations = new AtomicInteger();
 		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
 				objectMapper,
-				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource),
 				corpus -> {
 					rankingInvocations.incrementAndGet();
 					return emptyRankingObservation(corpus);
@@ -332,7 +346,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger rankingInvocations = new AtomicInteger();
 		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
 				new ObjectMapper(),
-				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource),
 				corpus -> {
 					rankingInvocations.incrementAndGet();
 					return emptyRankingObservation(corpus);
@@ -368,7 +382,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger rankingInvocations = new AtomicInteger();
 		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
 				objectMapper,
-				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource),
 				corpus -> {
 					rankingInvocations.incrementAndGet();
 					throw new IOException("synthetic ranking failure");
@@ -403,7 +417,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger rankingInvocations = new AtomicInteger();
 		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
 				objectMapper,
-				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource),
+				RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource),
 				corpus -> {
 					rankingInvocations.incrementAndGet();
 					Files.writeString(
@@ -443,7 +457,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger rankingInvocations = new AtomicInteger();
 		var workflow = RelatedTopicReuseHoldoutOperatorTestFixture.workflow(
 				objectMapper,
-				new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+				RelatedTopicReuseHoldoutLedgerTestFixture.create(
 						commitFailureDataSource(true, commits)),
 				corpus -> {
 					rankingInvocations.incrementAndGet();
@@ -474,7 +488,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 			throws Exception {
 		SyntheticRun first = syntheticRun("original");
 		SyntheticRun changedBundleAndEvaluator = syntheticRun("changed");
-		var ledger = new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource);
+		var ledger = RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource);
 		String firstRunKey = ledger.claim(first.commitment(), first.checkout()).runKey();
 		String changedRunKey = RelatedTopicReuseHoldoutFirstRunIdentity.fromVerified(
 				changedBundleAndEvaluator.commitment(),
@@ -507,7 +521,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 							throw new IllegalStateException("concurrent ledger start timed out");
 						}
 						try {
-							new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource)
+							RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource)
 									.claim(run.commitment(), run.checkout());
 							committed.incrementAndGet();
 						}
@@ -535,13 +549,13 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger commits = new AtomicInteger();
 		DataSource ambiguous = commitFailureDataSource(true, commits);
 
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				ambiguous).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(CommitOutcomeUnknownException.class)
 				.hasMessage("HOLDOUT_LEDGER_COMMIT_OUTCOME_UNKNOWN");
 		assertThat(commits).hasValue(1);
 		assertThat(claimCount()).isOne();
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				runtimeDataSource).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(AlreadyClaimedException.class);
 	}
@@ -553,7 +567,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		AtomicInteger commits = new AtomicInteger();
 		DataSource ambiguous = commitFailureDataSource(false, commits);
 
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				ambiguous).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(CommitOutcomeUnknownException.class);
 		assertThat(commits).hasValue(1);
@@ -593,7 +607,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	@Test
 	void wrongRoleOrAlteredContractFailsBeforeInsertion() throws Exception {
 		SyntheticRun run = syntheticRun("contract");
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				administratorDataSource).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(ContractException.class)
 				.hasMessage("HOLDOUT_LEDGER_DATABASE_CONTRACT_INVALID");
@@ -603,7 +617,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 				Statement statement = connection.createStatement()) {
 			statement.execute("COMMENT ON TABLE holdout_ledger_v1.first_run_claim_v1 IS 'altered'");
 		}
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				runtimeDataSource).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(ContractException.class);
 		assertThat(claimCount()).isZero();
@@ -617,7 +631,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 				administratorDataSource,
 				RelatedTopicReuseHoldoutPostgresFirstRunLedger.RUNTIME_ROLE);
 
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				masquerading).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(ContractException.class)
 				.hasMessage("HOLDOUT_LEDGER_DATABASE_CONTRACT_INVALID");
@@ -811,7 +825,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	void committedCapabilityIsBoundToTheExactCorpusAndStartsOnce()
 			throws Exception {
 		SyntheticRun run = syntheticRun("capability");
-		var committed = new RelatedTopicReuseHoldoutPostgresFirstRunLedger(runtimeDataSource)
+		var committed = RelatedTopicReuseHoldoutLedgerTestFixture.create(runtimeDataSource)
 				.claim(run.commitment(), run.checkout());
 
 		committed.consumeForRanking(run.verifiedCorpus());
@@ -838,6 +852,21 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		});
 		assertThat(RelatedTopicReuseHoldoutPostgresFirstRunLedger.class.getModifiers())
 				.matches(Modifier::isFinal);
+		assertThat(Arrays.stream(
+				RelatedTopicReuseHoldoutPostgresFirstRunLedger.class
+						.getDeclaredConstructors())
+						.filter(constructor -> !Modifier.isPrivate(constructor.getModifiers())))
+				.singleElement()
+				.satisfies(constructor -> assertThat(constructor.getParameterTypes())
+						.containsExactly(VerifiedRuntimeConnectionSource.class));
+		assertThat(Arrays.stream(
+				RelatedTopicReuseHoldoutPostgresFirstRunLedger.class
+						.getDeclaredConstructors())
+						.filter(constructor -> DataSource.class.equals(
+								constructor.getParameterTypes()[0])))
+				.singleElement()
+				.satisfies(constructor ->
+						assertThat(Modifier.isPrivate(constructor.getModifiers())).isTrue());
 		assertThat(Arrays.stream(
 				RelatedTopicReuseHoldoutPostgresFirstRunLedger.CommittedFirstRun.class
 						.getDeclaredConstructors()))
@@ -1375,6 +1404,52 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 		};
 	}
 
+	private static DataSource rejectClientQueryTimeouts(DataSource delegate) {
+		return new DelegatingDataSource(delegate) {
+			@Override
+			public Connection getConnection() throws SQLException {
+				Connection connection = super.getConnection();
+				return (Connection) Proxy.newProxyInstance(
+						Connection.class.getClassLoader(),
+						new Class<?>[] {Connection.class},
+						(proxy, method, arguments) -> {
+							try {
+								Object result = method.invoke(connection, arguments);
+								if (result instanceof PreparedStatement preparedStatement) {
+									return rejectClientQueryTimeouts(
+											preparedStatement, PreparedStatement.class);
+								}
+								if (result instanceof Statement statement) {
+									return rejectClientQueryTimeouts(statement, Statement.class);
+								}
+								return result;
+							}
+							catch (InvocationTargetException exception) {
+								throw exception.getCause();
+							}
+						});
+			}
+		};
+	}
+
+	private static <T> T rejectClientQueryTimeouts(T delegate, Class<T> type) {
+		return type.cast(Proxy.newProxyInstance(
+				type.getClassLoader(),
+				new Class<?>[] {type},
+				(proxy, method, arguments) -> {
+					if (method.getName().equals("setQueryTimeout")) {
+						throw new AssertionError(
+								"strict TLS ledger must not open a plaintext cancel socket");
+					}
+					try {
+						return method.invoke(delegate, arguments);
+					}
+					catch (InvocationTargetException exception) {
+						throw exception.getCause();
+					}
+				}));
+	}
+
 	private static DataSource setRoleDataSource(DataSource delegate, String role) {
 		return new DelegatingDataSource(delegate) {
 			@Override
@@ -1393,7 +1468,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 	}
 
 	private static void assertContractRejected(SyntheticRun run) {
-		assertThatThrownBy(() -> new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+		assertThatThrownBy(() -> RelatedTopicReuseHoldoutLedgerTestFixture.create(
 				runtimeDataSource).claim(run.commitment(), run.checkout()))
 				.isInstanceOf(ContractException.class)
 				.hasMessage("HOLDOUT_LEDGER_DATABASE_CONTRACT_INVALID");

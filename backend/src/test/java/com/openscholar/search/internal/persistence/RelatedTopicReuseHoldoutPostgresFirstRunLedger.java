@@ -18,6 +18,7 @@ import javax.sql.DataSource;
 
 import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutBundle.VerifiedFirstRunCommitment;
 import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutGitCollector.VerifiedCleanCheckout;
+import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.VerifiedRuntimeConnectionSource;
 
 /**
  * Insert-only PostgreSQL finality boundary for the preregistered first holdout run.
@@ -37,7 +38,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 	static final String CONTRACT_COMMENT =
 			"openscholar-related-topic-reuse-first-run-ledger-v1";
 
-	private static final int QUERY_TIMEOUT_SECONDS = 10;
 	private static final int NETWORK_TIMEOUT_MILLIS = 15_000;
 	private static final Executor DIRECT_EXECUTOR = Runnable::run;
 	private static final Set<String> RUNTIME_INSERT_COLUMNS = Set.of(
@@ -117,11 +117,23 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 			RETURNING 1
 			""";
 
-	private final DataSource operatorDataSource;
+	private final ClaimConnectionSource connectionSource;
 
-	RelatedTopicReuseHoldoutPostgresFirstRunLedger(DataSource operatorDataSource) {
-		this.operatorDataSource = Objects.requireNonNull(
-				operatorDataSource, "operatorDataSource");
+	RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+			VerifiedRuntimeConnectionSource connectionSource) {
+		this(Objects.requireNonNull(
+				connectionSource, "connectionSource")::openClaimConnection);
+	}
+
+	/** Reflection-only seam for plaintext synthetic mechanics tests. */
+	private RelatedTopicReuseHoldoutPostgresFirstRunLedger(DataSource dataSource) {
+		this(Objects.requireNonNull(dataSource, "dataSource")::getConnection);
+	}
+
+	private RelatedTopicReuseHoldoutPostgresFirstRunLedger(
+			ClaimConnectionSource connectionSource) {
+		this.connectionSource = Objects.requireNonNull(
+				connectionSource, "connectionSource");
 	}
 
 	CommittedFirstRun claim(
@@ -140,7 +152,7 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 		boolean commitAttempted = false;
 		boolean committed = false;
 		try {
-			connection = operatorDataSource.getConnection();
+			connection = connectionSource.open();
 			connection.setNetworkTimeout(DIRECT_EXECUTOR, NETWORK_TIMEOUT_MILLIS);
 			if (connection.getNetworkTimeout() != NETWORK_TIMEOUT_MILLIS) {
 				throw new ContractException();
@@ -183,7 +195,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 
 	private static void configureTransaction(Connection connection) throws SQLException {
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			statement.execute("SET LOCAL synchronous_commit = 'on'");
 			statement.execute("SET LOCAL lock_timeout = '5s'");
 			statement.execute("SET LOCAL statement_timeout = '10s'");
@@ -230,7 +241,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				WHERE r.rolname = current_user
 				""";
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				if (!result.next()
 						|| !DATABASE_NAME.equals(result.getString(1))
@@ -283,7 +293,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				""";
 		List<RoleContract> observed = new ArrayList<>();
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				while (result.next()) {
 					if (result.getBoolean(2)
@@ -339,7 +348,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				  AND c.relname = 'first_run_claim_v1'
 				""";
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				if (!result.next()
 						|| !"r".equals(result.getString(1))
@@ -414,7 +422,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				  AND c.relname = 'first_run_claim_v1'
 				""";
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				if (!result.next()
 						|| !result.getBoolean(1)
@@ -502,7 +509,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				""";
 		List<AclContract> observed = new ArrayList<>();
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				while (result.next()) {
 					observed.add(new AclContract(
@@ -559,7 +565,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				""";
 		List<ColumnContract> observed = new ArrayList<>();
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				while (result.next()) {
 					String name = result.getString(1);
@@ -605,7 +610,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				""";
 		List<ConstraintContract> observed = new ArrayList<>();
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				while (result.next()) {
 					observed.add(new ConstraintContract(
@@ -657,7 +661,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 				ORDER BY index_class.relname
 				""";
 		try (Statement statement = connection.createStatement()) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			try (ResultSet result = statement.executeQuery(sql)) {
 				if (!result.next()
 						|| !"first_run_claim_v1_pk".equals(result.getString(1))
@@ -757,7 +760,6 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 		VerifiedFirstRunCommitment commitment = identity.commitment();
 		VerifiedCleanCheckout checkout = identity.checkout();
 		try (PreparedStatement statement = connection.prepareStatement(INSERT_SQL)) {
-			statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
 			int index = 0;
 			statement.setInt(++index, RelatedTopicReuseHoldoutFirstRunIdentity.SCHEMA_VERSION);
 			statement.setString(++index, commitment.evaluationProtocolId());
@@ -1117,6 +1119,12 @@ final class RelatedTopicReuseHoldoutPostgresFirstRunLedger {
 	}
 
 	private record RoleContract(String name, boolean login) {
+	}
+
+	@FunctionalInterface
+	private interface ClaimConnectionSource {
+
+		Connection open() throws SQLException;
 	}
 
 	private record AclContract(

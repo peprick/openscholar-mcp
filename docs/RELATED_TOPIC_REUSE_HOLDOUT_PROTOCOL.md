@@ -266,11 +266,18 @@ than application Flyway. Provisioning requires the fixed dedicated
 INSERT-only runtime role, and a SELECT-only auditor. The runtime has no table reads,
 updates, deletes, truncation, schema/database creation, or temporary-object
 privilege in the ledger database. Production provisioning must also ensure that its
-cluster-level login cannot connect to the application or any other database, either
-by using a separate PostgreSQL cluster or by explicitly revoking and auditing
-cross-database access. The verifier does not inspect other databases and therefore
-does not yet prove the required separation. The migration assumes that the
-dedicated database and roles already exist. The
+cluster-level login cannot connect to the application or any other database by
+using the required dedicated PostgreSQL cluster and revoking and auditing access
+to its three standard databases. The package-private TLS factory's read-only
+preflight now requires the exact four-database inventory
+(`openscholar_holdout_ledger_v1`,
+`postgres`, `template0`, and `template1`), verifies that runtime and auditor can
+connect only to the ledger database and have no database `CREATE` or `TEMPORARY`
+privilege, and checks the disabled bootstrap plus fixed role attributes,
+memberships, per-role/per-database settings, and database-wide defaults. These
+runtime-visible checks do not provision the cluster or prove `pg_hba.conf`,
+firewall, DNS, administrator, host, or storage controls. The migration assumes
+that the dedicated database and roles already exist. The
 [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) now documents
 the administrator-managed role, credential, isolated-migration, TLS, and
 cross-database requirements; it is not provisioning automation or evidence that
@@ -300,18 +307,54 @@ pin and validate one exact server image/build; an unreviewed minor-version
 formatting change is expected to fail closed until the catalog contract is reviewed
 and updated.
 
-The ledger validates the connected database catalog and session, but the supplied
-`DataSource` remains an operator trust boundary. Catalog identity does not
-authenticate the remote endpoint, DNS or socket route, TLS peer, server
-certificate, administrator, or underlying storage. The future live operator and
-connection factory must pin and authenticate the intended endpoint and TLS/server
-identity, protect the owner and administrative authorities, and use separately
-governed persistent storage.
-The ledger sets and verifies a 15-second JDBC network timeout after it acquires a
-connection, in addition to transaction-local statement and lock limits. It cannot
-bound pool acquisition or initial connection setup, so the future live connection
-factory must still configure bounded pool-acquisition, connect, and socket
-timeouts and verify the selected driver/pool behavior under a stalled endpoint.
+`RelatedTopicReuseHoldoutPostgresTlsConnectionFactory` now supplies the ordinary
+ledger connection boundary. It accepts only closed typed endpoint and runtime-file
+inputs, validates a canonical digest-bound CA, requires a separately owned
+non-evaluator CA path with protected ancestry, enforces the trusted expected-owner
+name on the `0700` password directory plus `0400` single-link password file, and
+rejects repository-contained or changed files. Password content is bound with fresh
+per-instance keyed bytes that are wiped when Phase B is consumed; no stable
+password digest string is retained. It configures pgJDBC 42.7.12 for direct
+PostgreSQL 17 TLS with `verify-full`, the fixed LibPQ SSL factory and hostname
+verifier that requires an exact DNS SAN without CN or wildcard fallback,
+SCRAM-SHA-256 only, required channel binding, and no ambient client
+certificate or GSS/JAAS/SPNEGO credentials. Login, connect and TLS-response
+timeouts are 10 seconds; socket and JDBC network timeouts are 15 seconds. A
+10-second server-side `statement_timeout` is fixed in the startup options and
+verified on each preflighted connection. JDBC client query timeouts are disabled
+because pgJDBC cancellation would open a second non-TLS CancelRequest socket.
+
+Its Phase-A read-only preflight verifies the same session's `pg_stat_ssl` protocol,
+cipher and bit count; fixed database, runtime role and application name; exact
+canonical IPv4 server address, port and version; database inventory and
+privileges; disabled bootstrap; fixed role attributes and memberships; and
+absence of fixed-role and database-wide settings. The ordinary factory call
+returns a ledger already bound to its private one-use source. Its first claim
+revalidates the CA and password files and repeats the preflight on that exact
+Phase-B connection. Direct source access and the raw `DataSource` constructor are
+retained only behind explicit reflection-based mechanics fixtures.
+
+This local boundary does not independently extract or pin the leaf-certificate
+fingerprint and has no real TLS-enabled container or target proof. It also cannot
+prove DNS supervision, `pg_hba.conf`, firewall, administrator, storage, backup, or
+host integrity, and its configured timeouts are not a process-supervisor deadline.
+Its repeated pathname checks are not descriptor-relative and cannot eliminate
+replacement races by the CA owner, a host administrator, or another ancestor
+authority. Those controls and real stalled-endpoint/target validation remain
+prerequisites for a live run.
+
+The factory rejects visible non-empty Java `AclFileAttributeView` entries and
+requires the CA plus every ancestor to be non-writable by the evaluator process.
+Some Unix filesystems expose extended/NFSv4 ACLs only through native interfaces;
+the factory cannot prove ACL absence there or prove that no other principal can
+read the password. The launcher must fail closed after a native ACL/access review
+on the target filesystem.
+
+The owner names in `RuntimeFiles` are trusted launcher inputs compared with Java's
+reported file-owner names. This factory does not bind them to the process's numeric
+effective UID, reject UID 0, or detect UID/name aliases. A future native or
+container launcher must enforce those numeric-identity invariants before invoking
+the factory; the current pathname checks do not establish that process boundary.
 
 After the ranking callback completes, the consumed committed claim can mint one
 opaque `FirstRunEvidence` capability exactly once. It binds the durable first-run
@@ -366,18 +409,21 @@ claim, ranks, performs post-ranking judgment verification, scores, creates and
 exactly verifies schema-v2 evidence, and returns an opaque non-authorizing
 `PendingPublication`. It distinguishes pre-claim, rejected, ambiguous-commit, and
 committed-final failure states and exposes no retry, reset, resume, mutation, or
-publication operation. This centralizes the supported in-process call order, but
-does not authenticate which injected callback or data source ran and does not
-isolate same-process code.
+publication operation. This centralizes the supported in-process call order. The
+ordinary factory path now returns a ledger bound to its private verified
+connection source, but the workflow still does not authenticate the injected
+ranking callback or isolate same-process code.
 
-The workflow is not a build launcher, OS/process sandbox, TLS connection factory,
-provisioner, filesystem publisher, REST/MCP/UI entry point, or live command. There
-is still no real external bundle; no isolated command that builds and executes the
+The workflow is not a build launcher, OS/process sandbox, provisioner, filesystem
+publisher, REST/MCP/UI entry point, or live command. The separate factory is also
+package-private test-source rather than a deployed endpoint or runner. There is
+still no real external bundle; no isolated command that builds and executes the
 frozen evaluator with an exact toolchain; no automated dedicated-cluster or role
-provisioning; no bounded initial-acquisition/connect/socket implementation; no
-authenticated endpoint/TLS/server-identity deployment; no frozen evaluator
-revision/source digest; and no custody-authorized publisher. The remaining
-production requirements and execution ordering are specified in the
+provisioning; no real TLS-enabled target proof or leaf-certificate fingerprint
+pinning; no `pg_hba.conf`, firewall, storage, administrator, or DNS/process
+supervisor enforcement; no frozen evaluator revision/source digest; and no
+custody-authorized publisher. The remaining production requirements and execution
+ordering are specified in the
 [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md).
 The checked-in ranker tests are mechanics evidence, not an external holdout result.
 These schema details are for review, not an invitation to release a real bundle;
@@ -388,7 +434,7 @@ Run the staged-boundary, immutable-evidence, policy, and PostgreSQL ranking
 contracts from `backend/` with Docker available:
 
 ```bash
-./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutFirstRunIdentityTests,RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutOperatorWorkflowTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
+./mvnw -Dtest=RelatedTopicReuseHoldoutGitCollectorTests,RelatedTopicReuseHoldoutFirstRunIdentityTests,RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests,RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests,RelatedTopicReuseHoldoutPostgresRankerTests,RelatedTopicReuseHoldoutOperatorWorkflowTests,RelatedTopicReuseHoldoutBundleTests,RelatedTopicReuseHoldoutRankingSnapshotTests,RelatedTopicReuseHoldoutScoringResultTests,RelatedTopicReuseHoldoutEvaluatorSealTests,RelatedTopicReuseHoldoutEvidenceReportTests,RelatedTopicReuseHoldoutEvidenceReportBundleTests,RelatedTopicReuseHoldoutPolicyContractTests test
 ```
 
 ## Preregistered decision boundary
@@ -442,14 +488,18 @@ fail-closed clean-checkout collector for an externally frozen source inventory a
 an INSERT-only durable PostgreSQL first-run claim whose one-shot capability is
 mandatory at the ranking coordinator. The package-private workflow now composes
 collection through exact schema-v2 evidence verification in memory and returns no
-filesystem output. It does not load a real external bundle or provide the live
-isolated command that must build and run the same verified standalone checkout.
+filesystem output. The package-private TLS connection factory adds closed
+endpoint/runtime-file inputs, `verify-full` and SCRAM/channel-bound pgJDBC
+configuration, read-only runtime-visible preflight, and a returned ledger bound to
+one private revalidated connection. It does not load a real external bundle or
+provide the live isolated command that must build and run the same verified
+standalone checkout.
 The [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents
-the dedicated-cluster and role contract, but provisioning automation, the TLS
-connection factory, authenticated endpoint isolation, and bounded initial
-acquisition/connect/socket behavior remain pending. The next safe sequence is to
-implement and verify those live operator controls; commit and review the complete
-runnable evaluator; then independently retain its
+the remaining dedicated-cluster and role contract. Provisioning automation, real
+TLS target and stalled-endpoint proof, leaf-certificate fingerprint pinning,
+administrator-managed network/storage controls, and the DNS/process supervisor
+remain pending. The next safe sequence is to implement and independently verify
+those controls; commit and review the complete runnable evaluator; then retain its
 exact revision, inventory identity, and source digests outside the repository. A
 later native exclusive publisher or separately reviewed external custody handoff
 is still required before custody release. Until that frozen evaluator exists and a
@@ -481,14 +531,15 @@ fresh intake calls or another process can create another flag. The PostgreSQL le
 provides durable runtime-append-only cross-process finality through the mandatory
 committed capability, but only for callers that preserve the supported composition
 and database trust boundary. Its `fsync` and synchronous-commit checks establish
-local WAL acknowledgment, not endpoint or TLS/server identity, trusted time,
-administrator integrity, storage honesty, immutable retention, backup durability,
-or disaster recovery. An owner, superuser, or storage administrator remains capable
-of altering or removing the evidence. Testcontainers proves mechanics only; a real
-first run must use separately governed persistent storage, authenticated server
-configuration, bounded pool-acquisition/connect/socket timeouts, and the pending reviewed
-provisioning and clean-checkout operator runbooks, never the ephemeral test
-container.
+local WAL acknowledgment. The separate factory adds CA/hostname verification and
+exact runtime-visible endpoint/session checks, but does not pin the leaf
+certificate or prove DNS, firewall, `pg_hba.conf`, trusted time, administrator
+integrity, storage honesty, immutable retention, backup durability, or disaster
+recovery. An owner, superuser, or storage administrator remains capable of altering
+or removing the evidence. Synthetic mechanics do not prove timeout behavior or a
+real TLS target; a real first run must use independently provisioned, separately
+governed persistent infrastructure and the reviewed operator runbook, never the
+ephemeral test container.
 
 Inline synthetic bundles in ordinary tests are parser and invariant fixtures
 only. They are never holdout evidence, must never be reported as scores, and do
