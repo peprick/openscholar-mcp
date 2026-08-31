@@ -459,6 +459,7 @@ class RelatedTopicReuseHoldoutGitCollectorTests {
 				temporaryDirectory,
 				"clone", "--quiet", "--no-local", "--no-hardlinks", "--",
 				sourceRoot.toString(), clone.toString());
+		prepareFrozenCandidateEvaluatorCommit(clone);
 		String evaluatorRevision = gitLine(
 				clone, "rev-parse", "--verify", "HEAD^{commit}");
 		List<SourceFile> evaluatorSources = committedSources(
@@ -488,6 +489,25 @@ class RelatedTopicReuseHoldoutGitCollectorTests {
 				freeze,
 				evaluatorSources,
 				candidateSources);
+	}
+
+	private static void prepareFrozenCandidateEvaluatorCommit(Path clone)
+			throws Exception {
+		List<String> restore = new ArrayList<>(List.of(
+				"restore",
+				"--source",
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				"--staged",
+				"--worktree",
+				"--"));
+		restore.addAll(RelatedTopicReuseHoldoutGitCollector.candidateInventoryPaths());
+		gitSuccess(clone, restore);
+		gitSuccess(
+				clone,
+				"-c", "user.name=OpenScholar tests",
+				"-c", "user.email=tests@invalid.example",
+				"commit", "--quiet", "--allow-empty",
+				"-m", "test evaluator over frozen candidate");
 	}
 
 	private static List<SourceFile> committedSources(

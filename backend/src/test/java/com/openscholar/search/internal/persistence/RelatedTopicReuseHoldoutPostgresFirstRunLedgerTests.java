@@ -1154,6 +1154,7 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 						clone.toString()),
 				new byte[0]);
 		Path cleanRoot = clone.toRealPath();
+		prepareFrozenCandidateEvaluatorCommit(cleanRoot, git);
 		String evaluatorRevision = gitLine(
 				cleanRoot, git, "rev-parse", "--verify", "HEAD^{commit}");
 		List<SourceFile> evaluatorSources = committedSources(
@@ -1180,6 +1181,28 @@ class RelatedTopicReuseHoldoutPostgresFirstRunLedgerTests {
 				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
 				candidateSha256);
 		return new CleanCheckoutInput(cleanRoot, freeze, git);
+	}
+
+	private static void prepareFrozenCandidateEvaluatorCommit(Path cleanRoot, Path git)
+			throws Exception {
+		List<String> restore = new ArrayList<>(List.of(
+				"restore",
+				"--source",
+				RelatedTopicReuseHoldoutPolicy.CANDIDATE_FREEZE_REVISION,
+				"--staged",
+				"--worktree",
+				"--"));
+		restore.addAll(RelatedTopicReuseHoldoutGitCollector.candidateInventoryPaths());
+		gitSuccess(cleanRoot, git, restore, new byte[0]);
+		gitSuccess(
+				cleanRoot,
+				git,
+				List.of(
+						"-c", "user.name=OpenScholar tests",
+						"-c", "user.email=tests@invalid.example",
+						"commit", "--quiet", "--allow-empty",
+						"-m", "test evaluator over frozen candidate"),
+				new byte[0]);
 	}
 
 	private static List<SourceFile> committedSources(
