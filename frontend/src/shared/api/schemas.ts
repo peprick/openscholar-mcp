@@ -34,6 +34,7 @@ export const createSearchRequestSchema = z
         yearTo: z.number().int().min(1000).max(9999).optional(),
         documentTypes: z.array(documentTypeSchema).max(12).default([]),
         openAccessOnly: z.boolean().default(false),
+        pdfAvailableOnly: z.boolean().default(false),
         minimumCitations: z.number().int().min(0).default(0),
         languages: z
           .array(z.string().trim().toLowerCase().regex(/^[a-z]{2,3}$/))
@@ -57,6 +58,7 @@ export const createSearchRequestSchema = z
       .default({
         documentTypes: [],
         openAccessOnly: false,
+        pdfAvailableOnly: false,
         minimumCitations: 0,
         languages: [],
       }),

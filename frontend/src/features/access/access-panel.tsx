@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   isReadablePdfAccessStatus,
+  selectPreferredReaderSource,
   selectReaderSource,
 } from "@/features/reader/reader-source";
 import {
@@ -112,7 +113,7 @@ function AccessLocation({
         <div className="buttonGroup accessLocationActions">
           {readerHref !== null ? (
             <Link className="button button--primary" href={readerHref}>
-              Read here
+              Read this PDF
             </Link>
           ) : null}
           <ExternalLink
@@ -124,7 +125,7 @@ function AccessLocation({
             href={href}
           >
             {location.pdfUrl !== null
-              ? "Open PDF in a new tab"
+              ? "Open original PDF"
               : "Open full-text page"}
           </ExternalLink>
         </div>
@@ -255,6 +256,16 @@ export function AccessPanel({
     return () => window.clearTimeout(timeout);
   }, [access.cacheDisposition, access.freshUntil, readerSelectionTime]);
 
+  const preferredReader = selectPreferredReaderSource(
+    access,
+    paperId,
+    readerSelectionTime,
+  );
+  const preferredReaderHref =
+    preferredReader === null
+      ? null
+      : (`/papers/${paperId}/read/${preferredReader.locationId}` as Route);
+
   return (
     <section className="accessPanel" aria-labelledby="access-heading">
       <div className="accessPanelHeader">
@@ -270,8 +281,15 @@ export function AccessPanel({
       </div>
 
       <div className="accessActions">
+        {preferredReaderHref !== null ? (
+          <Link className="button button--primary" href={preferredReaderHref}>
+            Read PDF
+          </Link>
+        ) : null}
         <button
-          className="button button--primary"
+          className={`button ${
+            preferredReaderHref === null ? "button--primary" : "button--ghost"
+          }`}
           disabled={checking}
           onClick={() => void verify()}
           type="button"

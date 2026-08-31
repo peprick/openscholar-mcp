@@ -151,6 +151,7 @@ class ResearchProviderFanout {
 			ProviderSearchResult result = Objects.requireNonNull(
 					provider.search(request.query()), "Research providers must not return null");
 			validateResult(provider.id(), result);
+			result = applyPdfAvailabilityFilter(request.query(), result);
 			metrics.success(provider.id(), System.nanoTime() - startedAt, result.records().size());
 			return new ProviderCall(provider.id(), result, null);
 		}
@@ -166,6 +167,19 @@ class ResearchProviderFanout {
 			metrics.failure(provider.id(), System.nanoTime() - startedAt, failure);
 			return new ProviderCall(provider.id(), null, failure);
 		}
+	}
+
+	private static ProviderSearchResult applyPdfAvailabilityFilter(
+			ProviderSearchQuery query, ProviderSearchResult result) {
+		if (!query.pdfAvailableOnly()) {
+			return result;
+		}
+		return new ProviderSearchResult(
+				result.provider(),
+				result.records().stream().filter(record -> record.pdfUrl() != null).toList(),
+				result.totalMatches(),
+				result.nextCursor(),
+				result.retrievedAt());
 	}
 
 	private static void validateResult(ProviderId expected, ProviderSearchResult result) {
@@ -192,6 +206,7 @@ class ResearchProviderFanout {
 				query.yearTo(),
 				query.documentTypes(),
 				query.openAccessOnly(),
+				query.pdfAvailableOnly(),
 				query.minimumCitations(),
 				query.languages(),
 				query.pageSize(),

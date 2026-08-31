@@ -101,7 +101,8 @@ class LocalCatalogSearch {
 			           record.pdf_url
 			    FROM provider_record record
 			    WHERE record.paper_id = ranked.paper_id
-			    ORDER BY record.retrieved_at DESC, record.provider, record.provider_record_id
+			    ORDER BY CASE WHEN :pdfAvailableOnly AND record.pdf_url IS NOT NULL THEN 0 ELSE 1 END,
+			             record.retrieved_at DESC, record.provider, record.provider_record_id
 			    LIMIT 1
 			) provenance ON TRUE
 			ORDER BY ranked.total_score DESC,
@@ -175,7 +176,8 @@ class LocalCatalogSearch {
 			           record.pdf_url
 			    FROM provider_record record
 			    WHERE record.paper_id = ranked.paper_id
-			    ORDER BY record.retrieved_at DESC, record.provider, record.provider_record_id
+			    ORDER BY CASE WHEN :pdfAvailableOnly AND record.pdf_url IS NOT NULL THEN 0 ELSE 1 END,
+			             record.retrieved_at DESC, record.provider, record.provider_record_id
 			    LIMIT 1
 			) provenance ON TRUE
 			""";
@@ -241,12 +243,22 @@ class LocalCatalogSearch {
 					 )
 					""");
 		}
+		if (command.pdfAvailableOnly()) {
+			filters.append("""
+					 AND EXISTS (
+					     SELECT 1 FROM provider_record pdf_filter
+					     WHERE pdf_filter.paper_id = paper.id
+					       AND pdf_filter.pdf_url IS NOT NULL
+					 )
+					""");
+		}
 
 		JdbcClient.StatementSpec statement = jdbcClient.sql(BASE_QUERY.formatted(filters));
 		statement = statement
 				.param("ownerId", ownerId)
 				.param("query", command.query())
 				.param("normalizedQuery", normalizedQuery)
+				.param("pdfAvailableOnly", command.pdfAvailableOnly())
 				.param("limit", command.pageSize() + LocalCatalogCursorCodec.MAX_REMAINING_PAPERS);
 		if (command.yearFrom() != null) {
 			statement = statement.param("yearFrom", command.yearFrom());
@@ -291,6 +303,7 @@ class LocalCatalogSearch {
 				.param("ownerId", ownerId)
 				.param("query", command.query())
 				.param("normalizedQuery", normalizedQuery)
+				.param("pdfAvailableOnly", command.pdfAvailableOnly())
 				.param("paperIds", selectedPaperIds)
 				.query(LocalCatalogSearch::mapRow)
 				.list();

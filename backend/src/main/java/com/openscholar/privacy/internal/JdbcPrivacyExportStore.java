@@ -57,6 +57,7 @@ final class JdbcPrivacyExportStore {
 			       (filters ->> 'yearFrom')::integer AS year_from,
 			       (filters ->> 'yearTo')::integer AS year_to,
 			       (filters ->> 'openAccessOnly')::boolean AS open_access_only,
+			       coalesce((filters ->> 'pdfAvailableOnly')::boolean, false) AS pdf_available_only,
 			       (filters ->> 'minimumCitations')::integer AS minimum_citations,
 			       (filters ->> 'pageSize')::integer AS page_size,
 			       ARRAY(
@@ -180,6 +181,7 @@ final class JdbcPrivacyExportStore {
 						nullableInteger(resultSet, "year_to"),
 						strings(resultSet.getArray("document_types")),
 						resultSet.getBoolean("open_access_only"),
+						resultSet.getBoolean("pdf_available_only"),
 						resultSet.getInt("minimum_citations"),
 						strings(resultSet.getArray("languages")),
 						resultSet.getInt("page_size")),

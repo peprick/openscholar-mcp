@@ -125,3 +125,29 @@ export function selectReaderSource(
     verifiedAt: location.verifiedAt,
   };
 }
+
+export function selectPreferredReaderSource(
+  access: PaperAccessResponse,
+  expectedPaperId: string,
+  now: Date,
+): ReaderSource | null {
+  const preferredLocationIds = [
+    access.bestLocationId,
+    ...access.locations.map((location) => location.id),
+  ].filter((locationId, index, values): locationId is string =>
+    locationId !== null && values.indexOf(locationId) === index,
+  );
+
+  for (const locationId of preferredLocationIds) {
+    const source = selectReaderSource(
+      access,
+      expectedPaperId,
+      locationId,
+      now,
+    );
+    if (source !== null) {
+      return source;
+    }
+  }
+  return null;
+}

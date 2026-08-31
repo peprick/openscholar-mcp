@@ -3,11 +3,14 @@ package com.openscholar.search.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -18,8 +21,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
+import com.openscholar.paper.DocumentType;
 import com.openscholar.provider.ProviderException;
 import com.openscholar.provider.ProviderId;
+import com.openscholar.provider.ProviderPaperRecord;
 import com.openscholar.provider.ProviderSearchBatchResult;
 import com.openscholar.provider.ProviderSearchQuery;
 import com.openscholar.provider.ProviderSearchResult;
@@ -133,6 +138,32 @@ class ResearchProviderFanoutTests {
 	}
 
 	@Test
+	void keepsOnlyProviderRecordsWithReportedPdfLinksWhenRequested() {
+		ProviderPaperRecord withPdf = record(
+				"with-pdf", URI.create("https://repository.example/paper.pdf"));
+		ProviderPaperRecord withoutPdf = record("without-pdf", null);
+		TrackingProvider openAlex = new TrackingProvider(
+				ProviderId.OPENALEX,
+				query -> new ProviderSearchResult(
+						ProviderId.OPENALEX, List.of(withoutPdf, withPdf), 2, null, NOW));
+		ResearchProviderFanout fanout = fanout(List.of(openAlex));
+		ProviderSearchQuery pdfOnly = new ProviderSearchQuery(
+				"graph models", null, null, Set.of(), false, true, 0, Set.of(), 20, "*");
+
+		ProviderSearchBatchResult result = fanout.search(pdfOnly);
+
+		assertThat(result.results()).singleElement().satisfies(providerResult -> {
+			assertThat(providerResult.records())
+					.extracting(ProviderPaperRecord::providerRecordId)
+					.containsExactly("with-pdf");
+			assertThat(providerResult.totalMatches()).isEqualTo(2);
+		});
+		assertThat(openAlex.queries()).singleElement()
+				.extracting(ProviderSearchQuery::pdfAvailableOnly)
+				.isEqualTo(true);
+	}
+
+	@Test
 	void runsFiveProvidersWithinTheDefaultConcurrencyBudgetAndIsolatesOneFailure() throws Exception {
 		List<ProviderId> providerIds = List.of(
 				ProviderId.CORE,
@@ -213,6 +244,29 @@ class ResearchProviderFanoutTests {
 
 	private static ProviderSearchQuery query(String cursor) {
 		return new ProviderSearchQuery("graph models", null, null, Set.of(), false, 0, Set.of(), 20, cursor);
+	}
+
+	private static ProviderPaperRecord record(String id, URI pdfUrl) {
+		return new ProviderPaperRecord(
+				ProviderId.OPENALEX,
+				id,
+				null,
+				null,
+				"Graph models " + id,
+				null,
+				LocalDate.of(2026, 1, 1),
+				2026,
+				DocumentType.ARTICLE,
+				"en",
+				null,
+				0,
+				List.of(),
+				pdfUrl != null,
+				null,
+				pdfUrl,
+				null,
+				NOW,
+				Map.of());
 	}
 
 	private static ProviderException failure(

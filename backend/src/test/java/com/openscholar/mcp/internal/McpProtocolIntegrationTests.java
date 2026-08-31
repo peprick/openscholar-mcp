@@ -149,7 +149,8 @@ class McpProtocolIntegrationTests {
 				"export_citations");
 
 		assertToolContract(tools.get("search_research"),
-				Set.of("topic", "yearFrom", "yearTo", "documentTypes", "openAccessOnly", "minimumCitations",
+				Set.of("topic", "yearFrom", "yearTo", "documentTypes", "openAccessOnly", "pdfAvailableOnly",
+						"minimumCitations",
 						"languages", "limit", "cursor", "forceRefresh", "mode"),
 				Set.of("topic"), false, false, true);
 		assertToolContract(tools.get("get_paper_details"), Set.of("paperId"), Set.of("paperId"), true, true, false);

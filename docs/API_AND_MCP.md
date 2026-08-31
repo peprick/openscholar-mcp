@@ -38,6 +38,7 @@ Example:
     "yearTo": 2026,
     "documentTypes": ["ARTICLE", "PREPRINT", "THESIS"],
     "openAccessOnly": true,
+    "pdfAvailableOnly": true,
     "minimumCitations": 0,
     "languages": ["en"]
   },
@@ -53,6 +54,8 @@ Example:
 - `AUTO` keeps the normal provider/cache pipeline and uses the owner-scoped local catalog only when provider-backed results cannot satisfy the request.
 - `ONLINE` uses provider-backed fetch/cache behavior and never falls back to local-catalog retrieval. Use `forceRefresh=true` when a live provider call, rather than an exact fresh cache hit, is required.
 - `LOCAL` searches previously discovered or saved metadata in PostgreSQL and never contacts a provider. `forceRefresh=true` is invalid in this mode.
+
+`pdfAvailableOnly=true` keeps only records for which a discovery provider supplied a PDF URL. It is an availability hint, not a verified legal-access claim; the paper page still runs the separate exact-identifier access check before enabling in-app reading.
 
 Responses include search ID, query fingerprint, the requested mode, actual execution source, cache disposition, freshness, provider coverage/warnings, results, scores, ranking reasons, provenance, and pagination. `executionSource` is one of `PROVIDER_FETCH`, `EXACT_CACHE`, `STALE_CACHE`, or `LOCAL_CATALOG`; it is the authoritative indication of how the response was produced and can differ from `requestedMode=AUTO`.
 
@@ -256,6 +259,7 @@ Finds provider-backed, cached, or owner-scoped local research metadata.
   "yearTo": 2026,
   "documentTypes": ["ARTICLE", "PREPRINT", "THESIS"],
   "openAccessOnly": true,
+  "pdfAvailableOnly": true,
   "minimumCitations": 0,
   "languages": ["en"],
   "limit": 20,

@@ -64,6 +64,11 @@ describe("SearchForm", () => {
           name: "Show papers marked as open access",
         }),
       );
+      await user.click(
+        screen.getByRole("checkbox", {
+          name: "Only show results with a PDF link",
+        }),
+      );
       await user.click(screen.getByRole("button", { name: "Search papers" }));
 
       await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -78,6 +83,7 @@ describe("SearchForm", () => {
             yearTo: 2026,
             documentTypes: ["ARTICLE", "THESIS"],
             openAccessOnly: true,
+            pdfAvailableOnly: true,
             minimumCitations: 12,
             languages: ["en"],
           },
@@ -111,6 +117,7 @@ describe("SearchForm", () => {
         filters: {
           documentTypes: [],
           openAccessOnly: false,
+          pdfAvailableOnly: false,
           minimumCitations: 0,
           languages: [],
         },

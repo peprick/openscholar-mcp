@@ -505,6 +505,7 @@ public class SearchSnapshotStore {
 		}
 		filters.put("documentTypes", command.documentTypes().stream().map(Enum::name).sorted().toList());
 		filters.put("openAccessOnly", command.openAccessOnly());
+		filters.put("pdfAvailableOnly", command.pdfAvailableOnly());
 		filters.put("minimumCitations", command.minimumCitations());
 		filters.put("languages", command.languages().stream().sorted().toList());
 		filters.put("pageSize", command.pageSize());
@@ -521,6 +522,7 @@ public class SearchSnapshotStore {
 				nullableInteger(filters, "yearTo"),
 				documentTypes(filters.get("documentTypes")),
 				requiredBoolean(filters, "openAccessOnly"),
+				optionalBoolean(filters, "pdfAvailableOnly"),
 				requiredInteger(filters, "minimumCitations"),
 				strings(filters.get("languages"), "languages"),
 				requiredInteger(filters, "pageSize"),
@@ -554,6 +556,10 @@ public class SearchSnapshotStore {
 			return booleanValue;
 		}
 		throw invalidStoredFilter(key);
+	}
+
+	private static boolean optionalBoolean(Map<String, Object> values, String key) {
+		return values.containsKey(key) ? requiredBoolean(values, key) : false;
 	}
 
 	private static String requiredString(Map<String, Object> values, String key) {
@@ -668,6 +674,7 @@ public class SearchSnapshotStore {
 					currentCommand.yearTo(),
 					currentCommand.documentTypes(),
 					currentCommand.openAccessOnly(),
+					currentCommand.pdfAvailableOnly(),
 					currentCommand.minimumCitations(),
 					currentCommand.languages(),
 					currentCommand.pageSize(),

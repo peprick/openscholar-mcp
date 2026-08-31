@@ -13,6 +13,7 @@ public record ProviderSearchQuery(
 		Integer yearTo,
 		Set<DocumentType> documentTypes,
 		boolean openAccessOnly,
+		boolean pdfAvailableOnly,
 		int minimumCitations,
 		Set<String> languages,
 		int pageSize,
@@ -27,5 +28,19 @@ public record ProviderSearchQuery(
 						.map(language -> language.toLowerCase(Locale.ROOT))
 						.collect(Collectors.toUnmodifiableSet());
 		cursor = cursor == null || cursor.isBlank() ? "*" : cursor;
+	}
+
+	public ProviderSearchQuery(
+			String query,
+			Integer yearFrom,
+			Integer yearTo,
+			Set<DocumentType> documentTypes,
+			boolean openAccessOnly,
+			int minimumCitations,
+			Set<String> languages,
+			int pageSize,
+			String cursor) {
+		this(query, yearFrom, yearTo, documentTypes, openAccessOnly, false,
+				minimumCitations, languages, pageSize, cursor);
 	}
 }

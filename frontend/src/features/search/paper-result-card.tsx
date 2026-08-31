@@ -53,6 +53,9 @@ export function PaperResultCard({
           {result.reportedOpenAccess ? (
             <Badge tone="positive">Open access reported</Badge>
           ) : null}
+          {result.reportedPdfUrl !== null ? (
+            <Badge tone="info">PDF link found</Badge>
+          ) : null}
         </div>
         <h2>
           <Link href={`/papers/${result.paperId}` as Route}>{result.title}</Link>

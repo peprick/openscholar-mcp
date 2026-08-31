@@ -13,6 +13,7 @@ public record SearchCommand(
 		Integer yearTo,
 		Set<DocumentType> documentTypes,
 		boolean openAccessOnly,
+		boolean pdfAvailableOnly,
 		int minimumCitations,
 		Set<String> languages,
 		int pageSize,
@@ -66,8 +67,24 @@ public record SearchCommand(
 			Set<String> languages,
 			int pageSize,
 			String cursor,
+			boolean forceRefresh,
+			SearchMode mode) {
+		this(query, yearFrom, yearTo, documentTypes, openAccessOnly, false, minimumCitations,
+				languages, pageSize, cursor, forceRefresh, mode);
+	}
+
+	public SearchCommand(
+			String query,
+			Integer yearFrom,
+			Integer yearTo,
+			Set<DocumentType> documentTypes,
+			boolean openAccessOnly,
+			int minimumCitations,
+			Set<String> languages,
+			int pageSize,
+			String cursor,
 			boolean forceRefresh) {
-		this(query, yearFrom, yearTo, documentTypes, openAccessOnly, minimumCitations,
+		this(query, yearFrom, yearTo, documentTypes, openAccessOnly, false, minimumCitations,
 				languages, pageSize, cursor, forceRefresh, SearchMode.AUTO);
 	}
 }

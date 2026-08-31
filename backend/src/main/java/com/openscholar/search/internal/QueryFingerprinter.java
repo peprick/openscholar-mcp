@@ -87,6 +87,7 @@ class QueryFingerprinter {
 				"yearTo=" + nullable(command.yearTo()),
 				"documentTypes=" + types,
 				"openAccessOnly=" + command.openAccessOnly(),
+				"pdfAvailableOnly=" + command.pdfAvailableOnly(),
 				"minimumCitations=" + command.minimumCitations(),
 				"languages=" + languages,
 				"pageSize=" + command.pageSize(),

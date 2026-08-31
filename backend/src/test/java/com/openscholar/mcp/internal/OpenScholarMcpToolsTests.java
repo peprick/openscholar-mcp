@@ -156,6 +156,7 @@ class OpenScholarMcpToolsTests {
 		assertThat(search.command.yearTo()).isNull();
 		assertThat(search.command.documentTypes()).isEmpty();
 		assertThat(search.command.openAccessOnly()).isFalse();
+		assertThat(search.command.pdfAvailableOnly()).isFalse();
 		assertThat(search.command.minimumCitations()).isZero();
 		assertThat(search.command.languages()).isEmpty();
 		assertThat(search.command.pageSize()).isEqualTo(20);
@@ -167,7 +168,7 @@ class OpenScholarMcpToolsTests {
 	@Test
 	void searchResearchMapsExplicitValuesAndAcceptsTheInclusivePageCap() {
 		OpenScholarMcpTools.SearchResearchToolResult result = tools.searchResearch("graph agents", 2020, 2026,
-				Set.of(DocumentType.ARTICLE, DocumentType.THESIS), true, 7, Set.of("EN", "Fr"), 25,
+				Set.of(DocumentType.ARTICLE, DocumentType.THESIS), true, true, 7, Set.of("EN", "Fr"), 25,
 				"opaque-cursor", true, SearchMode.ONLINE);
 
 		assertThat(result.searchId()).isEqualTo(searchView.searchId());
@@ -175,6 +176,7 @@ class OpenScholarMcpToolsTests {
 		assertThat(search.command.yearTo()).isEqualTo(2026);
 		assertThat(search.command.documentTypes()).containsExactlyInAnyOrder(DocumentType.ARTICLE, DocumentType.THESIS);
 		assertThat(search.command.openAccessOnly()).isTrue();
+		assertThat(search.command.pdfAvailableOnly()).isTrue();
 		assertThat(search.command.minimumCitations()).isEqualTo(7);
 		assertThat(search.command.languages()).containsExactlyInAnyOrder("en", "fr");
 		assertThat(search.command.pageSize()).isEqualTo(25);

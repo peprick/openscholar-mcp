@@ -123,6 +123,9 @@ public class OpenScholarMcpTools {
 					required = false) Set<DocumentType> documentTypes,
 			@McpToolParam(description = "Return only records reported open access by the discovery provider",
 					required = false) Boolean openAccessOnly,
+			@McpToolParam(description = "Return only records for which a discovery provider reports a PDF link. "
+					+ "The link is still verified separately before reading",
+					required = false) Boolean pdfAvailableOnly,
 			@McpToolParam(description = "Minimum citation count; defaults to zero",
 					required = false) Integer minimumCitations,
 			@McpToolParam(description = "Optional two- or three-letter language codes",
@@ -139,9 +142,26 @@ public class OpenScholarMcpTools {
 		return execute("search_research",
 				() -> SearchResearchToolResult.from(searchUseCase.search(new SearchCommand(topic, yearFrom, yearTo,
 						validateDocumentTypes(documentTypes),
-						Boolean.TRUE.equals(openAccessOnly), defaulted(minimumCitations, 0),
+						Boolean.TRUE.equals(openAccessOnly), Boolean.TRUE.equals(pdfAvailableOnly),
+						defaulted(minimumCitations, 0),
 						validateLanguages(languages), boundedPageSize(limit, 20), cursor,
 						Boolean.TRUE.equals(forceRefresh), mode == null ? SearchMode.AUTO : mode))));
+	}
+
+	public SearchResearchToolResult searchResearch(
+			String topic,
+			Integer yearFrom,
+			Integer yearTo,
+			Set<DocumentType> documentTypes,
+			Boolean openAccessOnly,
+			Integer minimumCitations,
+			Set<String> languages,
+			Integer limit,
+			String cursor,
+			Boolean forceRefresh,
+			SearchMode mode) {
+		return searchResearch(topic, yearFrom, yearTo, documentTypes, openAccessOnly, false,
+				minimumCitations, languages, limit, cursor, forceRefresh, mode);
 	}
 
 	@McpTool(name = "get_paper_details", title = "Get paper details",

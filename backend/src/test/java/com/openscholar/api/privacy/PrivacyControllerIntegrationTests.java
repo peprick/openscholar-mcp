@@ -79,7 +79,7 @@ class PrivacyControllerIntegrationTests {
 				    provider_coverage, warnings, total_provider_matches, result_count, created_at
 				)
 				VALUES (?, ?, 'private doctoral topic', 'private doctoral topic', ?, 1, 'test-v1',
-				        '{"yearFrom":2020,"documentTypes":["THESIS"],"openAccessOnly":true,"minimumCitations":2,"languages":["en"],"pageSize":10,"cursor":"*"}'::jsonb,
+				        '{"yearFrom":2020,"documentTypes":["THESIS"],"openAccessOnly":true,"pdfAvailableOnly":true,"minimumCitations":2,"languages":["en"],"pageSize":10,"cursor":"*"}'::jsonb,
 				        'COMPLETED', ?, ?, '[]'::jsonb, '["CORE_UNAVAILABLE"]'::jsonb, 7, 1, ?)
 				""", searchId, LOCAL_USER_ID, "b".repeat(64), now, now.plusHours(1), now);
 		jdbcTemplate.update("""
@@ -117,6 +117,7 @@ class PrivacyControllerIntegrationTests {
 				.andExpect(jsonPath("$.searches[0].filters.yearTo").doesNotExist())
 				.andExpect(jsonPath("$.searches[0].filters.documentTypes[0]").value("THESIS"))
 				.andExpect(jsonPath("$.searches[0].filters.openAccessOnly").value(true))
+				.andExpect(jsonPath("$.searches[0].filters.pdfAvailableOnly").value(true))
 				.andExpect(jsonPath("$.searches[0].filters.languages[0]").value("en"))
 				.andExpect(jsonPath("$.searches[0].warnings[0]").value("CORE_UNAVAILABLE"))
 				.andExpect(jsonPath("$.collections[0].name").value("My reading"))

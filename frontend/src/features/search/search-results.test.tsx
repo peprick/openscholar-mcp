@@ -37,6 +37,7 @@ describe("SearchResults", () => {
     expect(screen.queryByText("Provider coverage")).not.toBeInTheDocument();
     expect(screen.queryByText(/Score:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Fresh until/)).not.toBeInTheDocument();
+    expect(screen.getByText("PDF link found")).toBeVisible();
   });
 
   it("explains an intentional local search in plain language", () => {

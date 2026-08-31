@@ -96,6 +96,7 @@ function initialState() {
           yearTo: 2026,
           documentTypes: ["ARTICLE"],
           openAccessOnly: true,
+          pdfAvailableOnly: true,
           minimumCitations: 5,
           languages: ["en"],
           pageSize: 20,

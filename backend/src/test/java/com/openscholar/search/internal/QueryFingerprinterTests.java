@@ -43,8 +43,12 @@ class QueryFingerprinterTests {
 		SearchCommand base = command("Graph Neural Networks", false, Set.of(), Set.of());
 		SearchCommand filtered = new SearchCommand(
 				base.query(), 2020, 2026, Set.of(), true, 5, Set.of("en"), 20, "next", false);
+		SearchCommand pdfFiltered = new SearchCommand(
+				base.query(), null, null, Set.of(), false, true, 0, Set.of(), 20, "*", false,
+				SearchMode.AUTO);
 
 		assertThat(fingerprinter.fingerprint(base)).isNotEqualTo(fingerprinter.fingerprint(filtered));
+		assertThat(fingerprinter.fingerprint(base)).isNotEqualTo(fingerprinter.fingerprint(pdfFiltered));
 		assertThat(fingerprinter.fingerprint(base)).hasSize(64);
 	}
 
@@ -83,7 +87,7 @@ class QueryFingerprinterTests {
 				.isNotEqualTo(fingerprinter.onlineFingerprint(online));
 		assertThat(fingerprinter.localFingerprint(auto))
 				.isNotEqualTo(fingerprinter.onlineFingerprint(auto));
-		assertThat(fingerprinter.fingerprintVersion()).isEqualTo(2);
+		assertThat(fingerprinter.fingerprintVersion()).isEqualTo(3);
 		assertThat(fingerprinter.localPipelineVersion()).isEqualTo("local-catalog-v1");
 	}
 

@@ -36,6 +36,7 @@ function requestFrom(form: HTMLFormElement, mode: SearchMode): unknown {
         .getAll("documentTypes")
         .map((value) => String(value)),
       openAccessOnly: formData.get("openAccessOnly") === "on",
+      pdfAvailableOnly: formData.get("pdfAvailableOnly") === "on",
       minimumCitations: optionalInteger(formData, "minimumCitations") ?? 0,
       languages: language === "" ? [] : [language],
     },
@@ -224,7 +225,7 @@ export function SearchForm({
       <details className="filterPanel">
         <summary>
           Refine search
-          <span>Year, type, language, and citations</span>
+          <span>Year, type, access, language, and citations</span>
         </summary>
         <div className="filterGrid">
           <div className="fieldGroup fieldGroup--years">
@@ -320,6 +321,10 @@ export function SearchForm({
           <label className="checkControl">
             <input name="openAccessOnly" type="checkbox" />
             <span>Show papers marked as open access</span>
+          </label>
+          <label className="checkControl">
+            <input name="pdfAvailableOnly" type="checkbox" />
+            <span>Only show results with a PDF link</span>
           </label>
         </div>
       </details>

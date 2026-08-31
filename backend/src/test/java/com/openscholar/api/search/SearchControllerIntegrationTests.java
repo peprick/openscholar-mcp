@@ -260,6 +260,43 @@ class SearchControllerIntegrationTests {
 	}
 
 	@Test
+	void localSearchCanRequireAProviderReportedPdfLink() throws Exception {
+		String topic = "local pdf filter " + UUID.randomUUID().toString().replace("-", "");
+		provider.changeTitle(topic + " available");
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request("seed pdf " + UUID.randomUUID(), false, "ONLINE")))
+				.andExpect(status().isCreated());
+
+		provider.reset();
+		provider.withoutPdf();
+		provider.changeTitle(topic + " metadata only");
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(request("seed metadata " + UUID.randomUUID(), false, "ONLINE")))
+				.andExpect(status().isCreated());
+		provider.clearObservations();
+
+		mockMvc.perform(post("/api/v1/searches")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "query": "%s",
+							  "mode": "LOCAL",
+							  "filters": {
+							    "pdfAvailableOnly": true
+							  }
+							}
+							""".formatted(topic)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.executionSource").value("LOCAL_CATALOG"))
+				.andExpect(jsonPath("$.results.length()").value(1))
+				.andExpect(jsonPath("$.results[0].title").value(topic + " available"))
+				.andExpect(jsonPath("$.results[0].reportedPdfUrl").isNotEmpty());
+		org.assertj.core.api.Assertions.assertThat(provider.calls()).isZero();
+	}
+
+	@Test
 	void autoSearchFallsBackToTheOwnerScopedLocalCatalogWhenTheProviderIsUnavailable() throws Exception {
 		String title = "Automatic local fallback " + UUID.randomUUID().toString().replace("-", "");
 		provider.changeTitle(title);
@@ -372,6 +409,7 @@ class SearchControllerIntegrationTests {
 								    "yearTo": 2024,
 								    "documentTypes": ["ARTICLE", "THESIS"],
 								    "openAccessOnly": true,
+								    "pdfAvailableOnly": true,
 								    "minimumCitations": 7,
 								    "languages": ["EN", "fr"]
 								  },
@@ -410,6 +448,7 @@ class SearchControllerIntegrationTests {
 			org.assertj.core.api.Assertions.assertThat(continued.documentTypes())
 					.containsExactlyInAnyOrder(DocumentType.ARTICLE, DocumentType.THESIS);
 			org.assertj.core.api.Assertions.assertThat(continued.openAccessOnly()).isTrue();
+			org.assertj.core.api.Assertions.assertThat(continued.pdfAvailableOnly()).isTrue();
 			org.assertj.core.api.Assertions.assertThat(continued.minimumCitations()).isEqualTo(7);
 			org.assertj.core.api.Assertions.assertThat(continued.languages())
 					.containsExactlyInAnyOrder("en", "fr");
@@ -495,6 +534,7 @@ class SearchControllerIntegrationTests {
 		private final MutableClock clock;
 		private final AtomicInteger calls = new AtomicInteger();
 		private final AtomicBoolean failing = new AtomicBoolean();
+		private final AtomicBoolean pdfOmitted = new AtomicBoolean();
 		private final List<ProviderSearchQuery> queries = new CopyOnWriteArrayList<>();
 		private String recordId;
 		private String doi;
@@ -541,7 +581,7 @@ class SearchControllerIntegrationTests {
 					List.of(new ProviderAuthor("A987654321", "Ada Researcher", null, 0, true)),
 					true,
 					URI.create("https://example.org/paper"),
-					URI.create("https://example.org/paper.pdf"),
+					pdfOmitted.get() ? null : URI.create("https://example.org/paper.pdf"),
 					42.5,
 					retrievedAt.minus(Duration.ofDays(1)),
 					Map.of("oaStatus", "gold"),
@@ -564,6 +604,7 @@ class SearchControllerIntegrationTests {
 		void reset() {
 			calls.set(0);
 			failing.set(false);
+			pdfOmitted.set(false);
 			queries.clear();
 			String suffix = UUID.randomUUID().toString().replace("-", "");
 			recordId = "W" + suffix;
@@ -575,6 +616,10 @@ class SearchControllerIntegrationTests {
 
 		void fail() {
 			failing.set(true);
+		}
+
+		void withoutPdf() {
+			pdfOmitted.set(true);
 		}
 
 		void clearObservations() {

@@ -29,6 +29,7 @@ public record CreateSearchRequest(
 				effectiveFilters.yearTo(),
 				effectiveFilters.safeDocumentTypes(),
 				Boolean.TRUE.equals(effectiveFilters.openAccessOnly()),
+				Boolean.TRUE.equals(effectiveFilters.pdfAvailableOnly()),
 				effectiveFilters.minimumCitations() == null ? 0 : effectiveFilters.minimumCitations(),
 				effectiveFilters.safeLanguages(),
 				pageSize == null ? 20 : pageSize,
@@ -47,11 +48,12 @@ public record CreateSearchRequest(
 			@Min(1000) @Max(9999) Integer yearTo,
 			@Size(max = 12) Set<DocumentType> documentTypes,
 			Boolean openAccessOnly,
+			Boolean pdfAvailableOnly,
 			@Min(0) Integer minimumCitations,
 			@Size(max = 20) Set<@Pattern(regexp = "(?i)[a-z]{2,3}") String> languages) {
 
 		static Filters defaults() {
-			return new Filters(null, null, Set.of(), false, 0, Set.of());
+			return new Filters(null, null, Set.of(), false, false, 0, Set.of());
 		}
 
 		Set<DocumentType> safeDocumentTypes() {

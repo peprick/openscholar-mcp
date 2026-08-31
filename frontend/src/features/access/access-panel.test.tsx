@@ -78,17 +78,22 @@ describe("AccessPanel", () => {
       />,
     );
 
-    const readerLink = screen.getByRole("link", {
-      name: "Read here",
+    const primaryReaderLink = screen.getByRole("link", {
+      name: "Read PDF",
     });
-    expect(readerLink).toHaveAttribute(
+    expect(primaryReaderLink).toHaveAttribute(
       "href",
       `/papers/${testIds.paper}/read/${testIds.location}`,
     );
-    expect(readerLink).not.toHaveAttribute("target");
+    expect(primaryReaderLink).not.toHaveAttribute("target");
+
+    expect(screen.getByRole("link", { name: "Read this PDF" })).toHaveAttribute(
+      "href",
+      `/papers/${testIds.paper}/read/${testIds.location}`,
+    );
 
     const externalLink = screen.getByRole("link", {
-      name: /Open PDF in a new tab/,
+      name: /Open original PDF/,
     });
     expect(externalLink).toHaveAttribute("href", verifiedPdf);
     expect(externalLink).toHaveAttribute("target", "_blank");
@@ -115,7 +120,7 @@ describe("AccessPanel", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: "Read here" }),
+      screen.queryByRole("link", { name: "Read PDF" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Open full-text page/ }),
@@ -141,7 +146,7 @@ describe("AccessPanel", () => {
     expect(screen.getByText("No free version")).toBeVisible();
     expect(screen.getByText("No free full text found yet.")).toBeVisible();
     expect(
-      screen.queryByRole("link", { name: "Read here" }),
+      screen.queryByRole("link", { name: "Read PDF" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(
@@ -187,10 +192,10 @@ describe("AccessPanel", () => {
     );
 
     expect(
-      screen.queryByRole("link", { name: "Read here" }),
+      screen.queryByRole("link", { name: "Read PDF" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open PDF in a new tab/ }),
+      screen.getByRole("link", { name: /Open original PDF/ }),
     ).toBeVisible();
     expect(
       screen.getByText(
@@ -214,16 +219,16 @@ describe("AccessPanel", () => {
       />,
     );
     expect(
-      screen.getByRole("link", { name: "Read here" }),
+      screen.getByRole("link", { name: "Read PDF" }),
     ).toBeVisible();
 
     await act(async () => vi.advanceTimersByTimeAsync(1_001));
 
     expect(
-      screen.queryByRole("link", { name: "Read here" }),
+      screen.queryByRole("link", { name: "Read PDF" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Open PDF in a new tab/ }),
+      screen.getByRole("link", { name: /Open original PDF/ }),
     ).toBeVisible();
   });
 
@@ -250,7 +255,7 @@ describe("AccessPanel", () => {
     );
 
     expect(
-      await screen.findByRole("link", { name: "Read here" }),
+      await screen.findByRole("link", { name: "Read PDF" }),
     ).toHaveAttribute(
       "href",
       `/papers/${testIds.paper}/read/${testIds.location}`,
@@ -292,7 +297,7 @@ describe("AccessPanel", () => {
       ),
     ).toBeVisible();
     expect(
-      screen.queryByRole("link", { name: "Read here" }),
+      screen.queryByRole("link", { name: "Read PDF" }),
     ).not.toBeInTheDocument();
   });
 

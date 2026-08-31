@@ -53,7 +53,7 @@ public record PrivacyExport(
 
 	@JsonInclude(JsonInclude.Include.ALWAYS)
 	@JsonPropertyOrder({
-		"yearFrom", "yearTo", "documentTypes", "openAccessOnly",
+		"yearFrom", "yearTo", "documentTypes", "openAccessOnly", "pdfAvailableOnly",
 		"minimumCitations", "languages", "pageSize"
 	})
 	public record PrivacySearchFilters(
@@ -61,6 +61,7 @@ public record PrivacyExport(
 			Integer yearTo,
 			List<String> documentTypes,
 			boolean openAccessOnly,
+			boolean pdfAvailableOnly,
 			int minimumCitations,
 			List<String> languages,
 			int pageSize) {

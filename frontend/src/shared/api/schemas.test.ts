@@ -22,6 +22,7 @@ describe("backend response schemas", () => {
       query: "graph neural networks",
     });
     expect(automatic.mode).toBe("AUTO");
+    expect(automatic.filters.pdfAvailableOnly).toBe(false);
 
     for (const mode of ["AUTO", "ONLINE", "LOCAL"] as const) {
       expect(

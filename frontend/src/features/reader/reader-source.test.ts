@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  selectPreferredReaderSource,
   selectReaderSource,
   selectVerifiedPdfLocation,
 } from "@/features/reader/reader-source";
@@ -210,5 +211,51 @@ describe("reader source selection", () => {
     expect(
       selectReaderSource(access, testIds.paper, requestedLocationId, now)?.pdfUrl,
     ).toBe("https://canonical.example/paper.pdf");
+  });
+
+  it("prefers the canonical best readable PDF for the primary reader action", () => {
+    const preferredLocationId = "72cc70a9-76ea-4719-b571-a244594f63d4";
+    const access = paperAccessResponseFixture({
+      bestLocationId: preferredLocationId,
+      freshUntil: "2026-08-19T12:00:00Z",
+      locations: [
+        paperAccessLocationFixture(),
+        paperAccessLocationFixture({
+          id: preferredLocationId,
+          pdfUrl: "https://canonical.example/preferred.pdf",
+        }),
+      ],
+    });
+
+    expect(
+      selectPreferredReaderSource(access, testIds.paper, now),
+    ).toMatchObject({
+      locationId: preferredLocationId,
+      pdfUrl: "https://canonical.example/preferred.pdf",
+    });
+  });
+
+  it("falls back to another readable PDF when the best location is landing-page only", () => {
+    const landingLocationId = "72cc70a9-76ea-4719-b571-a244594f63d4";
+    const readableLocationId = "cd30143b-8e07-4a29-a979-ecf09c70bf6c";
+    const access = paperAccessResponseFixture({
+      bestLocationId: landingLocationId,
+      freshUntil: "2026-08-19T12:00:00Z",
+      locations: [
+        paperAccessLocationFixture({
+          id: landingLocationId,
+          accessStatus: "OPEN_LANDING_PAGE",
+          pdfUrl: null,
+        }),
+        paperAccessLocationFixture({
+          id: readableLocationId,
+          pdfUrl: "https://repository.example/fallback.pdf",
+        }),
+      ],
+    });
+
+    expect(
+      selectPreferredReaderSource(access, testIds.paper, now)?.locationId,
+    ).toBe(readableLocationId);
   });
 });

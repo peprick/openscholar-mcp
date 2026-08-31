@@ -191,7 +191,7 @@ test("paper sources distinguish readable links from restricted access", async ({
   await expect(page.getByText("Author details")).toBeVisible();
   await expect(page.getByText("Free PDF", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read here" }),
+    page.getByRole("link", { name: "Read PDF" }),
   ).toBeVisible();
   await expect(page.getByText("CC-BY-4.0")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
@@ -211,7 +211,7 @@ test("paper sources distinguish readable links from restricted access", async ({
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read here" }),
+    page.getByRole("link", { name: "Read PDF" }),
   ).toHaveCount(0);
   await expect(page.getByText("Cache state")).toHaveCount(0);
   await expect(page.getByText("Access provider coverage")).toHaveCount(0);

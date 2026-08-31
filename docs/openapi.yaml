@@ -1402,6 +1402,10 @@ components:
         openAccessOnly:
           type: [boolean, "null"]
           default: false
+        pdfAvailableOnly:
+          type: [boolean, "null"]
+          default: false
+          description: Keeps records where a discovery provider reported a PDF URL; this does not verify legal access.
         minimumCitations:
           type: [integer, "null"]
           format: int32
@@ -2674,6 +2678,7 @@ components:
         - yearTo
         - documentTypes
         - openAccessOnly
+        - pdfAvailableOnly
         - minimumCitations
         - languages
         - pageSize
@@ -2696,6 +2701,9 @@ components:
             $ref: "#/components/schemas/DocumentType"
         openAccessOnly:
           type: boolean
+        pdfAvailableOnly:
+          type: boolean
+          description: Whether the search required a provider-reported PDF URL.
         minimumCitations:
           type: integer
           format: int32

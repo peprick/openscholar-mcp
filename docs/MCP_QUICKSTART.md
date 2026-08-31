@@ -198,6 +198,7 @@ A search call uses the same endpoint:
       "yearTo": 2026,
       "documentTypes": ["ARTICLE", "PREPRINT"],
       "openAccessOnly": true,
+      "pdfAvailableOnly": true,
       "languages": ["en"],
       "limit": 10,
       "mode": "AUTO"

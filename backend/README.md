@@ -74,6 +74,7 @@ curl --request POST http://127.0.0.1:8080/api/v1/searches \
       "yearFrom": 2021,
       "documentTypes": ["ARTICLE", "PREPRINT"],
       "openAccessOnly": true,
+      "pdfAvailableOnly": true,
       "languages": ["en"]
     },
     "pageSize": 20

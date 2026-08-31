@@ -18,6 +18,7 @@ The setup, operation, and development instructions below are for copyright holde
 
 - Searches OpenAlex by default, with optional Europe PMC, DataCite, DOAJ, and licence-gated CORE discovery adapters.
 - Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
+- Filters online or local results to records where a discovery provider reported a PDF link, while keeping legal-access verification separate before reading.
 - Installs as a PWA with an account-neutral fallback and one explicit, passphrase-encrypted, metadata-only offline collection; server-backed search still requires the local or hosted OpenScholar stack.
 - Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, PMID, PMCID, and provider identity.
 - Opens an owner-visible canonical paper directly from a DOI, arXiv, or OpenAlex reference without calling a provider.
