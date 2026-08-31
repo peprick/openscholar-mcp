@@ -303,7 +303,10 @@ function requirePrivateUnlicensedPackage(path, expectedDirectory) {
 }
 
 function requireFileSha256(path, expected) {
-  const actual = createHash("sha256").update(read(path)).digest("hex");
+  const content = path.endsWith(".cmd")
+    ? read(path).replaceAll("\r\n", "\n")
+    : read(path);
+  const actual = createHash("sha256").update(content).digest("hex");
   if (actual !== expected) {
     failures.push(`${path}: SHA-256 must be ${expected}, found ${actual}`);
   }

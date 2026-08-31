@@ -97,6 +97,21 @@ try {
   rmSync(baseline, { recursive: true, force: true });
 }
 
+const crlfBaseline = fixture();
+try {
+  const wrapperPath = join(crlfBaseline, "backend/mvnw.cmd");
+  const wrapper = readFileSync(wrapperPath, "utf8").replaceAll("\r\n", "\n");
+  writeFileSync(wrapperPath, wrapper.replaceAll("\n", "\r\n"));
+  const result = run(crlfBaseline);
+  if (result.status !== 0) {
+    throw new Error(
+      `CRLF wrapper policy failed: stdout=${result.stdout} stderr=${result.stderr}`,
+    );
+  }
+} finally {
+  rmSync(crlfBaseline, { recursive: true, force: true });
+}
+
 expectMutationFailure(
   "Maven license-name drift",
   (root) => replace(

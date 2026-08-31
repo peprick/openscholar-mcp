@@ -32,6 +32,9 @@ replay_pid*.log
 
 # Node.js and Next.js
 **/node_modules/
+**/.cache/
+**/.turbo/
+**/.nyc_output/
 /.pnpm-store/
 /frontend/.next/
 /frontend/.vercel/
@@ -48,6 +51,8 @@ replay_pid*.log
 
 # Logs and local runtime data
 *.log
+*.pid
+*.pid.lock
 /tmp/
 /data/
 /documents/
