@@ -101,6 +101,37 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static final ConnectionOpener POSTGRES_OPENER =
 			RelatedTopicReuseHoldoutPostgresTlsConnectionFactory::openPostgresConnection;
+	private static final FileAccessInspector SYSTEM_FILE_ACCESS_INSPECTOR =
+			new FileAccessInspector() {
+				@Override
+				public String owner(Path path) throws IOException {
+					return Files.getOwner(path, LinkOption.NOFOLLOW_LINKS).getName();
+				}
+
+				@Override
+				public boolean readable(Path path) {
+					return Files.isReadable(path);
+				}
+
+				@Override
+				public boolean writable(Path path) {
+					return Files.isWritable(path);
+				}
+
+				@Override
+				public Set<PosixFilePermission> permissions(Path path)
+						throws IOException {
+					return Set.copyOf(Files.getPosixFilePermissions(
+							path, LinkOption.NOFOLLOW_LINKS));
+				}
+
+				@Override
+				public boolean hasVisibleAcl(Path path) throws IOException {
+					AclFileAttributeView view = Files.getFileAttributeView(
+							path, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+					return view != null && !view.getAcl().isEmpty();
+				}
+			};
 
 	private RelatedTopicReuseHoldoutPostgresTlsConnectionFactory() {
 	}
@@ -109,16 +140,21 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			EndpointRecord endpoint,
 			RuntimeFiles files) throws PreflightException {
 		return new RelatedTopicReuseHoldoutPostgresFirstRunLedger(
-				preflightSource(endpoint, files, POSTGRES_OPENER));
+				preflightSource(
+						endpoint,
+						files,
+						POSTGRES_OPENER,
+						SYSTEM_FILE_ACCESS_INSPECTOR));
 	}
 
 	private static VerifiedRuntimeConnectionSource preflightSource(
 			EndpointRecord endpoint,
 			RuntimeFiles files,
-			ConnectionOpener opener) throws PreflightException {
+			ConnectionOpener opener,
+			FileAccessInspector fileAccessInspector) throws PreflightException {
 		ValidatedConfiguration configuration = null;
 		try {
-			configuration = validate(endpoint, files);
+			configuration = validate(endpoint, files, fileAccessInspector);
 			try (Connection connection = openVerifiedConnection(configuration, opener)) {
 				// The close is part of the Phase-A probe and must succeed.
 			}
@@ -140,8 +176,9 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 
 	private static ValidatedConfiguration validate(
 			EndpointRecord endpoint,
-			RuntimeFiles files) throws SafeFailure {
-		if (endpoint == null || files == null) {
+			RuntimeFiles files,
+			FileAccessInspector fileAccessInspector) throws SafeFailure {
+		if (endpoint == null || files == null || fileAccessInspector == null) {
 			throw failure("HOLDOUT_LEDGER_TLS_CONFIGURATION_INVALID");
 		}
 		if (!POSTGRESQL_DRIVER_VERSION.equals(
@@ -168,9 +205,16 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			throw failure("HOLDOUT_LEDGER_TLS_CONFIGURATION_INVALID");
 		}
 
-		validateCaPath(caCertificate, expectedCaOwner, expectedOwner);
+		validateCaPath(
+				caCertificate,
+				expectedCaOwner,
+				expectedOwner,
+				fileAccessInspector);
 		ReadFile ca = readStableFile(
-				caCertificate, MAXIMUM_CA_BYTES, "HOLDOUT_LEDGER_TLS_CA_INVALID");
+				caCertificate,
+				MAXIMUM_CA_BYTES,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID",
+				fileAccessInspector);
 		try {
 			if (ca.bytes().length == 0
 					|| !constantTimeDigestEquals(endpoint.caSha256(), ca.bytes())) {
@@ -181,11 +225,12 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			Arrays.fill(ca.bytes(), (byte) 0);
 		}
 
-		validateSecretPath(passwordFile, expectedOwner);
+		validateSecretPath(passwordFile, expectedOwner, fileAccessInspector);
 		ReadFile password = readStableFile(
 				passwordFile,
 				MAXIMUM_PASSWORD_BYTES,
-				"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID",
+				fileAccessInspector);
 		byte[] passwordBindingKey = new byte[32];
 		byte[] passwordBinding = null;
 		char[] passwordCharacters = null;
@@ -214,7 +259,8 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 				passwordBindingKey,
 				passwordBinding,
 				expectedCaOwner,
-				expectedOwner);
+				expectedOwner,
+				fileAccessInspector);
 	}
 
 	private static InetAddress validateEndpoint(EndpointRecord endpoint)
@@ -249,6 +295,7 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 	}
 
 	private static void revalidate(ValidatedConfiguration expected) throws SafeFailure {
+		FileAccessInspector fileAccessInspector = expected.fileAccessInspector();
 		if (!POSTGRESQL_DRIVER_VERSION.equals(
 				PGSimpleDataSource.class.getPackage().getImplementationVersion())
 				|| !validateEndpoint(expected.endpoint()).equals(expected.expectedAddress())
@@ -269,11 +316,13 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		validateCaPath(
 				expected.caCertificate(),
 				expected.expectedCaOwner(),
-				expected.expectedOwner());
+				expected.expectedOwner(),
+				fileAccessInspector);
 		ReadFile ca = readStableFile(
 				expected.caCertificate(),
 				MAXIMUM_CA_BYTES,
-				"HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED");
+				"HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED",
+				fileAccessInspector);
 		try {
 			if (!expected.caSnapshot().equals(ca.snapshot())
 					|| !constantTimeDigestEquals(
@@ -284,7 +333,10 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		finally {
 			Arrays.fill(ca.bytes(), (byte) 0);
 		}
-		validateSecretPath(expected.passwordFile(), expected.expectedOwner());
+		validateSecretPath(
+				expected.passwordFile(),
+				expected.expectedOwner(),
+				fileAccessInspector);
 	}
 
 	private static Connection openVerifiedConnection(
@@ -327,11 +379,14 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			throw failure("HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED");
 		}
 		validateSecretPath(
-				configuration.passwordFile(), configuration.expectedOwner());
+				configuration.passwordFile(),
+				configuration.expectedOwner(),
+				configuration.fileAccessInspector());
 		ReadFile password = readStableFile(
 				configuration.passwordFile(),
 				MAXIMUM_PASSWORD_BYTES,
-				"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID",
+				configuration.fileAccessInspector());
 		char[] decoded = null;
 		try {
 			if (!configuration.passwordSnapshot().equals(password.snapshot())
@@ -667,34 +722,61 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 	private static void validateCaPath(
 			Path caCertificate,
 			String expectedCaOwner,
-			String evaluatorOwner) throws SafeFailure {
+			String evaluatorOwner,
+			FileAccessInspector fileAccessInspector) throws SafeFailure {
 		Path parent = caCertificate.getParent();
 		if (parent == null) {
 			throw failure("HOLDOUT_LEDGER_TLS_CA_INVALID");
 		}
 		canonicalDirectory(parent, "HOLDOUT_LEDGER_TLS_CA_INVALID");
 		Set<PosixFilePermission> filePermissions = permissions(
-				caCertificate, "HOLDOUT_LEDGER_TLS_CA_INVALID");
-		rejectVisibleAcl(caCertificate, "HOLDOUT_LEDGER_TLS_CA_INVALID");
-		if (!owner(parent, "HOLDOUT_LEDGER_TLS_CA_INVALID").equals(expectedCaOwner)
-				|| !owner(caCertificate, "HOLDOUT_LEDGER_TLS_CA_INVALID")
+				caCertificate,
+				fileAccessInspector,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+		rejectVisibleAcl(
+				caCertificate,
+				fileAccessInspector,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+		if (!owner(parent, fileAccessInspector, "HOLDOUT_LEDGER_TLS_CA_INVALID")
+					.equals(expectedCaOwner)
+				|| !owner(
+						caCertificate,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_CA_INVALID")
 						.equals(expectedCaOwner)
 				|| filePermissions.contains(PosixFilePermission.GROUP_WRITE)
 				|| filePermissions.contains(PosixFilePermission.OTHERS_WRITE)
-				|| !Files.isReadable(caCertificate)
-				|| Files.isWritable(caCertificate)
+				|| !readable(
+						caCertificate,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_CA_INVALID")
+				|| writable(
+						caCertificate,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_CA_INVALID")
 				|| linkCount(caCertificate, "HOLDOUT_LEDGER_TLS_CA_INVALID") != 1L) {
 			throw failure("HOLDOUT_LEDGER_TLS_CA_INVALID");
 		}
 		Path current = parent;
 		while (current != null) {
-			rejectVisibleAcl(current, "HOLDOUT_LEDGER_TLS_CA_INVALID");
+			rejectVisibleAcl(
+					current,
+					fileAccessInspector,
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
 			Set<PosixFilePermission> observed = permissions(
-					current, "HOLDOUT_LEDGER_TLS_CA_INVALID");
-			String observedOwner = owner(current, "HOLDOUT_LEDGER_TLS_CA_INVALID");
+					current,
+					fileAccessInspector,
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
+			String observedOwner = owner(
+					current,
+					fileAccessInspector,
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
 			if (observed.contains(PosixFilePermission.GROUP_WRITE)
 					|| observed.contains(PosixFilePermission.OTHERS_WRITE)
-					|| Files.isWritable(current)
+					|| writable(
+							current,
+							fileAccessInspector,
+							"HOLDOUT_LEDGER_TLS_CA_INVALID")
 					|| (observedOwner.equals(evaluatorOwner)
 							&& observed.contains(PosixFilePermission.OWNER_WRITE))) {
 				throw failure("HOLDOUT_LEDGER_TLS_CA_INVALID");
@@ -703,24 +785,48 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		}
 	}
 
-	private static void validateSecretPath(Path passwordFile, String expectedOwner)
+	private static void validateSecretPath(
+			Path passwordFile,
+			String expectedOwner,
+			FileAccessInspector fileAccessInspector)
 			throws SafeFailure {
 		Path parent = passwordFile.getParent();
 		if (parent == null) {
 			throw failure("HOLDOUT_LEDGER_TLS_SECRET_INVALID");
 		}
 		canonicalDirectory(parent, "HOLDOUT_LEDGER_TLS_SECRET_INVALID");
-		rejectVisibleAcl(parent, "HOLDOUT_LEDGER_TLS_SECRET_INVALID");
-		rejectVisibleAcl(passwordFile, "HOLDOUT_LEDGER_TLS_SECRET_INVALID");
-		if (!permissions(parent, "HOLDOUT_LEDGER_TLS_SECRET_INVALID")
+		rejectVisibleAcl(
+				parent,
+				fileAccessInspector,
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+		rejectVisibleAcl(
+				passwordFile,
+				fileAccessInspector,
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+		if (!permissions(
+				parent,
+				fileAccessInspector,
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID")
 					.equals(SECRET_DIRECTORY_PERMISSIONS)
-				|| !permissions(passwordFile, "HOLDOUT_LEDGER_TLS_SECRET_INVALID")
+				|| !permissions(
+						passwordFile,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_SECRET_INVALID")
 							.equals(SECRET_FILE_PERMISSIONS)
-				|| !owner(parent, "HOLDOUT_LEDGER_TLS_SECRET_INVALID")
+				|| !owner(
+						parent,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_SECRET_INVALID")
 						.equals(expectedOwner)
-				|| !owner(passwordFile, "HOLDOUT_LEDGER_TLS_SECRET_INVALID")
+				|| !owner(
+						passwordFile,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_SECRET_INVALID")
 						.equals(expectedOwner)
-				|| Files.isWritable(passwordFile)
+				|| writable(
+						passwordFile,
+						fileAccessInspector,
+						"HOLDOUT_LEDGER_TLS_SECRET_INVALID")
 				|| linkCount(passwordFile, "HOLDOUT_LEDGER_TLS_SECRET_INVALID") != 1L) {
 			throw failure("HOLDOUT_LEDGER_TLS_SECRET_INVALID");
 		}
@@ -763,10 +869,14 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		}
 	}
 
-	private static ReadFile readStableFile(Path path, int maximum, String diagnostic)
+	private static ReadFile readStableFile(
+			Path path,
+			int maximum,
+			String diagnostic,
+			FileAccessInspector fileAccessInspector)
 			throws SafeFailure {
 		try {
-			FileSnapshot before = snapshot(path, diagnostic);
+			FileSnapshot before = snapshot(path, diagnostic, fileAccessInspector);
 			if (before.size() < 0L || before.size() > maximum) {
 				throw failure(diagnostic);
 			}
@@ -784,7 +894,7 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 					throw failure(diagnostic);
 				}
 			}
-			FileSnapshot after = snapshot(path, diagnostic);
+			FileSnapshot after = snapshot(path, diagnostic, fileAccessInspector);
 			if (!before.equals(after)) {
 				Arrays.fill(bytes, (byte) 0);
 				throw failure(diagnostic);
@@ -799,7 +909,10 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		}
 	}
 
-	private static FileSnapshot snapshot(Path path, String diagnostic)
+	private static FileSnapshot snapshot(
+			Path path,
+			String diagnostic,
+			FileAccessInspector fileAccessInspector)
 			throws IOException, SafeFailure {
 		BasicFileAttributes attributes = Files.readAttributes(
 				path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
@@ -810,25 +923,54 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 				attributes.fileKey().toString(),
 				attributes.size(),
 				attributes.lastModifiedTime(),
-				permissions(path, diagnostic),
-				owner(path, diagnostic),
+				permissions(path, fileAccessInspector, diagnostic),
+				owner(path, fileAccessInspector, diagnostic),
 				linkCount(path, diagnostic));
 	}
 
-	private static Set<PosixFilePermission> permissions(Path path, String diagnostic)
-			throws SafeFailure {
+	private static Set<PosixFilePermission> permissions(
+			Path path,
+			FileAccessInspector fileAccessInspector,
+			String diagnostic) throws SafeFailure {
 		try {
-			return Set.copyOf(Files.getPosixFilePermissions(
-					path, LinkOption.NOFOLLOW_LINKS));
+			return Set.copyOf(fileAccessInspector.permissions(path));
 		}
 		catch (IOException | RuntimeException exception) {
 			throw failure(diagnostic);
 		}
 	}
 
-	private static String owner(Path path, String diagnostic) throws SafeFailure {
+	private static String owner(
+			Path path,
+			FileAccessInspector fileAccessInspector,
+			String diagnostic) throws SafeFailure {
 		try {
-			return Files.getOwner(path, LinkOption.NOFOLLOW_LINKS).getName();
+			return Objects.requireNonNull(
+					fileAccessInspector.owner(path), "inspected owner");
+		}
+		catch (IOException | RuntimeException exception) {
+			throw failure(diagnostic);
+		}
+	}
+
+	private static boolean readable(
+			Path path,
+			FileAccessInspector fileAccessInspector,
+			String diagnostic) throws SafeFailure {
+		try {
+			return fileAccessInspector.readable(path);
+		}
+		catch (IOException | RuntimeException exception) {
+			throw failure(diagnostic);
+		}
+	}
+
+	private static boolean writable(
+			Path path,
+			FileAccessInspector fileAccessInspector,
+			String diagnostic) throws SafeFailure {
+		try {
+			return fileAccessInspector.writable(path);
 		}
 		catch (IOException | RuntimeException exception) {
 			throw failure(diagnostic);
@@ -849,12 +991,13 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		}
 	}
 
-	private static void rejectVisibleAcl(Path path, String diagnostic)
+	private static void rejectVisibleAcl(
+			Path path,
+			FileAccessInspector fileAccessInspector,
+			String diagnostic)
 			throws SafeFailure {
 		try {
-			AclFileAttributeView view = Files.getFileAttributeView(
-					path, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-			if (view != null && !view.getAcl().isEmpty()) {
+			if (fileAccessInspector.hasVisibleAcl(path)) {
 				throw failure(diagnostic);
 			}
 		}
@@ -1031,6 +1174,19 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 				throws SQLException;
 	}
 
+	private interface FileAccessInspector {
+
+		String owner(Path path) throws IOException;
+
+		boolean readable(Path path) throws IOException;
+
+		boolean writable(Path path) throws IOException;
+
+		Set<PosixFilePermission> permissions(Path path) throws IOException;
+
+		boolean hasVisibleAcl(Path path) throws IOException;
+	}
+
 	private static final class ValidatedConfiguration {
 
 		private final EndpointRecord endpoint;
@@ -1044,6 +1200,7 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		private final byte[] passwordBinding;
 		private final String expectedCaOwner;
 		private final String expectedOwner;
+		private final FileAccessInspector fileAccessInspector;
 
 		private ValidatedConfiguration(
 				EndpointRecord endpoint,
@@ -1056,7 +1213,8 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 				byte[] passwordBindingKey,
 				byte[] passwordBinding,
 				String expectedCaOwner,
-				String expectedOwner) {
+				String expectedOwner,
+				FileAccessInspector fileAccessInspector) {
 			this.endpoint = endpoint;
 			this.expectedAddress = expectedAddress;
 			this.repository = repository;
@@ -1070,6 +1228,8 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 					passwordBinding, "passwordBinding");
 			this.expectedCaOwner = expectedCaOwner;
 			this.expectedOwner = expectedOwner;
+			this.fileAccessInspector = Objects.requireNonNull(
+					fileAccessInspector, "fileAccessInspector");
 		}
 
 		private EndpointRecord endpoint() {
@@ -1106,6 +1266,10 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 
 		private String expectedCaOwner() {
 			return expectedCaOwner;
+		}
+
+		private FileAccessInspector fileAccessInspector() {
+			return fileAccessInspector;
 		}
 
 		private boolean passwordMatches(byte[] password) {

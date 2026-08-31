@@ -1,10 +1,16 @@
 package com.openscholar.search.internal.persistence;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Set;
 
 import org.postgresql.ds.PGSimpleDataSource;
 
@@ -17,6 +23,8 @@ import com.openscholar.search.internal.persistence.RelatedTopicReuseHoldoutPostg
 final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 
 	private static final Class<?> CONNECTION_OPENER = nested("ConnectionOpener");
+	private static final Class<?> FILE_ACCESS_INSPECTOR =
+			nested("FileAccessInspector");
 	private static final Class<?> VALIDATED_CONFIGURATION =
 			nested("ValidatedConfiguration");
 
@@ -27,6 +35,14 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 			EndpointRecord endpoint,
 			RuntimeFiles files,
 			TestConnectionOpener opener) throws PreflightException {
+		return preflight(endpoint, files, opener, secureFileAccess(files));
+	}
+
+	static VerifiedRuntimeConnectionSource preflight(
+			EndpointRecord endpoint,
+			RuntimeFiles files,
+			TestConnectionOpener opener,
+			TestFileAccessInspector fileAccess) throws PreflightException {
 		Object reflectedOpener = Proxy.newProxyInstance(
 				CONNECTION_OPENER.getClassLoader(),
 				new Class<?>[] {CONNECTION_OPENER},
@@ -38,16 +54,18 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 					default -> throw new AssertionError(
 							"unexpected connection-opener method: " + method);
 				});
+		Object reflectedFileAccess = reflectedFileAccess(fileAccess);
 		try {
 			Method method = RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.class
 					.getDeclaredMethod(
 							"preflightSource",
 							EndpointRecord.class,
 							RuntimeFiles.class,
-							CONNECTION_OPENER);
+							CONNECTION_OPENER,
+							FILE_ACCESS_INSPECTOR);
 			method.setAccessible(true);
 			return (VerifiedRuntimeConnectionSource) method.invoke(
-					null, endpoint, files, reflectedOpener);
+					null, endpoint, files, reflectedOpener, reflectedFileAccess);
 		}
 		catch (NoSuchMethodException | IllegalAccessException exception) {
 			throw new AssertionError("TLS preflight test seam is unavailable", exception);
@@ -69,7 +87,14 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 
 	static PGSimpleDataSource configuredDataSource(
 			EndpointRecord endpoint, RuntimeFiles files) {
-		Object configuration = validate(endpoint, files);
+		return configuredDataSource(endpoint, files, secureFileAccess(files));
+	}
+
+	static PGSimpleDataSource configuredDataSource(
+			EndpointRecord endpoint,
+			RuntimeFiles files,
+			TestFileAccessInspector fileAccess) {
+		Object configuration = validate(endpoint, files, fileAccess);
 		try {
 			Method method = RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.class
 					.getDeclaredMethod("configuredDataSource", VALIDATED_CONFIGURATION);
@@ -88,7 +113,14 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 	}
 
 	static String validatedConfigurationText(EndpointRecord endpoint, RuntimeFiles files) {
-		Object configuration = validate(endpoint, files);
+		return validatedConfigurationText(endpoint, files, secureFileAccess(files));
+	}
+
+	static String validatedConfigurationText(
+			EndpointRecord endpoint,
+			RuntimeFiles files,
+			TestFileAccessInspector fileAccess) {
+		Object configuration = validate(endpoint, files, fileAccess);
 		try {
 			return configuration.toString();
 		}
@@ -97,12 +129,104 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 		}
 	}
 
-	private static Object validate(EndpointRecord endpoint, RuntimeFiles files) {
+	static TestFileAccessInspector secureFileAccess(RuntimeFiles files) {
+		Path caCertificate = files.caCertificate();
+		Path caDirectory = caCertificate.getParent();
+		Path passwordFile = files.runtimePassword();
+		Path passwordDirectory = passwordFile.getParent();
+		return new TestFileAccessInspector() {
+			@Override
+			public String owner(Path path) {
+				if (path.equals(caCertificate) || path.equals(caDirectory)) {
+					return files.expectedCaOwner();
+				}
+				if (path.equals(passwordFile) || path.equals(passwordDirectory)) {
+					return files.expectedOwner();
+				}
+				return "synthetic-unrelated-owner";
+			}
+
+			@Override
+			public boolean readable(Path path) {
+				return true;
+			}
+
+			@Override
+			public boolean writable(Path path) {
+				return false;
+			}
+
+			@Override
+			public Set<PosixFilePermission> permissions(Path path) throws IOException {
+				if (path.equals(caCertificate)
+						|| path.equals(caDirectory)
+						|| path.equals(passwordFile)
+						|| path.equals(passwordDirectory)) {
+					return Set.copyOf(Files.getPosixFilePermissions(
+							path, LinkOption.NOFOLLOW_LINKS));
+				}
+				return Set.of(
+						PosixFilePermission.OWNER_READ,
+						PosixFilePermission.OWNER_EXECUTE,
+						PosixFilePermission.GROUP_READ,
+						PosixFilePermission.GROUP_EXECUTE,
+						PosixFilePermission.OTHERS_READ,
+						PosixFilePermission.OTHERS_EXECUTE);
+			}
+
+			@Override
+			public boolean hasVisibleAcl(Path path) {
+				return false;
+			}
+		};
+	}
+
+	static TestFileAccessInspector reportingWritable(
+			TestFileAccessInspector delegate, Path writablePath) {
+		return new DelegatingFileAccessInspector(delegate) {
+			@Override
+			public boolean writable(Path path) throws IOException {
+				return path.equals(writablePath) || super.writable(path);
+			}
+		};
+	}
+
+	static TestFileAccessInspector reportingVisibleAcl(
+			TestFileAccessInspector delegate, Path aclPath) {
+		return new DelegatingFileAccessInspector(delegate) {
+			@Override
+			public boolean hasVisibleAcl(Path path) throws IOException {
+				return path.equals(aclPath) || super.hasVisibleAcl(path);
+			}
+		};
+	}
+
+	static TestFileAccessInspector reportingGroupOrOtherWritable(
+			TestFileAccessInspector delegate, Path writablePath) {
+		return new DelegatingFileAccessInspector(delegate) {
+			@Override
+			public Set<PosixFilePermission> permissions(Path path) throws IOException {
+				if (path.equals(writablePath)) {
+					return Set.of(PosixFilePermission.GROUP_WRITE);
+				}
+				return super.permissions(path);
+			}
+		};
+	}
+
+	private static Object validate(
+			EndpointRecord endpoint,
+			RuntimeFiles files,
+			TestFileAccessInspector fileAccess) {
 		try {
 			Method method = RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.class
-					.getDeclaredMethod("validate", EndpointRecord.class, RuntimeFiles.class);
+					.getDeclaredMethod(
+							"validate",
+							EndpointRecord.class,
+							RuntimeFiles.class,
+							FILE_ACCESS_INSPECTOR);
 			method.setAccessible(true);
-			return method.invoke(null, endpoint, files);
+			return method.invoke(null, endpoint, files, reflectedFileAccess(fileAccess));
 		}
 		catch (NoSuchMethodException | IllegalAccessException exception) {
 			throw new AssertionError("TLS configuration test seam is unavailable", exception);
@@ -110,6 +234,24 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 		catch (InvocationTargetException exception) {
 			throw unexpected(exception.getCause());
 		}
+	}
+
+	private static Object reflectedFileAccess(TestFileAccessInspector fileAccess) {
+		return Proxy.newProxyInstance(
+				FILE_ACCESS_INSPECTOR.getClassLoader(),
+				new Class<?>[] {FILE_ACCESS_INSPECTOR},
+				(proxy, method, arguments) -> switch (method.getName()) {
+					case "owner" -> fileAccess.owner((Path) arguments[0]);
+					case "readable" -> fileAccess.readable((Path) arguments[0]);
+					case "writable" -> fileAccess.writable((Path) arguments[0]);
+					case "permissions" -> fileAccess.permissions((Path) arguments[0]);
+					case "hasVisibleAcl" -> fileAccess.hasVisibleAcl((Path) arguments[0]);
+					case "toString" -> "ReflectionOnlyFileAccessInspector";
+					case "hashCode" -> System.identityHashCode(proxy);
+					case "equals" -> proxy == arguments[0];
+					default -> throw new AssertionError(
+							"unexpected file-access method: " + method);
+				});
 	}
 
 	private static Class<?> nested(String simpleName) {
@@ -149,5 +291,53 @@ final class RelatedTopicReuseHoldoutPostgresTlsTestFixture {
 	interface TestConnectionOpener {
 
 		Connection open(char[] password) throws SQLException;
+	}
+
+	interface TestFileAccessInspector {
+
+		String owner(Path path) throws IOException;
+
+		boolean readable(Path path) throws IOException;
+
+		boolean writable(Path path) throws IOException;
+
+		Set<PosixFilePermission> permissions(Path path) throws IOException;
+
+		boolean hasVisibleAcl(Path path) throws IOException;
+	}
+
+	private static class DelegatingFileAccessInspector
+			implements TestFileAccessInspector {
+
+		private final TestFileAccessInspector delegate;
+
+		private DelegatingFileAccessInspector(TestFileAccessInspector delegate) {
+			this.delegate = delegate;
+		}
+
+		@Override
+		public String owner(Path path) throws IOException {
+			return delegate.owner(path);
+		}
+
+		@Override
+		public boolean readable(Path path) throws IOException {
+			return delegate.readable(path);
+		}
+
+		@Override
+		public boolean writable(Path path) throws IOException {
+			return delegate.writable(path);
+		}
+
+		@Override
+		public Set<PosixFilePermission> permissions(Path path) throws IOException {
+			return delegate.permissions(path);
+		}
+
+		@Override
+		public boolean hasVisibleAcl(Path path) throws IOException {
+			return delegate.hasVisibleAcl(path);
+		}
 	}
 }

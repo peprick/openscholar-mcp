@@ -3,7 +3,6 @@ package com.openscholar.search.internal.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -287,7 +286,7 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 	@Test
 	void rejectsCaPermissionHardLinkAndSymlinkBeforeOpeningAConnection()
 			throws Exception {
-		Materials permissions = syntheticCaMaterials("ca-permissions");
+		Materials permissions = materials("ca-permissions");
 		Files.setPosixFilePermissions(
 				permissions.caCertificate(),
 				Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.GROUP_WRITE));
@@ -295,13 +294,15 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				permissions.endpoint(), permissions.files(),
 				"HOLDOUT_LEDGER_TLS_CA_INVALID");
 
-		Materials hardLink = syntheticCaMaterials("ca-hard-link");
-		Files.createLink(hardLink.root().resolve("second-ca-link"), hardLink.caCertificate());
+		Materials hardLink = materials("ca-hard-link");
+		Files.createLink(
+				hardLink.root().resolve("second-ca-link"),
+				hardLink.caCertificate());
 		assertRejectedWithoutOpen(
 				hardLink.endpoint(), hardLink.files(),
 				"HOLDOUT_LEDGER_TLS_CA_INVALID");
 
-		Materials symlink = syntheticCaMaterials("ca-symlink");
+		Materials symlink = materials("ca-symlink");
 		Path caSymlink = symlink.root().resolve("ca-symlink.pem");
 		Files.createSymbolicLink(caSymlink, symlink.caCertificate());
 		RuntimeFiles symlinkFiles = new RuntimeFiles(
@@ -313,6 +314,78 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 		assertRejectedWithoutOpen(
 				symlink.endpoint(), symlinkFiles,
 				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+	}
+
+	@Test
+	void rejectsProcessWritableAndNonOwnerWritableCaPathsBeforeOpeningAConnection()
+			throws Exception {
+		Materials materials = materials("ca-writable");
+		var secure = RelatedTopicReuseHoldoutPostgresTlsTestFixture
+				.secureFileAccess(materials.files());
+
+		for (Path writable : List.of(
+				materials.caCertificate(),
+				materials.caDirectory(),
+				materials.root())) {
+			assertRejectedWithoutOpen(
+					materials.endpoint(),
+					materials.files(),
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture.reportingWritable(
+							secure, writable),
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
+		}
+		for (Path writable : List.of(materials.caDirectory(), materials.root())) {
+			assertRejectedWithoutOpen(
+					materials.endpoint(),
+					materials.files(),
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture
+							.reportingGroupOrOtherWritable(secure, writable),
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
+		}
+	}
+
+	@Test
+	void rejectsWritablePasswordFileBeforeOpeningAConnection() throws Exception {
+		Materials materials = materials("password-writable");
+		var fileAccess = RelatedTopicReuseHoldoutPostgresTlsTestFixture.reportingWritable(
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture
+						.secureFileAccess(materials.files()),
+				materials.passwordFile());
+
+		assertRejectedWithoutOpen(
+				materials.endpoint(),
+				materials.files(),
+				fileAccess,
+				"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+	}
+
+	@Test
+	void rejectsVisibleAclOnCaAndSecretPathsBeforeOpeningAConnection()
+			throws Exception {
+		Materials materials = materials("visible-acl");
+		var secure = RelatedTopicReuseHoldoutPostgresTlsTestFixture
+				.secureFileAccess(materials.files());
+
+		for (Path caPath : List.of(
+				materials.caCertificate(),
+				materials.caDirectory(),
+				materials.root())) {
+			assertRejectedWithoutOpen(
+					materials.endpoint(),
+					materials.files(),
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture.reportingVisibleAcl(
+							secure, caPath),
+					"HOLDOUT_LEDGER_TLS_CA_INVALID");
+		}
+		for (Path secretPath : List.of(
+				materials.passwordFile(), materials.secretDirectory())) {
+			assertRejectedWithoutOpen(
+					materials.endpoint(),
+					materials.files(),
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture.reportingVisibleAcl(
+							secure, secretPath),
+					"HOLDOUT_LEDGER_TLS_SECRET_INVALID");
+		}
 	}
 
 	@Test
@@ -598,6 +671,19 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 
 	private void assertRejectedWithoutOpen(
 			EndpointRecord endpoint, RuntimeFiles files, String diagnostic) {
+		assertRejectedWithoutOpen(
+				endpoint,
+				files,
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.secureFileAccess(files),
+				diagnostic);
+	}
+
+	private void assertRejectedWithoutOpen(
+			EndpointRecord endpoint,
+			RuntimeFiles files,
+			RelatedTopicReuseHoldoutPostgresTlsTestFixture.TestFileAccessInspector
+					fileAccess,
+			String diagnostic) {
 		AtomicInteger attempts = new AtomicInteger();
 		assertThatThrownBy(() -> RelatedTopicReuseHoldoutPostgresTlsTestFixture.preflight(
 				endpoint,
@@ -605,7 +691,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				ignored -> {
 					attempts.incrementAndGet();
 					throw new AssertionError("invalid input reached the connection opener");
-				}))
+				},
+				fileAccess))
 				.isInstanceOf(PreflightException.class)
 				.hasMessage(diagnostic)
 				.hasNoCause();
@@ -613,33 +700,17 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 	}
 
 	private Materials materials(String name) throws Exception {
-		return materials(name, true);
-	}
-
-	private Materials syntheticCaMaterials(String name) throws Exception {
-		return materials(name, false);
-	}
-
-	private Materials materials(String name, boolean systemCa) throws Exception {
 		Path testRoot = Files.createDirectory(temporaryDirectory.resolve(name)).toRealPath();
 		assertThat(testRoot.getFileSystem().supportedFileAttributeViews())
 				.contains("posix", "unix");
 		Path repository = Files.createDirectory(testRoot.resolve("repository")).toRealPath();
-		Path caDirectory;
-		Path caCertificate;
-		if (systemCa) {
-			caCertificate = systemCaCertificate();
-			caDirectory = caCertificate.getParent();
-		}
-		else {
-			caDirectory = Files.createDirectory(testRoot.resolve("ca")).toRealPath();
-			caCertificate = Files.writeString(
-					caDirectory.resolve("ledger-ca.pem"),
-					"synthetic-ca-for-unit-tests\n",
-					StandardCharsets.US_ASCII).toRealPath();
-			Files.setPosixFilePermissions(caCertificate, CA_FILE_PERMISSIONS);
-			Files.setPosixFilePermissions(caDirectory, CA_DIRECTORY_PERMISSIONS);
-		}
+		Path caDirectory = Files.createDirectory(testRoot.resolve("ca")).toRealPath();
+		Path caCertificate = Files.writeString(
+				caDirectory.resolve("ledger-ca.pem"),
+				"synthetic-ca-for-unit-tests\n",
+				StandardCharsets.US_ASCII).toRealPath();
+		Files.setPosixFilePermissions(caCertificate, CA_FILE_PERMISSIONS);
+		Files.setPosixFilePermissions(caDirectory, CA_DIRECTORY_PERMISSIONS);
 		Path secretDirectory = Files.createDirectory(testRoot.resolve("secrets")).toRealPath();
 		Path passwordFile = Files.writeString(
 				secretDirectory.resolve("runtime-password"),
@@ -647,13 +718,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				StandardCharsets.UTF_8).toRealPath();
 		Files.setPosixFilePermissions(secretDirectory, SECRET_DIRECTORY_PERMISSIONS);
 		Files.setPosixFilePermissions(passwordFile, SECRET_FILE_PERMISSIONS);
-		String owner = Files.getOwner(passwordFile).getName();
-		String caOwner = Files.getOwner(caCertificate).getName();
-		if (systemCa) {
-			assertThat(caOwner)
-					.as("system CA must be owned independently from the evaluator")
-					.isNotEqualTo(owner);
-		}
+		String owner = "synthetic-evaluator-owner";
+		String caOwner = "synthetic-ca-owner";
 		EndpointRecord endpoint = new EndpointRecord(
 				RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.ENDPOINT_SCHEMA_VERSION,
 				"ledger.example.test",
@@ -669,7 +735,7 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				caCertificate,
 				passwordFile,
 				caOwner,
-				systemCa ? owner : "synthetic-distinct-evaluator-owner");
+				owner);
 		return new Materials(
 				testRoot,
 				repository,
@@ -681,18 +747,6 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				owner,
 				endpoint,
 				files);
-	}
-
-	private static Path systemCaCertificate() throws IOException {
-		for (String candidate : List.of(
-				"/etc/ssl/cert.pem",
-				"/etc/ssl/certs/ca-certificates.crt")) {
-			Path path = Path.of(candidate);
-			if (Files.isRegularFile(path)) {
-				return path.toRealPath();
-			}
-		}
-		throw new AssertionError("no canonical system CA fixture is available");
 	}
 
 	private static String sha256(byte[] bytes) {
