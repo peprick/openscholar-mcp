@@ -51,7 +51,7 @@ import org.postgresql.ds.PGSimpleDataSource;
  */
 final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 
-	static final int ENDPOINT_SCHEMA_VERSION = 1;
+	static final int ENDPOINT_SCHEMA_VERSION = 2;
 	static final int LOGIN_TIMEOUT_SECONDS = 10;
 	static final int CONNECT_TIMEOUT_SECONDS = 10;
 	static final int SSL_RESPONSE_TIMEOUT_MILLIS = 10_000;
@@ -66,7 +66,7 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 	private static final int MAXIMUM_PASSWORD_CHARACTERS = 512;
 	private static final String SSL_FACTORY = "org.postgresql.ssl.LibPQFactory";
 	private static final String SSL_HOSTNAME_VERIFIER =
-			RelatedTopicReuseHoldoutStrictDnsSanHostnameVerifier.class.getName();
+			RelatedTopicReuseHoldoutPinnedDnsSanHostnameVerifier.class.getName();
 	private static final Pattern DNS_HOST = Pattern.compile(
 			"(?=.{1,253}\\z)(?=.*[a-z])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+"
 					+ "[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?");
@@ -283,7 +283,9 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 				|| endpoint.tlsBits() < 128
 				|| endpoint.tlsBits() > 512
 				|| endpoint.caSha256() == null
-				|| !SHA256.matcher(endpoint.caSha256()).matches()) {
+				|| !SHA256.matcher(endpoint.caSha256()).matches()
+				|| endpoint.leafCertificateSha256() == null
+				|| !SHA256.matcher(endpoint.leafCertificateSha256()).matches()) {
 			throw failure("HOLDOUT_LEDGER_TLS_ENDPOINT_INVALID");
 		}
 		try {
@@ -445,6 +447,11 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 		dataSource.setSslCert("");
 		dataSource.setSslKey("");
 		dataSource.setSslfactory(SSL_FACTORY);
+		// pgJDBC passes this fixed public value to the configured hostname verifier.
+		// LibPQFactory 42.7.12 ignores sslFactoryArg, so normal PKIX validation still
+		// completes before the verifier binds the negotiated leaf certificate.
+		dataSource.setSslFactoryArg(
+				configuration.endpoint().leafCertificateSha256());
 		dataSource.setSslHostnameVerifier(SSL_HOSTNAME_VERIFIER);
 		dataSource.setSslNegotiation("direct");
 		dataSource.setRequireAuth("scram-sha-256");
@@ -1101,7 +1108,8 @@ final class RelatedTopicReuseHoldoutPostgresTlsConnectionFactory {
 			String tlsProtocol,
 			String tlsCipher,
 			int tlsBits,
-			String caSha256) {
+			String caSha256,
+			String leafCertificateSha256) {
 
 		@Override
 		public String toString() {

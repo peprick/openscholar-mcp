@@ -1,0 +1,26 @@
+services:
+  runner:
+    entrypoint:
+      - /usr/bin/timeout
+      - --signal=TERM
+      - --kill-after=10s
+      - 180s
+      - ./mvnw
+    command:
+      - --offline
+      - --batch-mode
+      - --no-transfer-progress
+      - -Dtest=RelatedTopicReuseHoldoutPostgresTlsTimeoutLiveIntegrationIT
+      - test
+    environment:
+      HOLDOUT_TIMEOUT_RUNNER_ADDRESS: 172.30.237.20
+      HOLDOUT_TLS_TARGET_ADDRESS: ${HOLDOUT_TLS_SERVER_ADDRESS:-172.30.237.10}
+    extra_hosts:
+      - ledger.holdout.test=172.30.237.20
+    networks:
+      holdout-database:
+        ipv4_address: 172.30.237.20
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096

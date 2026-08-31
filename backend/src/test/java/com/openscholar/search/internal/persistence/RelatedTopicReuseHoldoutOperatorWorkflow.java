@@ -16,8 +16,9 @@ import tools.jackson.databind.ObjectMapper;
  * Filesystem-write-free composition boundary for one related-topic holdout run.
  *
  * <p>This is not yet a live command. It centralizes the supported in-process call
- * graph while the isolated build launcher, TLS ledger connection factory, and
- * no-clobber external publisher remain pending.</p>
+ * graph while the isolated build launcher and no-clobber external publisher
+ * remain pending. The separate test-source TLS factory supplies a verified,
+ * one-use ledger to this workflow but is not itself a live launcher.</p>
  */
 final class RelatedTopicReuseHoldoutOperatorWorkflow {
 

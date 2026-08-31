@@ -350,6 +350,7 @@ requireExactInventory(
     || name.endsWith(".Dockerfile")),
   [
     "backend/Dockerfile",
+    "backend/src/test/holdout-tls/Dockerfile.runner",
     "deploy/images/blackbox-exporter/Dockerfile",
     "deploy/images/caddy/Dockerfile",
     "frontend/Dockerfile",

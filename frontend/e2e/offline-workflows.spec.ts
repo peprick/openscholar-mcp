@@ -129,7 +129,7 @@ test("search keeps diagnostics private while preserving useful next-page context
   await expect(page.getByLabel("Provider coverage")).toHaveCount(0);
 
   await page.getByText("Why it matched").click();
-  await expect(page.getByText(/Metadata from OPENALEX/)).toBeVisible();
+  await expect(page.getByText(/Metadata from OpenAlex/)).toBeVisible();
   await expect(page.getByText(/OpenScholar checks links/)).toBeVisible();
   await expect(page.getByText(/Score:/)).toHaveCount(0);
   await expectNoSeriousAccessibilityViolations(page);

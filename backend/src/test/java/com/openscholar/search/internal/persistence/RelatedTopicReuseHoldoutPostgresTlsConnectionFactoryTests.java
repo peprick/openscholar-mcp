@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -90,8 +91,10 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 		assertThat(dataSource.getSslKey()).isEmpty();
 		assertThat(dataSource.getSslfactory())
 				.isEqualTo("org.postgresql.ssl.LibPQFactory");
+		assertThat(dataSource.getSslFactoryArg())
+				.isEqualTo(materials.endpoint().leafCertificateSha256());
 		assertThat(dataSource.getSslHostnameVerifier())
-				.isEqualTo(RelatedTopicReuseHoldoutStrictDnsSanHostnameVerifier.class
+				.isEqualTo(RelatedTopicReuseHoldoutPinnedDnsSanHostnameVerifier.class
 						.getName());
 		assertThat(dataSource.getSslNegotiation()).isEqualTo("direct");
 		assertThat(dataSource.getRequireAuth()).isEqualTo("scram-sha-256");
@@ -205,7 +208,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 	}
 
 	@Test
-	void rejectsInvalidEndpointAndCaDigestBeforeOpeningAConnection() throws Exception {
+	void rejectsInvalidEndpointLeafPinAndCaDigestBeforeOpeningAConnection()
+			throws Exception {
 		Materials invalidEndpoint = materials("invalid-endpoint");
 		EndpointRecord endpoint = invalidEndpoint.endpoint();
 		EndpointRecord queryHost = new EndpointRecord(
@@ -217,9 +221,42 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				endpoint.tlsProtocol(),
 				endpoint.tlsCipher(),
 				endpoint.tlsBits(),
-				endpoint.caSha256());
+				endpoint.caSha256(),
+				endpoint.leafCertificateSha256());
 		assertRejectedWithoutOpen(
 				queryHost,
+				invalidEndpoint.files(),
+				"HOLDOUT_LEDGER_TLS_ENDPOINT_INVALID");
+
+		EndpointRecord obsoleteSchema = new EndpointRecord(
+				1,
+				endpoint.host(),
+				endpoint.port(),
+				endpoint.serverAddress(),
+				endpoint.serverVersion(),
+				endpoint.tlsProtocol(),
+				endpoint.tlsCipher(),
+				endpoint.tlsBits(),
+				endpoint.caSha256(),
+				endpoint.leafCertificateSha256());
+		assertRejectedWithoutOpen(
+				obsoleteSchema,
+				invalidEndpoint.files(),
+				"HOLDOUT_LEDGER_TLS_ENDPOINT_INVALID");
+
+		EndpointRecord malformedLeafPin = new EndpointRecord(
+				endpoint.schemaVersion(),
+				endpoint.host(),
+				endpoint.port(),
+				endpoint.serverAddress(),
+				endpoint.serverVersion(),
+				endpoint.tlsProtocol(),
+				endpoint.tlsCipher(),
+				endpoint.tlsBits(),
+				endpoint.caSha256(),
+				"A".repeat(64));
+		assertRejectedWithoutOpen(
+				malformedLeafPin,
 				invalidEndpoint.files(),
 				"HOLDOUT_LEDGER_TLS_ENDPOINT_INVALID");
 
@@ -234,7 +271,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				valid.tlsProtocol(),
 				valid.tlsCipher(),
 				valid.tlsBits(),
-				"0".repeat(64));
+				"0".repeat(64),
+				valid.leafCertificateSha256());
 		assertRejectedWithoutOpen(
 				wrongDigest,
 				digestMismatch.files(),
@@ -586,16 +624,196 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 		Files.writeString(materials.passwordFile(), "changed-secret", StandardCharsets.UTF_8);
 		Files.setPosixFilePermissions(materials.passwordFile(), SECRET_FILE_PERMISSIONS);
 
+		assertPhaseBRevalidationConsumesSource(
+				verified,
+				attempts,
+				materials,
+				"HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED");
+	}
+
+	@Test
+	void caContentReplacementAfterPhaseAConsumesSourceBeforePhaseBOpen()
+			throws Exception {
+		Materials materials = materials("phase-b-ca-replacement");
+		AtomicInteger attempts = new AtomicInteger();
+		VerifiedRuntimeConnectionSource verified = preflightForMutation(
+				materials,
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.secureFileAccess(
+						materials.files()),
+				attempts);
+
+		Path replacement = Files.writeString(
+				materials.root().resolve("replacement-ca.pem"),
+				"replacement-ca-for-unit-tests\n",
+				StandardCharsets.US_ASCII);
+		Files.setPosixFilePermissions(replacement, CA_FILE_PERMISSIONS);
+		Files.setPosixFilePermissions(
+				materials.caDirectory(),
+				Set.of(
+						PosixFilePermission.OWNER_READ,
+						PosixFilePermission.OWNER_WRITE,
+						PosixFilePermission.OWNER_EXECUTE));
+		try {
+			Files.move(
+					replacement,
+					materials.caCertificate(),
+					StandardCopyOption.REPLACE_EXISTING);
+		}
+		finally {
+			Files.setPosixFilePermissions(
+					materials.caDirectory(), CA_DIRECTORY_PERMISSIONS);
+		}
+
+		assertPhaseBRevalidationConsumesSource(
+				verified,
+				attempts,
+				materials,
+				"HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED");
+	}
+
+	@Test
+	void caOwnerDriftAfterPhaseAConsumesSourceBeforePhaseBOpen()
+			throws Exception {
+		Materials materials = materials("phase-b-ca-owner");
+		DriftableFileAccess fileAccess = new DriftableFileAccess(
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.secureFileAccess(
+						materials.files()));
+		AtomicInteger attempts = new AtomicInteger();
+		VerifiedRuntimeConnectionSource verified = preflightForMutation(
+				materials, fileAccess, attempts);
+
+		fileAccess.reportOwnerDrift(materials.caCertificate());
+
+		assertPhaseBRevalidationConsumesSource(
+				verified,
+				attempts,
+				materials,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+	}
+
+	@Test
+	void caPermissionDriftAfterPhaseAConsumesSourceBeforePhaseBOpen()
+			throws Exception {
+		Materials materials = materials("phase-b-ca-permission");
+		AtomicInteger attempts = new AtomicInteger();
+		VerifiedRuntimeConnectionSource verified = preflightForMutation(
+				materials,
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.secureFileAccess(
+						materials.files()),
+				attempts);
+
+		Files.setPosixFilePermissions(
+				materials.caCertificate(),
+				Set.of(
+						PosixFilePermission.OWNER_READ,
+						PosixFilePermission.GROUP_WRITE));
+
+		assertPhaseBRevalidationConsumesSource(
+				verified,
+				attempts,
+				materials,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+	}
+
+	@Test
+	void caAclDriftAfterPhaseAConsumesSourceBeforePhaseBOpen()
+			throws Exception {
+		Materials materials = materials("phase-b-ca-acl");
+		DriftableFileAccess fileAccess = new DriftableFileAccess(
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.secureFileAccess(
+						materials.files()));
+		AtomicInteger attempts = new AtomicInteger();
+		VerifiedRuntimeConnectionSource verified = preflightForMutation(
+				materials, fileAccess, attempts);
+
+		fileAccess.reportVisibleAcl(materials.caCertificate());
+
+		assertPhaseBRevalidationConsumesSource(
+				verified,
+				attempts,
+				materials,
+				"HOLDOUT_LEDGER_TLS_CA_INVALID");
+	}
+
+	private static VerifiedRuntimeConnectionSource preflightForMutation(
+			Materials materials,
+			RelatedTopicReuseHoldoutPostgresTlsTestFixture.TestFileAccessInspector
+					fileAccess,
+			AtomicInteger attempts) throws PreflightException {
+		ConnectionProbe phaseA = new ConnectionProbe(materials.endpoint());
+		return RelatedTopicReuseHoldoutPostgresTlsTestFixture.preflight(
+				materials.endpoint(), materials.files(), ignored -> {
+					if (attempts.getAndIncrement() != 0) {
+						throw new AssertionError(
+								"Phase-B opener ran after filesystem drift");
+					}
+					return phaseA.connection();
+				}, fileAccess);
+	}
+
+	private static void assertPhaseBRevalidationConsumesSource(
+			VerifiedRuntimeConnectionSource verified,
+			AtomicInteger attempts,
+			Materials materials,
+			String diagnostic) {
 		assertThatThrownBy(verified::openClaimConnection)
-				.isInstanceOf(SQLException.class)
-				.hasMessage("HOLDOUT_LEDGER_TLS_CONFIGURATION_CHANGED")
+				.isExactlyInstanceOf(SQLException.class)
+				.hasMessage(diagnostic)
 				.hasNoCause()
 				.satisfies(failure -> assertNoSensitiveText(failure, materials));
 		assertThat(attempts).hasValue(1);
 		assertThatThrownBy(verified::openClaimConnection)
-				.isInstanceOf(SQLException.class)
-				.hasMessage("HOLDOUT_LEDGER_TLS_CONNECTION_ALREADY_CONSUMED");
+				.isExactlyInstanceOf(SQLException.class)
+				.hasMessage("HOLDOUT_LEDGER_TLS_CONNECTION_ALREADY_CONSUMED")
+				.hasNoCause()
+				.satisfies(failure -> assertNoSensitiveText(failure, materials));
 		assertThat(attempts).hasValue(1);
+	}
+
+	@Test
+	void secretOwnerWritabilityAndAclDriftConsumeWithoutPhaseBOpen()
+			throws Exception {
+		for (SecretFileDrift drift : SecretFileDrift.values()) {
+			Materials materials = materials("phase-b-" + drift.name().toLowerCase());
+			ConnectionProbe phaseA = new ConnectionProbe(materials.endpoint());
+			AtomicInteger attempts = new AtomicInteger();
+			AtomicReference<Path> ownerDrift = new AtomicReference<>();
+			AtomicReference<Path> writableDrift = new AtomicReference<>();
+			AtomicReference<Path> aclDrift = new AtomicReference<>();
+			var fileAccess = mutableFileAccess(
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture
+							.secureFileAccess(materials.files()),
+					ownerDrift,
+					writableDrift,
+					aclDrift);
+			VerifiedRuntimeConnectionSource verified =
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture.preflight(
+							materials.endpoint(), materials.files(), ignored -> {
+								attempts.incrementAndGet();
+								return phaseA.connection();
+							}, fileAccess);
+
+			Path changedPath = materials.passwordFile();
+			switch (drift) {
+				case OWNER -> ownerDrift.set(changedPath);
+				case WRITABLE -> writableDrift.set(changedPath);
+				case ACL -> aclDrift.set(changedPath);
+			}
+
+			assertThatThrownBy(verified::openClaimConnection)
+					.as(drift.name())
+					.isInstanceOf(SQLException.class)
+					.hasMessage("HOLDOUT_LEDGER_TLS_SECRET_INVALID")
+					.hasNoCause()
+					.satisfies(failure -> assertNoSensitiveText(failure, materials));
+			assertThat(attempts).as(drift.name()).hasValue(1);
+			assertThatThrownBy(verified::openClaimConnection)
+					.as(drift.name())
+					.isInstanceOf(SQLException.class)
+					.hasMessage("HOLDOUT_LEDGER_TLS_CONNECTION_ALREADY_CONSUMED")
+					.hasNoCause();
+			assertThat(attempts).as(drift.name()).hasValue(1);
+		}
 	}
 
 	private static Connection throwSql(String message) throws SQLException {
@@ -613,7 +831,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				endpoint.tlsProtocol(),
 				endpoint.tlsCipher(),
 				endpoint.tlsBits(),
-				caSha256);
+				caSha256,
+				endpoint.leafCertificateSha256());
 	}
 
 	private static void assertProbeRejected(
@@ -701,6 +920,45 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 		assertThat(attempts).hasValue(0);
 	}
 
+	private static RelatedTopicReuseHoldoutPostgresTlsTestFixture
+			.TestFileAccessInspector mutableFileAccess(
+					RelatedTopicReuseHoldoutPostgresTlsTestFixture
+							.TestFileAccessInspector delegate,
+					AtomicReference<Path> ownerDrift,
+					AtomicReference<Path> writableDrift,
+					AtomicReference<Path> aclDrift) {
+		return new RelatedTopicReuseHoldoutPostgresTlsTestFixture
+				.TestFileAccessInspector() {
+			@Override
+			public String owner(Path path) throws java.io.IOException {
+				return path.equals(ownerDrift.get())
+						? "synthetic-changed-owner"
+						: delegate.owner(path);
+			}
+
+			@Override
+			public boolean readable(Path path) throws java.io.IOException {
+				return delegate.readable(path);
+			}
+
+			@Override
+			public boolean writable(Path path) throws java.io.IOException {
+				return path.equals(writableDrift.get()) || delegate.writable(path);
+			}
+
+			@Override
+			public Set<PosixFilePermission> permissions(Path path)
+					throws java.io.IOException {
+				return delegate.permissions(path);
+			}
+
+			@Override
+			public boolean hasVisibleAcl(Path path) throws java.io.IOException {
+				return path.equals(aclDrift.get()) || delegate.hasVisibleAcl(path);
+			}
+		};
+	}
+
 	private Materials materials(String name) throws Exception {
 		Path testRoot = Files.createDirectory(temporaryDirectory.resolve(name)).toRealPath();
 		assertThat(testRoot.getFileSystem().supportedFileAttributeViews())
@@ -731,7 +989,8 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 				"TLSv1.3",
 				"TLS_AES_256_GCM_SHA384",
 				256,
-				sha256(Files.readAllBytes(caCertificate)));
+				sha256(Files.readAllBytes(caCertificate)),
+				sha256("synthetic-leaf-certificate".getBytes(StandardCharsets.US_ASCII)));
 		RuntimeFiles files = new RuntimeFiles(
 				repository,
 				caCertificate,
@@ -774,11 +1033,69 @@ class RelatedTopicReuseHoldoutPostgresTlsConnectionFactoryTests {
 			RuntimeFiles files) {
 	}
 
+	private static final class DriftableFileAccess implements
+			RelatedTopicReuseHoldoutPostgresTlsTestFixture.TestFileAccessInspector {
+
+		private final RelatedTopicReuseHoldoutPostgresTlsTestFixture
+				.TestFileAccessInspector delegate;
+		private Path ownerDrift;
+		private Path visibleAcl;
+
+		private DriftableFileAccess(
+				RelatedTopicReuseHoldoutPostgresTlsTestFixture.TestFileAccessInspector
+						delegate) {
+			this.delegate = delegate;
+		}
+
+		private void reportOwnerDrift(Path path) {
+			ownerDrift = path;
+		}
+
+		private void reportVisibleAcl(Path path) {
+			visibleAcl = path;
+		}
+
+		@Override
+		public String owner(Path path) throws java.io.IOException {
+			if (path.equals(ownerDrift)) {
+				return "synthetic-drifted-ca-owner";
+			}
+			return delegate.owner(path);
+		}
+
+		@Override
+		public boolean readable(Path path) throws java.io.IOException {
+			return delegate.readable(path);
+		}
+
+		@Override
+		public boolean writable(Path path) throws java.io.IOException {
+			return delegate.writable(path);
+		}
+
+		@Override
+		public Set<PosixFilePermission> permissions(Path path)
+				throws java.io.IOException {
+			return delegate.permissions(path);
+		}
+
+		@Override
+		public boolean hasVisibleAcl(Path path) throws java.io.IOException {
+			return path.equals(visibleAcl) || delegate.hasVisibleAcl(path);
+		}
+	}
+
 	private enum RoleDrift {
 		NONE,
 		MEMBERSHIP,
 		LOGIN,
 		CONFIGURATION
+	}
+
+	private enum SecretFileDrift {
+		OWNER,
+		WRITABLE,
+		ACL
 	}
 
 	private static final class ConnectionProbe implements InvocationHandler {

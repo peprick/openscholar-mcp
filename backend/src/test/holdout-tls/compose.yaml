@@ -1,6 +1,5 @@
 name: openscholar-holdout-tls-test
 
-x-postgres-image: &postgres-image pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
 x-postgres-security: &postgres-security
   platform: linux/amd64
   read_only: true
@@ -22,7 +21,7 @@ x-postgres-security: &postgres-security
 
 services:
   materials:
-    image: *postgres-image
+    image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
     platform: linux/amd64
     user: "0:0"
     read_only: true
@@ -55,7 +54,7 @@ services:
 
   tls-postgres:
     <<: *postgres-security
-    image: *postgres-image
+    image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD_FILE: /holdout/private/bootstrap-password
@@ -112,7 +111,7 @@ services:
 
   plaintext-postgres:
     <<: *postgres-security
-    image: *postgres-image
+    image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD_FILE: /holdout/private/bootstrap-password
@@ -191,6 +190,7 @@ services:
       HOLDOUT_RUNTIME_PASSWORD_FILE: /run/holdout-secret/runtime-password
       HOLDOUT_WRONG_PASSWORD_FILE: /run/holdout-secret/wrong-runtime-password
       HOLDOUT_SERVER_VERSION_FILE: /holdout/metadata/server-version
+      HOLDOUT_LEAF_CERTIFICATE_SHA256_FILE: /holdout/metadata/server-leaf-sha256
       HOLDOUT_EXPECTED_CA_OWNER: root
       HOLDOUT_EXPECTED_OWNER: holdout
     tmpfs:

@@ -211,7 +211,56 @@ The [related-topic reuse holdout protocol](RELATED_TOPIC_REUSE_HOLDOUT_PROTOCOL.
 
 A test-only deterministic PostgreSQL ranker projects generated label-free metadata into ephemeral digest-namespaced rows, exercises the production LOCAL control plus owner-scoped feedback and fusion, freezes repeated and hidden-perturbation observations, verifies zero provider calls and experimental snapshot writes, and cleans up the fixture. Post-ranking verification then mints an exact snapshot/corpus/judgment capability consumed by a test-only scorer that applies the frozen metrics and all 22 gates and returns a complete non-reader-facing in-memory result. The author-control baseline-hit gate accepts its sole grade-`3` relevant paper anywhere in the control top ten; Precision@1, rank-one irrelevance, and no-control-regression remain independent gates. Owner and filter violations count unique query/candidate pairs across the union of the control pool, every feedback pool, and the candidate top ten.
 
-Judgment release is atomic and one-shot for a particular `VerifiedCorpus` instance. A dedicated operator-only PostgreSQL ledger adds durable runtime-append-only cross-process finality keyed by the evaluation protocol and policy: its separate run key binds the exact bundle, corpus, manifest, judgment commitment, source inventory, evaluator, and candidate before ranking begins. It uses a collector-only clean-checkout capability, an INSERT-only runtime role, `fsync` plus synchronous-commit checks, a verified 15-second post-acquisition JDBC network timeout, targetless conflict handling, and an opaque capability minted only after commit. The coordinator requires and consumes that capability before invoking the ranking callback, then can mint one opaque first-run evidence capability bound to that exact completed snapshot. The deterministic scorer wraps that evidence, the post-ranking-verified snapshot, and its exact result in a privately constructed outcome; report creation accepts only that outcome rather than a raw caller-constructed result. There is no retry, reset, update, delete, lease, status, or completion API. A package-private, in-memory, filesystem-write-free workflow now composes collection, staged intake, claim, ranking, judgment verification, scoring, and exact evidence verification into a non-authorizing pending-publication capability. Canonical evidence-report schema v2 binds the durable run key, evaluation protocol and policy, freeze schema version, source inventory, complete snapshot, and score into the four-artifact identity. A private read-only retained-bundle verifier can compare those opaque bytes with a canonical external manifest under an operator-controlled filesystem assumption. These utilities still prove mechanics only for synthetic metadata. No real bundle or reviewer label is checked in, and there is still no live isolated command or build launcher; no TLS connection factory, provisioning automation, bounded initial-acquisition/connect/socket implementation, or authenticated endpoint isolation; no defense against database administrator and storage authority; no final evaluator freeze; and no safe publisher. The [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents those production requirements but does not implement them. Portable Java NIO cannot guarantee atomic directory installation without replacing a concurrently created target, so publication is explicitly deferred to a reviewed native exclusive-rename boundary. External acceptance and custody release remain unauthorized until the complete evaluator revision is independently frozen and a controlled live operator builds and runs that same verified checkout. Digest validation, database durability settings, in-process types, and declarations do not prove reviewer independence, process isolation, trusted time, storage honesty, tool authenticity, or semantic disjointness.
+Judgment release is atomic and one-shot for a particular `VerifiedCorpus` instance.
+A dedicated operator-only PostgreSQL ledger adds durable runtime-append-only
+cross-process finality keyed by the evaluation protocol and policy: its separate
+run key binds the exact bundle, corpus, manifest, judgment commitment, source
+inventory, evaluator, and candidate before ranking begins. It uses a collector-only
+clean-checkout capability, an INSERT-only runtime role, `fsync` plus
+synchronous-commit checks, a verified 15-second post-acquisition JDBC network
+timeout, targetless conflict handling, and an opaque capability minted only after
+commit. The coordinator requires and consumes that capability before invoking the
+ranking callback, then can mint one opaque first-run evidence capability bound to
+that exact completed snapshot. The deterministic scorer wraps that evidence, the
+post-ranking-verified snapshot, and its exact result in a privately constructed
+outcome; report creation accepts only that outcome rather than a raw
+caller-constructed result. There is no retry, reset, update, delete, lease, status,
+or completion API. A package-private, in-memory, filesystem-write-free workflow
+now composes collection, staged intake, claim, ranking, judgment verification,
+scoring, and exact evidence verification into a non-authorizing
+pending-publication capability. Canonical evidence-report schema v2 binds the
+durable run key, evaluation protocol and policy, freeze schema version, source
+inventory, complete snapshot, and score into the four-artifact identity. A private
+read-only retained-bundle verifier can compare those opaque bytes with a canonical
+external manifest under an operator-controlled filesystem assumption.
+
+A test-only TLS connection factory now provides endpoint schema v2 with the
+lowercase SHA-256 of the leaf certificate's DER encoding, normal PKIX validation,
+an exact DNS SAN and leaf pin, SCRAM/channel binding, bounded
+initial-acquisition/connect/socket settings, runtime-visible preflight, and a
+single revalidated Phase-B connection. Its explicit disposable seven-test harness
+exercises success, a real synthetic durable claim and replay rejection, and
+untrusted-CA, SAN-mismatch, wrong-SCRAM, plaintext-downgrade, and wrong-leaf-pin
+rejection against real PostgreSQL 17 TLS and plaintext test containers. A second
+four-test overlay proves bounded local TCP acquisition, direct-TLS handshake,
+verified-connection read, and server statement failures without a reconnect.
+These utilities still prove mechanics only for
+synthetic metadata. No real bundle or reviewer label is checked in, and there is
+still no live isolated command or build launcher, production provisioning,
+authenticated target-deployment isolation or process supervisor,
+descriptor-relative pathname safety, defense against database administrator and
+storage authority or an attacker replacing both the trusted endpoint record and
+runtime configuration, final evaluator freeze, or safe publisher. The
+[operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents those
+production requirements but does not implement them. Portable Java NIO cannot
+guarantee atomic directory installation without replacing a concurrently created
+target, so publication is explicitly deferred to a reviewed native
+exclusive-rename boundary. External acceptance and custody release remain
+unauthorized until the complete evaluator revision is independently frozen and a
+controlled live operator builds and runs that same verified checkout. Digest
+validation, database durability settings, endpoint pinning, in-process types, and
+declarations do not prove reviewer independence, process isolation, trusted time,
+storage honesty, tool authenticity, or semantic disjointness.
 
 ## Multilingual lexical configuration comparison
 

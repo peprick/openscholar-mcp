@@ -27,7 +27,54 @@ OpenScholar will not add publisher scraping, access-control bypasses, CAPTCHA wo
 
 - Expand the independently labelled relevance and deduplication corpus beyond the current synthetic/reference-shaped sets.
 - Add an independently authored multilingual holdout, robust language detection, supported-tokenizer coverage, and an indexing/migration design before considering any versioned lexical change; the current development-only comparator is not activation evidence.
-- Add an independently authored blind related-topic reuse holdout and target-deployment performance evidence before considering any product path. The current candidate was tuned against visible synthetic `DEVELOPMENT` labels, then frozen for regression; despite measured development gains, its expansion still surfaced owner-visible off-topic controls below rank one and is not activation evidence. The [holdout protocol](RELATED_TOPIC_REUSE_HOLDOUT_PROTOCOL.md) freezes a future input schema, metric semantics, decision gates, fail-closed staged parser, label-free ranking capability, and coordinator-issued raw-score evidence bound to the exact manifest and judgment commitment. A versioned canonical digest binds each score identity to its complete ranking snapshot, and one staged `VerifiedCorpus` permits only one atomic judgment release. A dedicated, INSERT-only PostgreSQL ledger provides durable runtime-append-only cross-process first-run finality, and the ranking coordinator requires its collector-bound committed capability. A package-private, in-memory, filesystem-write-free workflow now composes clean-checkout collection, staged intake, the one-shot claim, ranking, judgment verification, scoring, and exact evidence verification without exposing retry or publication. Evidence report schema v2 binds the durable first-run run key, evaluation protocol and policy, freeze schema version, source inventory ID, and exact ranking snapshot into the canonical four-artifact report identity. A package-private TLS factory now adds closed endpoint/runtime-file inputs, strict POSIX secret and separately owned canonical CA checks, pgJDBC `verify-full` plus SCRAM/channel binding, runtime-visible Phase-A preflight, configured connection bounds, and a returned ledger bound to one revalidated Phase-B connection. An explicit-only disposable harness now exercises that factory against real pinned PostgreSQL 17 TLS and plaintext containers with generated materials and a non-root runner. The [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents the complete dedicated-cluster, four-role, TLS, secret, migration, exact-toolchain, ordering, and external-custody requirements; the local factory and harness implement only bounded test-visible slices. There is still no real external holdout or live isolated evaluator command/build launcher; the harness supplies neither production provisioning nor a target-deployment or stalled-endpoint proof. Leaf-certificate fingerprint pinning, descriptor-relative pathname safety, production `pg_hba.conf`/firewall/storage/administrator/DNS-supervisor enforcement, protection against database administrator or storage authority, a final evaluator freeze, and a safe publisher remain absent. External custody, live execution, and activation remain unauthorized. A future publisher needs a reviewed native exclusive-rename boundary because portable Java NIO cannot guarantee atomic no-replace directory promotion. The frozen [100,000-paper scale protocol](RELATED_TOPIC_REUSE_PERFORMANCE_PROTOCOL.md) is a single-caller, warm-cache Testcontainers diagnostic with record-only latency and does not satisfy either requirement.
+- Add an independently authored blind related-topic reuse holdout and
+  target-deployment performance evidence before considering any product path. The
+  current candidate was tuned against visible synthetic `DEVELOPMENT` labels,
+  then frozen for regression; despite measured development gains, its expansion
+  still surfaced owner-visible off-topic controls below rank one and is not
+  activation evidence. The [holdout protocol](RELATED_TOPIC_REUSE_HOLDOUT_PROTOCOL.md)
+  freezes a future input schema, metric semantics, decision gates, fail-closed
+  staged parser, label-free ranking capability, and coordinator-issued raw-score
+  evidence bound to the exact manifest and judgment commitment. A versioned
+  canonical digest binds each score identity to its complete ranking snapshot,
+  and one staged `VerifiedCorpus` permits only one atomic judgment release. A
+  dedicated, INSERT-only PostgreSQL ledger provides durable runtime-append-only
+  cross-process first-run finality, and the ranking coordinator requires its
+  collector-bound committed capability. A package-private, in-memory,
+  filesystem-write-free workflow now composes clean-checkout collection, staged
+  intake, the one-shot claim, ranking, judgment verification, scoring, and exact
+  evidence verification without exposing retry or publication. Evidence report
+  schema v2 binds the durable first-run run key, evaluation protocol and policy,
+  freeze schema version, source inventory ID, and exact ranking snapshot into the
+  canonical four-artifact report identity. A package-private TLS factory now adds
+  closed endpoint/runtime-file inputs, endpoint schema v2 with lowercase DER leaf
+  SHA-256, strict POSIX secret and separately owned canonical CA checks, normal
+  PKIX plus exact DNS SAN and leaf-pin validation, SCRAM/channel binding,
+  runtime-visible Phase-A preflight, configured connection bounds, and a returned
+  ledger bound to one revalidated Phase-B connection. An explicit-only disposable
+  seven-test harness exercises that factory and a real synthetic durable claim
+  against pinned PostgreSQL 17 TLS and plaintext containers with generated
+  materials and a non-root runner, including independent replay and
+  wrong-leaf-pin rejection. A separate four-test overlay proves bounded local TCP
+  acquisition, direct-TLS handshake, verified-connection read, and server
+  statement failures without another image, capability, or reconnect. The
+  [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents the
+  complete dedicated-cluster, four-role, TLS, secret, migration, exact-toolchain,
+  ordering, and external-custody requirements; the local factory and harness
+  implement only bounded test-visible slices. There is still no real external
+  holdout or live isolated evaluator command/build launcher; the harness supplies
+  neither production provisioning, a production process supervisor, nor
+  target-deployment proof. Descriptor-relative pathname safety, production
+  `pg_hba.conf`/firewall/storage/administrator/DNS-supervisor enforcement,
+  protection against a database administrator, storage authority, or attacker
+  replacing both the trusted endpoint record and runtime configuration, a final
+  evaluator freeze, and a safe publisher remain absent. External custody, live
+  execution, and activation remain unauthorized. A future publisher needs a
+  reviewed native exclusive-rename boundary because portable Java NIO cannot
+  guarantee atomic no-replace directory promotion. The frozen
+  [100,000-paper scale protocol](RELATED_TOPIC_REUSE_PERFORMANCE_PROTOCOL.md) is a
+  single-caller, warm-cache Testcontainers diagnostic with record-only latency and
+  does not satisfy either requirement.
 - Revisit the default-off hybrid pgvector path only after representative evaluation shows stable gains.
 - Add performance budgets for the target deployment rather than extrapolating from loopback measurements.
 

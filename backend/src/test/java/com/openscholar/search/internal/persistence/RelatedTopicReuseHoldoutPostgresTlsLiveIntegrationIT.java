@@ -74,6 +74,40 @@ class RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT {
 	}
 
 	@Test
+	void boundTlsLedgerCommitsSyntheticFirstRunAndRejectsDurableReplay()
+			throws Exception {
+		Path trustedCa = path("HOLDOUT_CA_CERTIFICATE");
+		EndpointRecord endpoint = tlsEndpoint(
+				required("HOLDOUT_TLS_HOST"),
+				requiredPort("HOLDOUT_TLS_PORT"),
+				required("HOLDOUT_TLS_SERVER_ADDRESS"),
+				trustedCa);
+		RuntimeFiles files = runtimeFiles(
+				trustedCa, path("HOLDOUT_RUNTIME_PASSWORD_FILE"));
+		var inputs = RelatedTopicReuseHoldoutFirstRunTestFixture.inputs(
+				"live-tls-ledger");
+		var firstLedger = RelatedTopicReuseHoldoutPostgresTlsConnectionFactory
+				.preflight(endpoint, files);
+
+		var committed = firstLedger.claim(inputs.commitment(), inputs.checkout());
+
+		assertThat(committed.runKey()).matches("[0-9a-f]{64}");
+		assertThat(committed.externalBundleAcceptanceAuthorized()).isFalse();
+		assertThat(committed.custodyReleaseAuthorized()).isFalse();
+		assertThat(committed.productActivationAuthorized()).isFalse();
+
+		var replayLedger = RelatedTopicReuseHoldoutPostgresTlsConnectionFactory
+				.preflight(endpoint, files);
+		assertThatThrownBy(() -> replayLedger.claim(
+				inputs.commitment(), inputs.checkout()))
+				.isExactlyInstanceOf(
+						RelatedTopicReuseHoldoutPostgresFirstRunLedger
+								.AlreadyClaimedException.class)
+				.hasMessage("HOLDOUT_LEDGER_FIRST_RUN_ALREADY_CLAIMED")
+				.hasNoCause();
+	}
+
+	@Test
 	void untrustedCaIsRejectedBeforeAConnectionIsReleased() throws Exception {
 		Path untrustedCa = path("HOLDOUT_UNTRUSTED_CA_CERTIFICATE");
 		assertThat(Files.mismatch(path("HOLDOUT_CA_CERTIFICATE"), untrustedCa))
@@ -120,6 +154,24 @@ class RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT {
 	}
 
 	@Test
+	void wrongLeafCertificatePinIsRejectedBeforeAConnectionIsReleased()
+			throws Exception {
+		Path trustedCa = path("HOLDOUT_CA_CERTIFICATE");
+		String expectedPin = leafCertificateSha256();
+		String wrongPin = (expectedPin.charAt(0) == '0' ? "1" : "0")
+				+ expectedPin.substring(1);
+		assertThat(wrongPin).isNotEqualTo(expectedPin);
+		assertConnectionRejected(
+				tlsEndpoint(
+					required("HOLDOUT_TLS_HOST"),
+					requiredPort("HOLDOUT_TLS_PORT"),
+					required("HOLDOUT_TLS_SERVER_ADDRESS"),
+					trustedCa,
+					wrongPin),
+				runtimeFiles(trustedCa, path("HOLDOUT_RUNTIME_PASSWORD_FILE")));
+	}
+
+	@Test
 	void directTlsCannotDowngradeToThePlaintextServer() throws Exception {
 		Path trustedCa = path("HOLDOUT_CA_CERTIFICATE");
 		String plaintextHost = required("HOLDOUT_PLAINTEXT_HOST");
@@ -139,6 +191,16 @@ class RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT {
 	private static EndpointRecord tlsEndpoint(
 			String host, int port, String serverAddress, Path caCertificate)
 			throws IOException {
+		return tlsEndpoint(
+				host, port, serverAddress, caCertificate, leafCertificateSha256());
+	}
+
+	private static EndpointRecord tlsEndpoint(
+			String host,
+			int port,
+			String serverAddress,
+			Path caCertificate,
+			String leafCertificateSha256) throws IOException {
 		return new EndpointRecord(
 				RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.ENDPOINT_SCHEMA_VERSION,
 				host,
@@ -148,7 +210,8 @@ class RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT {
 				required("HOLDOUT_TLS_PROTOCOL"),
 				required("HOLDOUT_TLS_CIPHER"),
 				requiredInteger("HOLDOUT_TLS_BITS"),
-				sha256(caCertificate));
+				sha256(caCertificate),
+				leafCertificateSha256);
 	}
 
 	private static RuntimeFiles runtimeFiles(Path caCertificate, Path passwordFile) {
@@ -248,5 +311,15 @@ class RelatedTopicReuseHoldoutPostgresTlsLiveIntegrationIT {
 		catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256 is unavailable", exception);
 		}
+	}
+
+	private static String leafCertificateSha256() throws IOException {
+		String digest = Files.readString(
+				path("HOLDOUT_LEAF_CERTIFICATE_SHA256_FILE")).strip();
+		if (!digest.matches("[0-9a-f]{64}")) {
+			throw new IllegalStateException(
+					"HOLDOUT_LEAF_CERTIFICATE_SHA256_FILE has an invalid digest");
+		}
+		return digest;
 	}
 }

@@ -20,6 +20,7 @@ const fixtureFiles = [
   "CONTRIBUTING.md",
   "backend/pom.xml",
   "backend/Dockerfile",
+  "backend/src/test/holdout-tls/Dockerfile.runner",
   "backend/mvnw",
   "backend/mvnw.cmd",
   "backend/.mvn/wrapper/maven-wrapper.properties",

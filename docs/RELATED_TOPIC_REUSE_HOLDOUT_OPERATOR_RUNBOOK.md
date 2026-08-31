@@ -74,8 +74,9 @@ The fixed database and object identities are:
 
 Do not point the evaluator at an alias that can resolve to multiple unreviewed
 servers. The approved DNS name, port, database, server build, CA digest, and
-certificate identity form one versioned endpoint record retained outside the
-repository.
+certificate identity form one endpoint-schema-v2 record retained outside the
+repository. Its certificate identity is the lowercase 64-hex SHA-256 of the exact
+leaf X.509 certificate's DER encoding.
 
 ## Responsibilities and four-role boundary
 
@@ -198,11 +199,14 @@ parameters, role, socket, pool, or SSL implementation—and configures pgJDBC
 - a server certificate that chains to that CA and whose subject alternative name
   matches the exact configured DNS name; the current typed profile does not accept
   an IP literal as its server name;
+- an endpoint-schema-v2 leaf pin equal to the lowercase 64-hex SHA-256 of that
+  exact leaf certificate's DER encoding;
 - no user-supplied JDBC query parameters, trust-all manager, `sslmode=require`,
   fallback to plaintext, or alternate Unix socket;
-- direct PostgreSQL 17 TLS through the fixed LibPQ SSL factory and a fixed verifier
-  that accepts only the exact DNS subject alternative name—never CN fallback or a
-  wildcard—plus SCRAM-SHA-256 authentication only and required channel binding;
+- direct PostgreSQL 17 TLS through the fixed LibPQ SSL factory, preserving normal
+  PKIX path validation, and a fixed verifier that accepts only the exact pinned
+  leaf and exact DNS subject alternative name—never CN fallback or a wildcard—plus
+  SCRAM-SHA-256 authentication only and required channel binding;
 - no ambient client certificate, private key, GSS, JAAS, or SPNEGO credential;
 - separately administered `hostssl` rules restricted to the fixed database and
   two login roles; and
@@ -218,21 +222,29 @@ supplementary evidence. They do not replace the factory's CA and hostname
 verification, and the database name returned by the server does not authenticate
 the network endpoint.
 
-The endpoint record currently binds the canonical CA digest and observed TLS
-properties but does not independently extract and pin the leaf-certificate
-fingerprint. That remains required before a live run. The explicit-only
-`scripts/test-related-topic-reuse-holdout-tls.sh` harness now exercises the
-factory against disposable real PostgreSQL 17 TLS and plaintext containers,
+Endpoint schema v2 binds the canonical CA digest, the lowercase DER leaf SHA-256,
+and the observed TLS properties. Normal PKIX validation, exact DNS SAN validation,
+and the exact leaf pin must all pass. The explicit-only
+`scripts/test-related-topic-reuse-holdout-tls.sh` harness exercises this boundary
+against disposable real PostgreSQL 17 TLS and plaintext containers,
 runtime-generated certificates, Linux POSIX owners and modes, and the fixed
-catalog on an internal test network. That local proof is not evidence that a
-production endpoint, `pg_hba.conf`, firewall, DNS route, administrator, or
-storage boundary satisfies this section.
+catalog on an internal test network. Its seven tests cover successful Phase A and
+single-use Phase B, a real synthetic ledger claim with durable replay rejection,
+then reject an untrusted CA, DNS SAN mismatch, wrong SCRAM password, plaintext
+downgrade, and wrong leaf pin. That local proof is not
+evidence that a production endpoint, `pg_hba.conf`, firewall, DNS route,
+administrator, storage boundary, or target deployment satisfies this section.
 
-Record the server certificate fingerprint, issuer, subject alternative name,
-validity interval, CA digest, endpoint, and exact server build before release.
-Certificate rotation changes the approved endpoint record and requires another
-preflight; never weaken verification to work around an expired or mismatched
-certificate.
+The pin assumes that endpoint schema v2 and its runtime configuration are trusted
+launcher inputs retained through an independent control. An attacker able to
+replace both can substitute a different endpoint and matching pin together; the
+digest is an integrity binding, not an authority or signature.
+
+Record the lowercase DER leaf SHA-256, issuer, subject alternative name, validity
+interval, CA digest, endpoint, and exact server build before release. Certificate
+rotation changes the approved schema-v2 endpoint record and leaf pin and requires
+another preflight; the schema version itself remains v2. Never weaken verification
+to work around an expired or mismatched certificate.
 
 ## Secret-file contract
 
@@ -394,10 +406,17 @@ The first claim can open exactly one Phase-B connection, revalidates the CA and
 password files first, and preflights that same connection before handing it to the
 ledger claim path. The source is not returned to an ordinary caller.
 
-These configured bounds still lack a real stalled TCP endpoint, stalled TLS
-handshake, non-responsive PostgreSQL target, and process-supervisor proof. DNS and
-process startup require an external hard deadline, and no local Java timeout
-claim should be treated as that supervisor evidence. Expiry after a claim attempt
+The explicit-only
+`scripts/test-related-topic-reuse-holdout-tls-timeouts.sh` harness now exercises
+four real local deadline paths: a saturated TCP accept queue, a direct-TLS
+downstream stall, a downstream stall after the exact Phase-B connection has been
+verified, and server cancellation of `pg_sleep(30)`. It checks the applicable
+10- and 15-second stage bounds, the socket-timeout cause or `57014` SQL state, and
+absence of a reconnect. The pinned runner's fixed 180-second one-shot watchdog
+terminates the explicit test process rather than restarting it. Equal login and connect bounds mean the first test proves
+bounded acquisition rather than attributing one specific pgJDBC timer. DNS and
+process startup still require an external hard deadline, and this in-container
+test watchdog is not production process-supervisor evidence. Expiry after a claim attempt
 remains a consumed or ambiguous run; a timeout is never permission to retry.
 
 Disable driver, pool, orchestration, shell, and service-manager retry. Health
@@ -428,8 +447,9 @@ isolation evidence.
    session, endpoint and server identity, exact database inventory, cross-database
    runtime/auditor privileges, disabled bootstrap, fixed role memberships and
    settings, and configured connection bounds. Independently verify the migration,
-   `pg_hba.conf`, firewall, leaf-certificate fingerprint, storage, administrator
-   controls, and real timeout behavior that the factory cannot prove.
+   `pg_hba.conf`, firewall, the independently retained endpoint-schema-v2 leaf
+   identity, storage, administrator controls, and real timeout behavior that the
+   factory cannot prove.
 6. Remove bootstrap, owner, auditor, application, provider, network, registry,
    build-service, and Docker authorities from the evaluator environment.
 7. Make the verified clone, artifact, dependency cache, and configuration
@@ -565,19 +585,29 @@ or proof of independent authorship.
   reflection-based mechanics fixtures.
 - [`RelatedTopicReuseHoldoutPostgresTlsConnectionFactory`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutPostgresTlsConnectionFactory.java)
   implements closed typed endpoint/runtime-file intake, pgJDBC `verify-full`,
+  normal PKIX plus exact DNS SAN and endpoint-schema-v2 leaf-pin validation,
   runtime-visible Phase-A catalog and TLS preflight, and a returned ledger bound
   to one revalidated Phase-B connection. Its pathname checks retain the documented
-  TOCTOU/administrator trust boundary. It does not pin the leaf-certificate
-  fingerprint, provision a cluster, inspect `pg_hba.conf`, prove
-  firewall/DNS/storage/administrator integrity, impose a process-supervisor
-  deadline, or supply production target evidence.
+  TOCTOU/administrator trust boundary. It does not provision a cluster, inspect
+  `pg_hba.conf`, prove firewall/DNS/storage/administrator integrity, impose a
+  process-supervisor deadline, or supply production target evidence.
 - [`test-related-topic-reuse-holdout-tls.sh`](../scripts/test-related-topic-reuse-holdout-tls.sh)
   composes a disposable pinned PostgreSQL TLS target, a reachable plaintext
   negative target, generated materials, test-only ledger provisioning, and a
-  non-root explicit Maven `*IT` runner. It publishes no database port and removes
-  generated volumes after the run. It is local integration evidence only: it is
-  not a live evaluator, supported deployment, reusable credential provisioner,
-  persistent ledger, firewall/DNS attestation, or custody boundary.
+  non-root explicit Maven `*IT` runner. Its seven tests include successful
+  preflight/single-use access, a real synthetic claim with durable replay
+  rejection, and untrusted-CA, SAN-mismatch, wrong-SCRAM, plaintext-downgrade,
+  and wrong-leaf-pin rejection. It publishes no database port and removes generated volumes after
+  the run. It is local integration evidence only: it is not a live evaluator,
+  supported deployment, reusable credential provisioner, persistent ledger,
+  firewall/DNS attestation, or custody boundary.
+- [`test-related-topic-reuse-holdout-tls-timeouts.sh`](../scripts/test-related-topic-reuse-holdout-tls-timeouts.sh)
+  overlays that disposable target with a fixed-address non-root runner and four
+  in-JVM transport fault tests. It proves bounded local TCP acquisition, TLS
+  handshake, verified-connection read, and server-statement failure without a
+  retry, under a fixed 180-second test-process watchdog; it is not an external
+  supervisor, production network test, or target
+  deployment attestation.
 - [`RelatedTopicReuseHoldoutOperatorWorkflow`](../backend/src/test/java/com/openscholar/search/internal/persistence/RelatedTopicReuseHoldoutOperatorWorkflow.java)
   preserves the supported claim-to-evidence call graph and failure states in
   memory without publishing files; it is package-private and supplies no live

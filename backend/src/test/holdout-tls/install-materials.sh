@@ -79,7 +79,8 @@ rm -f -- \
   "${plaintext_private_directory}/runtime-password" \
   "${runtime_secret_directory}/runtime-password" \
   "${runtime_secret_directory}/wrong-runtime-password" \
-  "${metadata_directory}/server-version"
+  "${metadata_directory}/server-version" \
+  "${metadata_directory}/server-leaf-sha256"
 
 runtime_password="$(openssl rand -hex 32)"
 wrong_runtime_password="$(openssl rand -hex 32)"
@@ -165,6 +166,27 @@ openssl x509 \
   >/dev/null 2>&1 \
   || fail "generated server certificate has the wrong DNS SAN"
 
+# Pin the canonical X.509 DER bytes, not the textual PEM encoding. The runner
+# receives only this public digest; the private server-materials volume remains
+# unavailable to it.
+openssl x509 \
+  -in "${server_directory}/server.crt" \
+  -outform DER \
+  -out "${working_directory}/server.der"
+server_leaf_sha256="$(openssl dgst \
+  -sha256 \
+  -r \
+  "${working_directory}/server.der" | sed 's/ .*$//')"
+case "${server_leaf_sha256}" in
+  ''|*[!0-9a-f]*)
+    fail "generated server leaf SHA-256 has an invalid format"
+    ;;
+esac
+[ "${#server_leaf_sha256}" -eq 64 ] \
+  || fail "generated server leaf SHA-256 has an invalid length"
+printf '%s' "${server_leaf_sha256}" \
+  >"${metadata_directory}/server-leaf-sha256"
+
 server_version="$(postgres --version | sed 's/^postgres (PostgreSQL) //')"
 [ -n "${server_version}" ] || fail "PostgreSQL server version was empty"
 printf '%s' "${server_version}" >"${metadata_directory}/server-version"
@@ -174,7 +196,8 @@ chmod 0555 "${ca_directory}" "${metadata_directory}"
 chmod 0444 \
   "${ca_directory}/ca.crt" \
   "${ca_directory}/untrusted-ca.crt" \
-  "${metadata_directory}/server-version"
+  "${metadata_directory}/server-version" \
+  "${metadata_directory}/server-leaf-sha256"
 
 chown -R "${postgres_uid}:${postgres_gid}" \
   "${server_directory}" \
@@ -205,5 +228,6 @@ runtime_password=''
 wrong_runtime_password=''
 tls_bootstrap_password=''
 plaintext_bootstrap_password=''
+server_leaf_sha256=''
 
 printf '%s\n' 'holdout-tls-materials: generated isolated runtime materials'

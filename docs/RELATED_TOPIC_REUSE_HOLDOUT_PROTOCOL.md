@@ -309,15 +309,18 @@ and updated.
 
 `RelatedTopicReuseHoldoutPostgresTlsConnectionFactory` now supplies the ordinary
 ledger connection boundary. It accepts only closed typed endpoint and runtime-file
-inputs, validates a canonical digest-bound CA, requires a separately owned
+inputs. Endpoint schema v2 requires both the canonical CA SHA-256 and the
+lowercase 64-hex SHA-256 of the leaf certificate's DER encoding. The factory
+validates the digest-bound CA, requires a separately owned
 non-evaluator CA path with protected ancestry, enforces the trusted expected-owner
 name on the `0700` password directory plus `0400` single-link password file, and
 rejects repository-contained or changed files. Password content is bound with fresh
 per-instance keyed bytes that are wiped when Phase B is consumed; no stable
 password digest string is retained. It configures pgJDBC 42.7.12 for direct
-PostgreSQL 17 TLS with `verify-full`, the fixed LibPQ SSL factory and hostname
-verifier that requires an exact DNS SAN without CN or wildcard fallback,
-SCRAM-SHA-256 only, required channel binding, and no ambient client
+PostgreSQL 17 TLS with `verify-full` and the fixed LibPQ SSL factory, so normal
+PKIX path validation against that CA completes before the fixed verifier requires
+both the exact leaf pin and an exact DNS SAN without CN or wildcard fallback. It
+also requires SCRAM-SHA-256 only, required channel binding, and no ambient client
 certificate or GSS/JAAS/SPNEGO credentials. Login, connect and TLS-response
 timeouts are 10 seconds; socket and JDBC network timeouts are 15 seconds. A
 10-second server-side `statement_timeout` is fixed in the startup options and
@@ -334,14 +337,25 @@ revalidates the CA and password files and repeats the preflight on that exact
 Phase-B connection. Direct source access and the raw `DataSource` constructor are
 retained only behind explicit reflection-based mechanics fixtures.
 
-This local boundary does not independently extract or pin the leaf-certificate
-fingerprint and has no real TLS-enabled container or target proof. It also cannot
-prove DNS supervision, `pg_hba.conf`, firewall, administrator, storage, backup, or
-host integrity, and its configured timeouts are not a process-supervisor deadline.
-Its repeated pathname checks are not descriptor-relative and cannot eliminate
-replacement races by the CA owner, a host administrator, or another ancestor
-authority. Those controls and real stalled-endpoint/target validation remain
-prerequisites for a live run.
+This local boundary now enforces the endpoint-record leaf pin, and the first
+explicit Docker harness exercises it against a disposable real TLS-enabled
+PostgreSQL test target. Its seven tests cover successful Phase A and single-use
+Phase B, a real bound-ledger synthetic claim plus durable replay rejection, and
+independent untrusted-CA, DNS-SAN-mismatch, wrong-SCRAM, plaintext-downgrade, and
+wrong-leaf-pin failures. A second explicit harness adds four Linux transport
+proofs without another image or privileged sidecar: a saturated TCP accept queue,
+a direct-TLS downstream stall, a downstream stall on an already verified Phase-B
+connection, and a long statement cancelled by the server. The observed failures
+stay inside the configured 10- or 15-second stage bounds and the stalled Phase-B
+connection does not reconnect. These local tests do not establish a target
+deployment or prove DNS supervision, `pg_hba.conf`, firewall, administrator,
+storage, backup, host integrity, or a production process-supervisor deadline.
+Repeated pathname
+checks are not descriptor-relative and cannot eliminate replacement races by the
+CA owner, a host administrator, or another ancestor authority. Pinning also cannot
+protect an evaluator when an attacker can replace both the trusted endpoint record
+and the runtime configuration supplied to it. Those controls, target-deployment
+validation, and an external hard supervisor remain prerequisites for a live run.
 
 The factory rejects visible non-empty Java `AclFileAttributeView` entries and
 requires the CA plus every ancestor to be non-writable by the evaluator process.
@@ -419,11 +433,12 @@ publisher, REST/MCP/UI entry point, or live command. The separate factory is als
 package-private test-source rather than a deployed endpoint or runner. There is
 still no real external bundle; no isolated command that builds and executes the
 frozen evaluator with an exact toolchain; no automated dedicated-cluster or role
-provisioning; no real TLS-enabled target proof or leaf-certificate fingerprint
-pinning; no `pg_hba.conf`, firewall, storage, administrator, or DNS/process
-supervisor enforcement; no frozen evaluator revision/source digest; and no
-custody-authorized publisher. The remaining production requirements and execution
-ordering are specified in the
+provisioning; no target-deployment TLS evidence; no `pg_hba.conf`, firewall,
+storage, administrator, or DNS/process-supervisor enforcement; no frozen evaluator
+revision/source digest; and no custody-authorized publisher. The disposable TLS
+harness and endpoint schema v2 leaf pin are bounded local mechanics, not those
+production controls. The remaining production requirements and execution ordering
+are specified in the
 [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md).
 The checked-in ranker tests are mechanics evidence, not an external holdout result.
 These schema details are for review, not an invitation to release a real bundle;
@@ -489,18 +504,19 @@ an INSERT-only durable PostgreSQL first-run claim whose one-shot capability is
 mandatory at the ranking coordinator. The package-private workflow now composes
 collection through exact schema-v2 evidence verification in memory and returns no
 filesystem output. The package-private TLS connection factory adds closed
-endpoint/runtime-file inputs, `verify-full` and SCRAM/channel-bound pgJDBC
-configuration, read-only runtime-visible preflight, and a returned ledger bound to
-one private revalidated connection. It does not load a real external bundle or
+endpoint-schema-v2/runtime-file inputs, normal PKIX plus exact DNS SAN and
+DER-leaf-pin verification, SCRAM/channel-bound pgJDBC configuration, read-only
+runtime-visible preflight, and a returned ledger bound to one private revalidated
+connection. It does not load a real external bundle or
 provide the live isolated command that must build and run the same verified
 standalone checkout.
 The [operator runbook](RELATED_TOPIC_REUSE_HOLDOUT_OPERATOR_RUNBOOK.md) documents
-the remaining dedicated-cluster and role contract. Provisioning automation, real
-TLS target and stalled-endpoint proof, leaf-certificate fingerprint pinning,
-administrator-managed network/storage controls, and the DNS/process supervisor
-remain pending. The next safe sequence is to implement and independently verify
-those controls; commit and review the complete runnable evaluator; then retain its
-exact revision, inventory identity, and source digests outside the repository. A
+the remaining dedicated-cluster and role contract. Production provisioning,
+target-deployment proof, administrator-managed network/storage controls, and the
+DNS/process supervisor remain pending. The next safe sequence is
+to implement and independently verify those controls; commit and review the
+complete runnable evaluator; then retain its exact revision, inventory identity,
+and source digests outside the repository. A
 later native exclusive publisher or separately reviewed external custody handoff
 is still required before custody release. Until that frozen evaluator exists and a
 genuinely external first run is reviewed, there is no holdout result. Even a
@@ -531,15 +547,18 @@ fresh intake calls or another process can create another flag. The PostgreSQL le
 provides durable runtime-append-only cross-process finality through the mandatory
 committed capability, but only for callers that preserve the supported composition
 and database trust boundary. Its `fsync` and synchronous-commit checks establish
-local WAL acknowledgment. The separate factory adds CA/hostname verification and
-exact runtime-visible endpoint/session checks, but does not pin the leaf
-certificate or prove DNS, firewall, `pg_hba.conf`, trusted time, administrator
-integrity, storage honesty, immutable retention, backup durability, or disaster
-recovery. An owner, superuser, or storage administrator remains capable of altering
-or removing the evidence. Synthetic mechanics do not prove timeout behavior or a
-real TLS target; a real first run must use independently provisioned, separately
-governed persistent infrastructure and the reviewed operator runbook, never the
-ephemeral test container.
+local WAL acknowledgment. The separate factory adds normal PKIX validation, exact
+DNS SAN and leaf-certificate pinning, and exact runtime-visible endpoint/session
+checks, but it does not prove DNS, firewall, `pg_hba.conf`, trusted time,
+administrator integrity, storage honesty, immutable retention, backup durability,
+or disaster recovery. An attacker who can replace both the trusted endpoint record
+and runtime configuration can substitute a different pin and endpoint together.
+An owner, superuser, or storage administrator remains capable of altering or
+removing the evidence. The disposable real-TLS timeout harness proves bounded
+local fault behavior, not an external process supervisor or a target deployment;
+a real first run must use independently
+provisioned, separately governed persistent infrastructure and the reviewed
+operator runbook, never the ephemeral test container.
 
 Inline synthetic bundles in ordinary tests are parser and invariant fixtures
 only. They are never holdout evidence, must never be reported as scores, and do
