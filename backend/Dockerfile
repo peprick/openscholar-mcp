@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk@sha256:32a5f68f3bb3ace880243c9e55c89ad8fb09e5de904b6c8990693b103840c4d3 AS build
+FROM eclipse-temurin:21-jdk@sha256:85f00967bcc624fc19fa9c2cf124ea426a5363898e267141726f31f358c2e14b AS build
 
 WORKDIR /workspace
 COPY .mvn .mvn
