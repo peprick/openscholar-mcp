@@ -73,6 +73,7 @@ function successfulPdf(renderPromise: Promise<void> = Promise.resolve()) {
     render: vi.fn(() => renderTask),
   } as unknown as PDFPageProxy;
   const document = {
+    getData: vi.fn().mockResolvedValue(new Uint8Array([37, 80, 68, 70])),
     getPage: vi.fn().mockResolvedValue(page),
     numPages: 3,
   } as unknown as PDFDocumentProxy;
@@ -83,6 +84,9 @@ function successfulPdf(renderPromise: Promise<void> = Promise.resolve()) {
 afterEach(() => {
   cleanup();
   loader.startPdfLoad.mockReset();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("PdfReader", () => {
@@ -139,10 +143,82 @@ describe("PdfReader", () => {
     );
 
     const externalLink = screen.getByRole("link", {
-      name: /Open PDF in a new tab/,
+      name: /View PDF/,
     });
     expect(externalLink).toHaveAttribute("href", source.pdfUrl);
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("downloads the already loaded PDF without server-side storage", async () => {
+    const user = userEvent.setup();
+    const pdf = successfulPdf();
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+    const nativeUrl = URL;
+    const createObjectURL = vi.fn(() => "blob:verified-paper");
+    const revokeObjectURL = vi.fn();
+    class DownloadUrl extends nativeUrl {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    }
+    vi.stubGlobal("URL", DownloadUrl);
+    let capturedDownload = "";
+    let capturedHref = "";
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      capturedDownload = this.download;
+      capturedHref = this.href;
+    });
+
+    render(<PdfReader source={source} title="A verified research paper" />);
+    await screen.findByRole("img");
+    await user.click(screen.getByRole("button", { name: "Download PDF" }));
+
+    await waitFor(() => expect(pdf.document.getData).toHaveBeenCalledOnce());
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(capturedDownload).toBe("A-verified-research-paper.pdf");
+    expect(capturedHref).toBe("blob:verified-paper");
+    await waitFor(() =>
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:verified-paper"),
+    );
+  });
+
+  it("honors a download intent after the verified PDF finishes loading", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/papers/${testIds.paper}/read/${testIds.location}?download=1&from=search#reader`,
+    );
+    const pdf = successfulPdf();
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+    const nativeUrl = URL;
+    const createObjectURL = vi.fn(() => "blob:auto-download");
+    const revokeObjectURL = vi.fn();
+    class DownloadUrl extends nativeUrl {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    }
+    vi.stubGlobal("URL", DownloadUrl);
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(
+      <PdfReader
+        autoDownload
+        source={source}
+        title="A verified research paper"
+      />,
+    );
+
+    await waitFor(() => expect(pdf.document.getData).toHaveBeenCalledOnce());
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe(
+      `/papers/${testIds.paper}/read/${testIds.location}`,
+    );
+    expect(window.location.search).toBe("?from=search");
+    expect(window.location.hash).toBe("#reader");
+    await waitFor(() =>
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:auto-download"),
+    );
   });
 
   it("supports direct page entry with bounded validation and focus restoration", async () => {
@@ -256,7 +332,7 @@ describe("PdfReader", () => {
     );
     expect(alert).not.toHaveTextContent("Failed to fetch");
     const fallbackLink = within(alert).getByRole("link", {
-      name: /Open PDF in a new tab/,
+      name: /View PDF/,
     });
     expect(fallbackLink).toHaveAttribute("href", source.pdfUrl);
     expect(fallbackLink).toHaveAttribute("rel", "noopener noreferrer");
@@ -267,7 +343,7 @@ describe("PdfReader", () => {
     expect(readerHeader).not.toBeNull();
     expect(
       within(readerHeader!).getByRole("link", {
-        name: /Open PDF in a new tab/,
+        name: /View PDF/,
       }),
     ).toHaveAttribute("href", source.pdfUrl);
 
@@ -303,18 +379,22 @@ describe("PdfReader", () => {
     renderFailure.reject(new Error("Canvas rendering failed"));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(brokenPdf.task.destroy).toHaveBeenCalledOnce());
+    expect(brokenPdf.task.destroy).not.toHaveBeenCalled();
     expect(alert).toHaveTextContent(
       "This PDF cannot be displayed inside OpenScholar.",
     );
     expect(alert).not.toHaveTextContent("Canvas rendering failed");
     expect(
       within(alert).getByRole("link", {
-        name: /Open PDF in a new tab/,
+        name: /View PDF/,
       }),
     ).toHaveAttribute("href", source.pdfUrl);
+    expect(
+      within(alert).getByRole("button", { name: "Download PDF" }),
+    ).toBeEnabled();
 
     await user.click(within(alert).getByRole("button", { name: "Retry reader" }));
+    expect(brokenPdf.task.destroy).toHaveBeenCalledOnce();
     expect(
       await screen.findByRole("img", {
         name: "A verified research paper, page 1 of 3",

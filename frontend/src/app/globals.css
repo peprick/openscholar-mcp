@@ -482,6 +482,41 @@ button:disabled {
   white-space: nowrap;
 }
 
+.quickFilterRow {
+  border: 0;
+  display: flex;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.checkControl--prominent {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  border-radius: var(--radius-sm);
+  min-height: 50px;
+  padding: 8px 13px;
+}
+
+.checkControl--prominent > span {
+  display: grid;
+  gap: 1px;
+}
+
+.checkControl--prominent strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.checkControl--prominent small {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.checkControl--prominent:has(input:checked) strong,
+.checkControl--prominent:has(input:checked) small {
+  color: var(--green-dark);
+}
+
 .filterPanel {
   border-bottom: 1px solid var(--line);
   margin-top: 14px;
@@ -1074,6 +1109,37 @@ button:disabled {
   gap: 22px;
   justify-content: space-between;
   margin-top: 20px;
+}
+
+.resultActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pdfResultActionGroup {
+  display: contents;
+}
+
+.pdfActionMessage {
+  color: var(--ink-faint);
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  margin: 0;
+  text-align: right;
+}
+
+.pdfActionMessage--error {
+  color: var(--danger);
+}
+
+.pdfSourceNote {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  margin: 10px 0 0;
+  text-align: right;
 }
 
 .identifierList {
@@ -1682,6 +1748,15 @@ button:disabled {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.readerDownloadStatus {
+  color: var(--danger);
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  margin: 0;
+  max-width: 360px;
+  text-align: right;
 }
 
 .readerProvenance {
@@ -2712,6 +2787,10 @@ button:disabled {
   .readerExternalActions {
     justify-content: flex-start;
   }
+
+  .readerDownloadStatus {
+    text-align: left;
+  }
 }
 
 @media (max-width: 680px) {
@@ -2891,6 +2970,18 @@ button:disabled {
   .resultFooter {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .resultActions {
+    justify-content: flex-start;
+  }
+
+  .pdfSourceNote {
+    text-align: left;
+  }
+
+  .pdfActionMessage {
+    text-align: left;
   }
 
   .paperHeader h1 {

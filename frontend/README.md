@@ -50,17 +50,18 @@ The separate `pnpm test:e2e:compose` lane requires the disposable Spring Boot/Po
 
 ## Current flow
 
-- Search OpenAlex-backed research with bounded filters.
+- Search OpenAlex-backed research with bounded filters, including an always-visible PDF-link filter.
 - Reopen immutable cached search snapshots.
 - Inspect canonical paper metadata and provenance.
 - Resolve and open independently verified legal versions.
+- View or download eligible results after OpenScholar verifies a fresh HTTPS PDF location.
 - Read fresh, verified HTTPS PDF locations directly in the PDF.js canvas reader.
 - Download BibTeX or CSL-JSON citations.
 - Create, rename, and delete persistent research collections.
 - Save canonical papers with reading status and normalized tags.
 - Filter the saved library and export selected papers as BibTeX or CSL-JSON.
 
-Provider-reported PDF URLs from search results are never rendered as verified downloads. Legal-access actions use only the backend `/versions` contract. The reader does not proxy or retain document bytes: the browser requests a selected, fresh verified source directly. Sources that do not permit cross-origin reading fail closed to the external-link fallback.
+Provider-reported PDF URLs from search results are never rendered as verified downloads. View and download actions first use the backend `/versions` contract, then select a fresh verified source. The reader does not proxy or retain document bytes on the OpenScholar server: the browser requests the source directly and prepares an explicit download from the already loaded PDF.js document. Sources that do not permit cross-origin reading fail closed to the external-link fallback.
 
 Every frontend response carries an enforced Content Security Policy and related safety headers. The production Caddy policy mirrors the exact checked-in Next.js value, with a regression test that fails on drift; its documented `unsafe-inline` and PDF.js-specific `wasm-unsafe-eval` allowances are bounded residual risks rather than an absence of CSP.
 

@@ -7,7 +7,7 @@ import type {
   PDFPageProxy,
   RenderTask,
 } from "pdfjs-dist";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { startPdfLoad } from "@/features/reader/pdfjs-loader";
 import type { ReaderSource } from "@/features/reader/reader-source";
@@ -56,6 +56,29 @@ function canvasOutputScale(width: number, height: number): number {
 
 function ignoreCleanupFailure(promise: Promise<void>): void {
   void promise.catch(() => undefined);
+}
+
+function pdfFilename(title: string): string {
+  const stem = title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+  return `${stem === "" ? "research-paper" : stem}.pdf`;
+}
+
+function consumeDownloadIntent(): void {
+  const currentUrl = new URL(window.location.href);
+  if (currentUrl.searchParams.get("download") !== "1") {
+    return;
+  }
+  currentUrl.searchParams.delete("download");
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+  );
 }
 
 async function accessiblePageText(page: PDFPageProxy): Promise<string | null> {
@@ -121,6 +144,7 @@ async function accessiblePageText(page: PDFPageProxy): Promise<string | null> {
 }
 
 export function PdfReader(props: {
+  autoDownload?: boolean;
   source: ReaderSource;
   title: string;
 }): React.JSX.Element {
@@ -133,9 +157,11 @@ export function PdfReader(props: {
 }
 
 function PdfReaderSession({
+  autoDownload = false,
   source,
   title,
 }: {
+  autoDownload?: boolean;
   source: ReaderSource;
   title: string;
 }): React.JSX.Element {
@@ -145,11 +171,14 @@ function PdfReaderSession({
   const shortcutHintId = useId();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const destroyLoadingTaskRef = useRef<(() => void) | null>(null);
+  const autoDownloadStartedRef = useRef(false);
   const failureRef = useRef<HTMLDivElement>(null);
   const focusViewportAfterRenderRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [pageCount, setPageCount] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -253,7 +282,6 @@ function PdfReaderSession({
       renderTask?.cancel();
       if (active) {
         setRenderError(true);
-        destroyLoadingTaskRef.current?.();
       }
     }, PAGE_RENDER_TIMEOUT_MS);
 
@@ -297,7 +325,6 @@ function PdfReaderSession({
       } catch {
         if (active && !timedOut) {
           setRenderError(true);
-          destroyLoadingTaskRef.current?.();
         }
       } finally {
         window.clearTimeout(renderTimeout);
@@ -321,6 +348,53 @@ function PdfReaderSession({
     renderedPageMatches &&
     renderedPage !== null &&
     renderedPage.accessibleText !== null;
+
+  const downloadPdf = useCallback(async (): Promise<void> => {
+    if (document === null || loadError || downloading) {
+      return;
+    }
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const bytes = await document.getData();
+      if (bytes.byteLength < 1 || bytes.byteLength > MAX_PDF_BYTES) {
+        throw new Error("invalid PDF download size");
+      }
+      const blob = new Blob([new Uint8Array(bytes).buffer], {
+        type: "application/pdf",
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.download = pdfFilename(title);
+      link.href = objectUrl;
+      link.style.display = "none";
+      window.document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch {
+      setDownloadError(
+        "The PDF could not be prepared for download. Use View PDF instead.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }, [document, downloading, loadError, title]);
+
+  useEffect(() => {
+    if (
+      !autoDownload ||
+      document === null ||
+      loadError ||
+      autoDownloadStartedRef.current
+    ) {
+      return;
+    }
+    autoDownloadStartedRef.current = true;
+    consumeDownloadIntent();
+    void downloadPdf();
+  }, [autoDownload, document, downloadPdf, loadError]);
+
   const renderAnnouncement = readerFailed
     ? "PDF preview unavailable. External fallback and retry controls are ready."
     : loading
@@ -463,6 +537,8 @@ function PdfReaderSession({
     viewportRef.current?.focus({ preventScroll: true });
     focusViewportAfterRender();
     setDocument(null);
+    setDownloadError(null);
+    setDownloading(false);
     setPageCount(0);
     setPageNumber(1);
     setPageInput("1");
@@ -487,8 +563,16 @@ function PdfReaderSession({
         </div>
         <div className="readerExternalActions">
           <ExternalLink className="button button--primary" href={source.pdfUrl}>
-            Open PDF in a new tab
+            View PDF
           </ExternalLink>
+          <button
+            className="button button--secondary"
+            disabled={document === null || loadError || downloading}
+            onClick={() => void downloadPdf()}
+            type="button"
+          >
+            {downloading ? "Preparing download…" : "Download PDF"}
+          </button>
           {source.landingPageUrl !== null &&
           source.landingPageUrl !== source.pdfUrl ? (
             <ExternalLink
@@ -497,6 +581,15 @@ function PdfReaderSession({
             >
               View source page
             </ExternalLink>
+          ) : null}
+          {downloadError !== null ? (
+            <p
+              aria-live="polite"
+              className="readerDownloadStatus"
+              role="status"
+            >
+              {downloadError}
+            </p>
           ) : null}
         </div>
       </header>
@@ -701,8 +794,18 @@ function PdfReaderSession({
                 className="button button--primary"
                 href={source.pdfUrl}
               >
-                Open PDF in a new tab
+                View PDF
               </ExternalLink>
+              {document !== null ? (
+                <button
+                  className="button button--secondary"
+                  disabled={downloading}
+                  onClick={() => void downloadPdf()}
+                  type="button"
+                >
+                  {downloading ? "Preparing download…" : "Download PDF"}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}

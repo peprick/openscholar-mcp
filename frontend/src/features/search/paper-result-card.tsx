@@ -11,6 +11,8 @@ import {
 } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 
+import { PdfResultActions } from "./pdf-result-actions";
+
 function matchReasonLabel(feature: string): string {
   if (feature === "TITLE_EXACT" || feature === "TITLE_PREFIX") {
     return "The title closely matches your topic";
@@ -44,6 +46,7 @@ export function PaperResultCard({
       ? null
       : `arXiv ${result.identifiers.arxiv}`,
   ].filter((value): value is string => value !== null);
+  const pdfUrl = result.reportedPdfUrl;
 
   return (
     <article className="resultCard">
@@ -99,13 +102,24 @@ export function PaperResultCard({
               ))}
             </div>
           ) : null}
-          <Link
-            className="textLink"
-            href={`/papers/${result.paperId}` as Route}
-          >
-            View paper &amp; access <span aria-hidden="true">→</span>
-          </Link>
+          <div className="resultActions">
+            {pdfUrl !== null ? (
+              <PdfResultActions paperId={result.paperId} title={result.title} />
+            ) : null}
+            <Link
+              className={pdfUrl === null ? "textLink" : "button button--ghost"}
+              href={`/papers/${result.paperId}` as Route}
+            >
+              Paper details <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </div>
+        {pdfUrl !== null ? (
+          <p className="pdfSourceNote">
+            PDF reported by a research source. OpenScholar checks the link before
+            opening or downloading it.
+          </p>
+        ) : null}
         <details className="rankingDetails">
           <summary>Why it matched</summary>
           <div>

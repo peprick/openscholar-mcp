@@ -18,7 +18,7 @@ The setup, operation, and development instructions below are for copyright holde
 
 - Searches OpenAlex by default, with optional Europe PMC, DataCite, DOAJ, and licence-gated CORE discovery adapters.
 - Searches owner-visible metadata locally when explicitly requested or when AUTO mode cannot return provider-backed results.
-- Filters online or local results to records where a discovery provider reported a PDF link, while keeping legal-access verification separate before reading.
+- Offers an always-visible PDF filter for online or local results where a discovery provider reported a direct link, while keeping legal-access verification separate before opening it.
 - Installs as a PWA with an account-neutral fallback and one explicit, passphrase-encrypted, metadata-only offline collection; server-backed search still requires the local or hosted OpenScholar stack.
 - Normalizes and merges records by DOI, arXiv ID, OpenAlex ID, PMID, PMCID, and provider identity.
 - Opens an owner-visible canonical paper directly from a DOI, arXiv, or OpenAlex reference without calling a provider.
@@ -26,7 +26,8 @@ The setup, operation, and development instructions below are for copyright holde
 - Verifies legal full-text candidates through exact DOI/arXiv evidence from Unpaywall and arXiv.
 - Provides collections, reading status, tags, saved-library search, and BibTeX or CSL-JSON exports.
 - Gives readers a plain-language privacy center for downloading their OpenScholar data or deleting their owned searches and library state.
-- Opens fresh, verified, HTTPS, CORS-compatible PDFs in a browser PDF.js reader and falls back to the source site when embedded reading is not supported.
+- Gives eligible search results clear View PDF and Download PDF actions, verifies the selected link first, and opens fresh HTTPS, CORS-compatible documents in the browser PDF.js reader.
+- Downloads a user-requested PDF from the already verified browser reader without storing or proxying the document on the OpenScholar server; incompatible sources fall back to their original site.
 - Exposes six bounded research tools and three read-only JSON resource templates to agents over stateless Streamable HTTP MCP.
 - Returns versioned, non-disclosing MCP tool errors with stable codes, actions, and optional retry guidance.
 

@@ -113,7 +113,7 @@ function AccessLocation({
         <div className="buttonGroup accessLocationActions">
           {readerHref !== null ? (
             <Link className="button button--primary" href={readerHref}>
-              Read this PDF
+              View this PDF
             </Link>
           ) : null}
           <ExternalLink
@@ -125,9 +125,17 @@ function AccessLocation({
             href={href}
           >
             {location.pdfUrl !== null
-              ? "Open original PDF"
+              ? "View original PDF"
               : "Open full-text page"}
           </ExternalLink>
+          {location.pdfUrl !== null && readerHref !== null ? (
+            <Link
+              className="button button--secondary"
+              href={`${readerHref}?download=1` as Route}
+            >
+              Download this PDF
+            </Link>
+          ) : null}
         </div>
       ) : (
         <p className="inlineNotice">
@@ -283,10 +291,18 @@ export function AccessPanel({
       </div>
 
       <div className="accessActions">
-        {preferredReaderHref !== null ? (
-          <Link className="button button--primary" href={preferredReaderHref}>
-            Read PDF
-          </Link>
+        {preferredReader !== null && preferredReaderHref !== null ? (
+          <>
+            <Link className="button button--primary" href={preferredReaderHref}>
+              View PDF
+            </Link>
+            <Link
+              className="button button--secondary"
+              href={`${preferredReaderHref}?download=1` as Route}
+            >
+              Download PDF
+            </Link>
+          </>
         ) : null}
         <button
           className={`button ${

@@ -252,10 +252,25 @@ export function SearchForm({
         </div>
       </div>
 
+      <fieldset className="quickFilterRow">
+        <legend className="srOnly">Quick filters</legend>
+        <label className="checkControl checkControl--prominent">
+          <input
+            aria-label="PDF link reported only"
+            name="pdfAvailableOnly"
+            type="checkbox"
+          />
+          <span>
+            <strong>PDF link reported</strong>
+            <small>Show reported direct links; OpenScholar verifies before use</small>
+          </span>
+        </label>
+      </fieldset>
+
       <details className="filterPanel">
         <summary>
           Refine search
-          <span>Year, type, access, language, and citations</span>
+          <span>Year, type, open access, language, and citations</span>
         </summary>
         <div className="filterGrid">
           <div className="fieldGroup fieldGroup--years">
@@ -351,10 +366,6 @@ export function SearchForm({
           <label className="checkControl">
             <input name="openAccessOnly" type="checkbox" />
             <span>Show papers marked as open access</span>
-          </label>
-          <label className="checkControl">
-            <input name="pdfAvailableOnly" type="checkbox" />
-            <span>Only show results with a PDF link</span>
           </label>
         </div>
       </details>
