@@ -65,7 +65,7 @@ jobs:
           cache-dependency-path: backend/pom.xml
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -76,7 +76,7 @@ jobs:
         run: ./mvnw --batch-mode --no-transfer-progress package -DskipTests
 
       - name: Analyze
-        uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: /language:${{ matrix.language }}
 
@@ -123,7 +123,7 @@ jobs:
 
       - name: Upload Trivy results to code scanning
         if: always() && hashFiles('security-reports/trivy-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: security-reports/trivy-results.sarif
           category: trivy-filesystem
@@ -212,14 +212,14 @@ jobs:
 
       - name: Upload backend image findings
         if: always() && github.event_name != 'pull_request' && hashFiles('security-reports/backend-image.sarif') != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: security-reports/backend-image.sarif
           category: trivy-backend-image
 
       - name: Upload frontend image findings
         if: always() && github.event_name != 'pull_request' && hashFiles('security-reports/frontend-image.sarif') != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: security-reports/frontend-image.sarif
           category: trivy-frontend-image
@@ -341,7 +341,7 @@ jobs:
 
       - name: Upload hardened runtime findings
         if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}-hardened.sarif', matrix.name)) != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: security-reports/${{ matrix.name }}-hardened.sarif
           category: trivy-hardened-${{ matrix.name }}
@@ -446,7 +446,7 @@ jobs:
 
       - name: Upload third-party image findings
         if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}.sarif', matrix.name)) != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: security-reports/${{ matrix.name }}.sarif
           category: trivy-third-party-${{ matrix.name }}
