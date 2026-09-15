@@ -28,6 +28,33 @@ The documentation workflow and clean-source verifier also run `scripts/validate-
 
 `scripts/production-compose.sh` resolves the minimum and observability profiles before every delegated deployment command. It rejects an unexpected service set, a service outside the reviewed `linux/amd64` target, floating or digest-only references, unreviewed third-party substitutions, project-owned images outside the approved repositories, the checked-in `replace-me` values, Compose-global configuration injection, dangerous volume-deleting `down` options, and ambient shell overrides that do not satisfy `deploy/production-images.lock`. The frontend's secret-reading entrypoint is the image default and is also explicit in production Compose, so executable deployment behavior is covered by that image's digest and later signature/attestation.
 
+## Reviewed JavaScript security patches
+
+The 2026-09-15 dependency review keeps the application and conformance toolchain on their existing release lines rather than taking unrelated major upgrades. Next.js and `eslint-config-next` are deliberately aligned at **16.3.4**. The remaining transitive pins live in each package's `pnpm-workspace.yaml`, which pnpm **11.19.0** records in the corresponding lockfile:
+
+| Package | Reviewed version | Why the pin is needed |
+|---|---|---|
+| `next` / `eslint-config-next` | 16.3.4 | Next 16.3.1 is below the 16.3.3 fixes for [Windows-hosted remote code execution](https://github.com/advisories/GHSA-p293-qw3h-jr36) and [AVIF image-optimization remote code execution](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4). Keep the framework and lint configuration on the same patch. |
+| `sharp` | 0.35.4 | Next's optional image dependency must include the [libheif vulnerability fixes](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c). Its platform binaries and libvips dependencies are regenerated together, not edited by hand. |
+| `js-yaml` | 4.3.2 | ESLint's dependency needs the [empty-merge-source CPU exhaustion fix](https://github.com/advisories/GHSA-2883-xcg3-v3hh), even though it is development tooling rather than the serving application. |
+| `hono` | 4.13.5 | The MCP SDK's transitive HTTP framework needs fixes for [static-output traversal](https://github.com/advisories/GHSA-gqvv-2mrq-wpjv), [unbounded body nesting](https://github.com/advisories/GHSA-g6gw-c38x-mqfc), and [fragment/query interpretation differences](https://github.com/advisories/GHSA-crvj-82cr-hjcx). |
+| `fast-uri` | 3.1.6 | The SDK's AJV dependency needs the [IDN canonicalization](https://github.com/advisories/GHSA-5jgf-p345-68v8), [IPv6 normalization](https://github.com/advisories/GHSA-f65p-4m7j-42xc), [repeated percent-decoding](https://github.com/advisories/GHSA-fph4-wmhf-6fwf), and [encoded-scheme normalization](https://github.com/advisories/GHSA-jqff-g426-hqxp) fixes. |
+| `qs` | 6.16.0 | The additional audit found Express's transitive parser below the [array-limit fix](https://github.com/advisories/GHSA-x5fp-wj9c-mxmx) and [attacker-controlled `isBuffer` denial-of-service fix](https://github.com/advisories/GHSA-4mjr-xmp4-gh2g). This compatible 6.x update removes both findings. |
+
+The conformance CLI **0.1.16** and SDK **1.30.0** themselves remain unchanged. These overrides are reproducible security constraints, not vulnerability suppressions. Review and remove an override only when the upstream dependency graph naturally selects a fixed version, regenerate the lockfile with the pinned pnpm release, and rerun the frontend check, dependency audits, and MCP compatibility/conformance lanes. Do not delete an override merely because the installed graph audits clean: the override may be the reason it is clean.
+
+Validation commands:
+
+```bash
+pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+pnpm --dir frontend check
+pnpm --dir frontend audit --audit-level low
+pnpm --dir tools/mcp-conformance install --frozen-lockfile --ignore-scripts
+pnpm --dir tools/mcp-conformance audit --audit-level low
+```
+
+Both dependency graphs reported no known npm advisories after these patches. This is a point-in-time registry result, not a guarantee against unknown vulnerabilities or a substitute for image scanning. Rebuild/redeploy the frontend image to use the patches: updating repository lockfiles does not alter an already running container.
+
 ## Hardened proxy and probe images
 
 The official Caddy and blackbox-exporter runtime images currently fail this repository's high/critical runtime-image policy, so they are not production defaults and have no vulnerability exception. The checked-in [Caddy Dockerfile](../deploy/images/caddy/Dockerfile), [blackbox-exporter Dockerfile](../deploy/images/blackbox-exporter/Dockerfile), and [build notes](../deploy/images/README.md) produce minimal scratch final stages from checksum-pinned source commits and reviewed module graphs. The security workflow's `hardened-runtime-security` matrix runs the complete upstream tests in mandatory build ancestry, validates each checked-in runtime configuration under the intended restrictions, generates an SBOM, and Trivy-scans both local outputs. The protected release workflow repeats the local gate before publishing, then pulls, inspects, and rescans the exact returned digest before signing and attesting it. A successful workflow still does not promote or deploy that digest: an operator must review the retained evidence and manually place all four approved `tag@sha256` references in the ignored `deploy/production.env`. Until then, the example placeholders deliberately block the edge and observability deployment.
