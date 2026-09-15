@@ -159,6 +159,9 @@ describe("PdfReader", () => {
 
     render(<PdfReader source={source} title="A verified research paper" />);
 
+    expect(screen.getByText("repository.example.edu · Accepted Manuscript · Unpaywall")).toBeVisible();
+    expect(screen.queryByText(/UNPAYWALL/)).not.toBeInTheDocument();
+
     const announcement = screen.getByRole("status");
     expect(announcement).toHaveAttribute("aria-atomic", "true");
     expect(announcement).toHaveAttribute("aria-live", "polite");

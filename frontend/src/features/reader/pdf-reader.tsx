@@ -11,7 +11,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { startPdfLoad } from "@/features/reader/pdfjs-loader";
 import type { ReaderSource } from "@/features/reader/reader-source";
-import { humanizeEnum } from "@/shared/formatting/display";
+import { humanizeEnum, providerDisplayName } from "@/shared/formatting/display";
 import { ExternalLink } from "@/shared/ui/external-link";
 
 const MIN_ZOOM = 0.25;
@@ -632,7 +632,7 @@ function PdfReaderSession({
           <span className="eyebrow">Verified source reader</span>
           <h1 id="reader-heading">{title}</h1>
           <p>
-            {source.hostDomain} · {humanizeEnum(source.versionType)} · {source.source}
+            {source.hostDomain} · {humanizeEnum(source.versionType)} · {providerDisplayName(source.source)}
           </p>
         </div>
         {!readerFailed ? (
