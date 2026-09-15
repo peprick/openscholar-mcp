@@ -25,6 +25,7 @@
   --radius: 14px;
   --radius-lg: 24px;
   --shell: 1180px;
+  --connectivity-height: 0px;
   color-scheme: light;
 }
 
@@ -1490,7 +1491,7 @@ button:disabled {
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   position: sticky;
-  top: 104px;
+  top: calc(104px + var(--connectivity-height));
 }
 
 .metadataCardHeader {
@@ -1702,7 +1703,7 @@ button:disabled {
 }
 
 .accessLocationActions {
-  align-items: stretch;
+  align-items: center;
 }
 
 .readerPage {
@@ -1747,6 +1748,11 @@ button:disabled {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.readerSourceLink {
+  flex-basis: 100%;
   justify-content: flex-end;
 }
 
@@ -1800,7 +1806,7 @@ button:disabled {
   margin-bottom: 12px;
   padding: 9px;
   position: sticky;
-  top: 78px;
+  top: calc(78px + var(--connectivity-height));
   z-index: 5;
 }
 
@@ -1891,8 +1897,9 @@ button:disabled {
   background-size: 100% 32px;
   border-radius: var(--radius-lg);
   display: grid;
-  justify-items: center;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 68vh;
+  min-width: 0;
   overflow: auto;
   padding: clamp(20px, 4vw, 52px);
   position: relative;
@@ -1902,6 +1909,7 @@ button:disabled {
   background: white;
   box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
   display: block;
+  margin-inline: auto;
   max-width: none;
 }
 
@@ -2785,6 +2793,10 @@ button:disabled {
   }
 
   .readerExternalActions {
+    justify-content: flex-start;
+  }
+
+  .readerSourceLink {
     justify-content: flex-start;
   }
 

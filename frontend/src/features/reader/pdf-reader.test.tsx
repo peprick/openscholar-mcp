@@ -90,6 +90,67 @@ afterEach(() => {
 });
 
 describe("PdfReader", () => {
+  it("fits narrow containers by default, refits on resize, and preserves manual zoom", async () => {
+    const user = userEvent.setup();
+    let availableWidth = 300;
+    let notifyResize = (): void => undefined;
+    const disconnect = vi.fn();
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(
+      function (this: Element) {
+        return this.classList.contains("readerViewport") ? availableWidth : 0;
+      },
+    );
+    class ReaderResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver);
+      }
+      disconnect = disconnect;
+      observe = vi.fn();
+    }
+    vi.stubGlobal("ResizeObserver", ReaderResizeObserver);
+    const pdf = successfulPdf();
+    loader.startPdfLoad.mockResolvedValue(pdf.task);
+
+    const view = render(
+      <PdfReader source={source} title="A verified research paper" />,
+    );
+    const canvas = await screen.findByRole("img");
+    await waitFor(() => expect(canvas).toHaveStyle({ width: "300px" }));
+    expect(screen.getByText("50%")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Fit width" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    availableWidth = 240;
+    act(() => notifyResize());
+    await waitFor(() => expect(canvas).toHaveStyle({ width: "240px" }));
+    expect(screen.getByText("40%")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    await waitFor(() => expect(canvas).toHaveStyle({ width: "390px" }));
+    expect(screen.getByText("65%")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Fit width" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    const rendersBeforeResize = vi.mocked(pdf.page.render).mock.calls.length;
+
+    availableWidth = 360;
+    act(() => notifyResize());
+    expect(canvas).toHaveStyle({ width: "390px" });
+    expect(pdf.page.render).toHaveBeenCalledTimes(rendersBeforeResize);
+
+    await user.click(screen.getByRole("button", { name: "Fit width" }));
+    await waitFor(() => expect(canvas).toHaveStyle({ width: "360px" }));
+    expect(screen.getByText("60%")).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: /PDF page viewport/ }),
+    ).toHaveFocus();
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
   it("loads the verified source and provides page and zoom controls", async () => {
     const user = userEvent.setup();
     const firstRender = deferred<void>();
@@ -342,10 +403,9 @@ describe("PdfReader", () => {
       .closest("header");
     expect(readerHeader).not.toBeNull();
     expect(
-      within(readerHeader!).getByRole("link", {
-        name: /View PDF/,
-      }),
-    ).toHaveAttribute("href", source.pdfUrl);
+      within(readerHeader!).queryByRole("link", { name: /View PDF/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /View PDF/ })).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "Retry reader" }));
     expect(
@@ -392,6 +452,9 @@ describe("PdfReader", () => {
     expect(
       within(alert).getByRole("button", { name: "Download PDF" }),
     ).toBeEnabled();
+    expect(
+      screen.getAllByRole("button", { name: "Download PDF" }),
+    ).toHaveLength(1);
 
     await user.click(within(alert).getByRole("button", { name: "Retry reader" }));
     expect(brokenPdf.task.destroy).toHaveBeenCalledOnce();

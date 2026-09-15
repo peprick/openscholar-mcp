@@ -14,7 +14,7 @@ import type { ReaderSource } from "@/features/reader/reader-source";
 import { humanizeEnum } from "@/shared/formatting/display";
 import { ExternalLink } from "@/shared/ui/external-link";
 
-const MIN_ZOOM = 0.75;
+const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.25;
 const MAX_CANVAS_PIXELS = 16_000_000;
@@ -29,7 +29,10 @@ const PAGE_RENDER_TIMEOUT_MS = 20_000;
 
 type RenderedPage = {
   accessibleText: string | null;
+  fitWidth: boolean;
   pageNumber: number;
+  requestedZoom: number;
+  viewportWidth: number | null;
   zoom: number;
 };
 
@@ -184,11 +187,48 @@ function PdfReaderSession({
   const [pageInput, setPageInput] = useState("1");
   const [pageInputInvalid, setPageInputInvalid] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [displayZoom, setDisplayZoom] = useState(1);
+  const [fitWidth, setFitWidth] = useState(true);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
   const [loadPercent, setLoadPercent] = useState<number | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [renderError, setRenderError] = useState(false);
   const [renderedPage, setRenderedPage] = useState<RenderedPage | null>(null);
   const [showAccessibleText, setShowAccessibleText] = useState(false);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) {
+      return;
+    }
+
+    function measureViewport(): void {
+      if (viewport === null) {
+        return;
+      }
+      const styles = window.getComputedStyle(viewport);
+      const availableWidth = Math.floor(
+        viewport.clientWidth -
+          (Number.parseFloat(styles.paddingLeft) || 0) -
+          (Number.parseFloat(styles.paddingRight) || 0),
+      );
+      setViewportWidth(availableWidth > 0 ? availableWidth : null);
+    }
+
+    measureViewport();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measureViewport);
+    observer?.observe(viewport);
+    window.addEventListener("resize", measureViewport);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measureViewport);
+    };
+  }, []);
+
+  const fittedViewportWidth = fitWidth ? viewportWidth : null;
 
   useEffect(() => {
     let active = true;
@@ -292,13 +332,20 @@ function PdfReaderSession({
           return;
         }
         const baseViewport = page.getViewport({ scale: 1 });
+        // Fit can go below the manual zoom floor; large pages must still fit a phone.
+        const requestedScale =
+          fitWidth && fittedViewportWidth !== null
+            ? Math.min(1, fittedViewportWidth / baseViewport.width)
+            : zoom;
+        const viewportScale = boundedViewportScale(
+          baseViewport.width,
+          baseViewport.height,
+          requestedScale,
+        );
         const viewport = page.getViewport({
-          scale: boundedViewportScale(
-            baseViewport.width,
-            baseViewport.height,
-            zoom,
-          ),
+          scale: viewportScale,
         });
+        setDisplayZoom(viewportScale);
         const outputScale = canvasOutputScale(viewport.width, viewport.height);
         const canvas = canvasRef.current;
         canvas.width = Math.floor(viewport.width * outputScale);
@@ -320,7 +367,14 @@ function PdfReaderSession({
         }
         const accessibleText = await accessiblePageText(page);
         if (active && !timedOut) {
-          setRenderedPage({ accessibleText, pageNumber, zoom });
+          setRenderedPage({
+            accessibleText,
+            fitWidth,
+            pageNumber,
+            requestedZoom: zoom,
+            viewportWidth: fittedViewportWidth,
+            zoom: viewportScale,
+          });
         }
       } catch {
         if (active && !timedOut) {
@@ -337,12 +391,15 @@ function PdfReaderSession({
       window.clearTimeout(renderTimeout);
       renderTask?.cancel();
     };
-  }, [document, pageNumber, zoom]);
+  }, [document, fitWidth, fittedViewportWidth, pageNumber, zoom]);
 
   const readerFailed = loadError || renderError;
   const loading = document === null && !loadError;
   const renderedPageMatches =
-    renderedPage?.pageNumber === pageNumber && renderedPage.zoom === zoom;
+    renderedPage?.pageNumber === pageNumber &&
+    renderedPage.requestedZoom === zoom &&
+    renderedPage.fitWidth === fitWidth &&
+    renderedPage.viewportWidth === fittedViewportWidth;
   const rendering = document !== null && !readerFailed && !renderedPageMatches;
   const accessibleTextAvailable =
     renderedPageMatches &&
@@ -406,7 +463,7 @@ function PdfReaderSession({
       : rendering
         ? `Rendering page ${pageNumber} of ${pageCount}.`
         : `Page ${pageNumber} of ${pageCount} rendered at ${Math.round(
-            zoom * 100,
+            displayZoom * 100,
           )} percent${
             accessibleTextAvailable ? ". Extracted page text is available." : "."
           }`;
@@ -462,13 +519,28 @@ function PdfReaderSession({
     }
     const boundedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextZoom));
     focusViewportAfterRender();
-    if (boundedZoom === zoom && renderedPageMatches) {
+    if (!fitWidth && boundedZoom === zoom && renderedPageMatches) {
       focusViewportAfterRenderRef.current = false;
       viewportRef.current?.focus({ preventScroll: true });
       return;
     }
     setRenderedPage(null);
+    setFitWidth(false);
     setZoom(boundedZoom);
+  }
+
+  function fitPageWidth(): void {
+    if (document === null || readerFailed) {
+      return;
+    }
+    focusViewportAfterRender();
+    if (fitWidth && renderedPageMatches) {
+      focusViewportAfterRenderRef.current = false;
+      viewportRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    setRenderedPage(null);
+    setFitWidth(true);
   }
 
   function submitPageNumber(event: React.FormEvent<HTMLFormElement>): void {
@@ -518,12 +590,12 @@ function PdfReaderSession({
       case "+":
       case "=":
         event.preventDefault();
-        changeZoom(zoom + ZOOM_STEP);
+        changeZoom(displayZoom + ZOOM_STEP);
         break;
       case "-":
       case "_":
         event.preventDefault();
-        changeZoom(zoom - ZOOM_STEP);
+        changeZoom(displayZoom - ZOOM_STEP);
         break;
       case "0":
         event.preventDefault();
@@ -544,6 +616,8 @@ function PdfReaderSession({
     setPageInput("1");
     setPageInputInvalid(false);
     setZoom(1);
+    setDisplayZoom(1);
+    setFitWidth(true);
     setLoadPercent(null);
     setLoadError(false);
     setRenderError(false);
@@ -561,37 +635,39 @@ function PdfReaderSession({
             {source.hostDomain} · {humanizeEnum(source.versionType)} · {source.source}
           </p>
         </div>
-        <div className="readerExternalActions">
-          <ExternalLink className="button button--primary" href={source.pdfUrl}>
-            View PDF
-          </ExternalLink>
-          <button
-            className="button button--secondary"
-            disabled={document === null || loadError || downloading}
-            onClick={() => void downloadPdf()}
-            type="button"
-          >
-            {downloading ? "Preparing download…" : "Download PDF"}
-          </button>
-          {source.landingPageUrl !== null &&
-          source.landingPageUrl !== source.pdfUrl ? (
-            <ExternalLink
-              className="button button--ghost"
-              href={source.landingPageUrl}
-            >
-              View source page
+        {!readerFailed ? (
+          <div className="readerExternalActions">
+            <ExternalLink className="button button--primary" href={source.pdfUrl}>
+              View PDF
             </ExternalLink>
-          ) : null}
-          {downloadError !== null ? (
-            <p
-              aria-live="polite"
-              className="readerDownloadStatus"
-              role="status"
+            <button
+              className="button button--secondary"
+              disabled={document === null || loadError || downloading}
+              onClick={() => void downloadPdf()}
+              type="button"
             >
-              {downloadError}
-            </p>
-          ) : null}
-        </div>
+              {downloading ? "Preparing download…" : "Download PDF"}
+            </button>
+            {source.landingPageUrl !== null &&
+            source.landingPageUrl !== source.pdfUrl ? (
+              <ExternalLink
+                className="textLink readerSourceLink"
+                href={source.landingPageUrl}
+              >
+                View source page
+              </ExternalLink>
+            ) : null}
+            {downloadError !== null ? (
+              <p
+                aria-live="polite"
+                className="readerDownloadStatus"
+                role="status"
+              >
+                {downloadError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       <dl className="readerProvenance">
@@ -677,31 +753,40 @@ function PdfReaderSession({
         <button
           aria-label="Zoom out"
           className="button button--ghost readerZoomButton"
-          disabled={document === null || zoom <= MIN_ZOOM || readerFailed}
-          onClick={() => changeZoom(zoom - ZOOM_STEP)}
+          disabled={document === null || displayZoom <= MIN_ZOOM || readerFailed}
+          onClick={() => changeZoom(displayZoom - ZOOM_STEP)}
           type="button"
         >
           −
         </button>
         <span className="readerZoomStatus">
-          {Math.round(zoom * 100)}%
+          {Math.round(displayZoom * 100)}%
         </span>
         <button
           aria-label="Zoom in"
           className="button button--ghost readerZoomButton"
-          disabled={document === null || zoom >= MAX_ZOOM || readerFailed}
-          onClick={() => changeZoom(zoom + ZOOM_STEP)}
+          disabled={document === null || displayZoom >= MAX_ZOOM || readerFailed}
+          onClick={() => changeZoom(displayZoom + ZOOM_STEP)}
           type="button"
         >
           +
         </button>
         <button
           className="button button--ghost"
-          disabled={document === null || zoom === 1 || readerFailed}
+          disabled={document === null || displayZoom === 1 || readerFailed}
           onClick={() => changeZoom(1)}
           type="button"
         >
           Reset zoom
+        </button>
+        <button
+          aria-pressed={fitWidth}
+          className="button button--ghost"
+          disabled={document === null || fitWidth || readerFailed}
+          onClick={fitPageWidth}
+          type="button"
+        >
+          Fit width
         </button>
         {accessibleTextAvailable ? (
           <button
@@ -783,13 +868,6 @@ function PdfReaderSession({
               the file may have moved. Open it in a new tab or try the reader again.
             </p>
             <div className="buttonGroup">
-              <button
-                className="button button--ghost"
-                onClick={retryReader}
-                type="button"
-              >
-                Retry reader
-              </button>
               <ExternalLink
                 className="button button--primary"
                 href={source.pdfUrl}
@@ -806,7 +884,19 @@ function PdfReaderSession({
                   {downloading ? "Preparing download…" : "Download PDF"}
                 </button>
               ) : null}
+              <button
+                className="button button--ghost"
+                onClick={retryReader}
+                type="button"
+              >
+                Retry reader
+              </button>
             </div>
+            {downloadError !== null ? (
+              <p aria-live="polite" role="status">
+                {downloadError}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -88,10 +88,9 @@ describe("AccessPanel", () => {
     );
     expect(primaryReaderLink).not.toHaveAttribute("target");
 
-    expect(screen.getByRole("link", { name: "View this PDF" })).toHaveAttribute(
-      "href",
-      `/papers/${testIds.paper}/read/${testIds.location}`,
-    );
+    expect(
+      screen.queryByRole("link", { name: "View this PDF" }),
+    ).not.toBeInTheDocument();
 
     const externalLink = screen.getByRole("link", {
       name: /View original PDF/,
@@ -107,11 +106,52 @@ describe("AccessPanel", () => {
       `/papers/${testIds.paper}/read/${testIds.location}?download=1`,
     );
     expect(
-      screen.getByRole("link", { name: "Download this PDF" }),
-    ).toHaveAttribute(
-      "href",
-      `/papers/${testIds.paper}/read/${testIds.location}?download=1`,
+      screen.queryByRole("link", { name: "Download this PDF" }),
+    ).not.toBeInTheDocument();
+    expect(externalLink).toHaveClass("textLink");
+    expect(externalLink).not.toHaveClass("button--primary");
+  });
+
+  it("keeps one primary PDF pair and offers alternate versions as secondary actions", () => {
+    const alternateId = "72cc70a9-76ea-4719-b571-a244594f63d4";
+    const access = paperAccessResponseFixture({
+      locations: [
+        paperAccessLocationFixture(),
+        paperAccessLocationFixture({
+          id: alternateId,
+          best: false,
+          hostDomain: "alternate.example.edu",
+          pdfUrl: "https://alternate.example.edu/paper.pdf",
+        }),
+      ],
+    });
+
+    const { container } = render(
+      <AccessPanel
+        initialAccess={access}
+        initialNow={initialNow}
+        paperId={testIds.paper}
+      />,
     );
+
+    expect(screen.getAllByRole("link", { name: "View PDF" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "Download PDF" })).toHaveLength(1);
+    expect(container.querySelectorAll(".button--primary")).toHaveLength(1);
+    const alternate = screen
+      .getByRole("heading", { name: "alternate.example.edu" })
+      .closest("article");
+    expect(alternate).not.toBeNull();
+    const alternateReader = within(alternate!).getByRole("link", {
+      name: "Read this version",
+    });
+    expect(alternateReader).toHaveAttribute(
+      "href",
+      `/papers/${testIds.paper}/read/${alternateId}`,
+    );
+    expect(alternateReader).toHaveClass("button--secondary");
+    expect(
+      within(alternate!).queryByRole("link", { name: /Download/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not offer the reader for a verified landing-page-only location", () => {

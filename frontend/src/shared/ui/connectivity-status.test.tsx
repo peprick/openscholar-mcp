@@ -20,6 +20,60 @@ function renderStatus(): void {
 }
 
 describe("ConnectivityStatus", () => {
+  it("reserves the measured notice height for other sticky panels and clears it on recovery", async () => {
+    let isOnline = false;
+    let noticeHeight = 62;
+    let notifyResize = (): void => undefined;
+    const disconnect = vi.fn();
+    vi.spyOn(window.navigator, "onLine", "get").mockImplementation(
+      () => isOnline,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        return {
+          height: this.classList.contains("connectivityRegion") ? noticeHeight : 0,
+        } as DOMRect;
+      },
+    );
+    class NoticeResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver);
+      }
+      disconnect = disconnect;
+      observe = vi.fn();
+    }
+    vi.stubGlobal("ResizeObserver", NoticeResizeObserver);
+
+    const view = render(
+      <ConnectivityProvider>
+        <ConnectivityStatus />
+      </ConnectivityProvider>,
+    );
+    await screen.findByText("Limited connectivity reported.");
+    expect(
+      document.documentElement.style.getPropertyValue("--connectivity-height"),
+    ).toBe("62px");
+
+    noticeHeight = 84;
+    act(() => notifyResize());
+    expect(
+      document.documentElement.style.getPropertyValue("--connectivity-height"),
+    ).toBe("84px");
+    isOnline = true;
+    act(() => window.dispatchEvent(new Event("online")));
+    await waitFor(() =>
+      expect(
+        document.documentElement.style.getPropertyValue("--connectivity-height"),
+      ).toBe("0px"),
+    );
+    view.unmount();
+    expect(
+      document.documentElement.style.getPropertyValue("--connectivity-height"),
+    ).toBe("");
+    expect(disconnect).toHaveBeenCalled();
+  });
+
   it("keeps the connected state visually quiet", () => {
     vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(true);
 

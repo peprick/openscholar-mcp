@@ -75,10 +75,12 @@ function verifiedLocationHref(location: PaperAccessLocation): string | null {
 function AccessLocation({
   canonicalBest,
   location,
+  preferredReader,
   readerHref,
 }: {
   canonicalBest: boolean;
   location: PaperAccessLocation;
+  preferredReader: boolean;
   readerHref: Route | null;
 }): React.JSX.Element {
   const href = verifiedLocationHref(location);
@@ -111,16 +113,16 @@ function AccessLocation({
       </dl>
       {href !== null ? (
         <div className="buttonGroup accessLocationActions">
-          {readerHref !== null ? (
-            <Link className="button button--primary" href={readerHref}>
-              View this PDF
+          {readerHref !== null && !preferredReader ? (
+            <Link className="button button--secondary" href={readerHref}>
+              Read this version
             </Link>
           ) : null}
           <ExternalLink
             className={
               readerHref === null
-                ? "button button--primary"
-                : "button button--ghost"
+                ? "button button--secondary"
+                : "textLink"
             }
             href={href}
           >
@@ -128,14 +130,6 @@ function AccessLocation({
               ? "View original PDF"
               : "Open full-text page"}
           </ExternalLink>
-          {location.pdfUrl !== null && readerHref !== null ? (
-            <Link
-              className="button button--secondary"
-              href={`${readerHref}?download=1` as Route}
-            >
-              Download this PDF
-            </Link>
-          ) : null}
         </div>
       ) : (
         <p className="inlineNotice">
@@ -330,6 +324,7 @@ export function AccessPanel({
               canonicalBest={location.id === access.bestLocationId}
               key={location.id}
               location={location}
+              preferredReader={location.id === preferredReader?.locationId}
               readerHref={
                 selectReaderSource(
                   access,
