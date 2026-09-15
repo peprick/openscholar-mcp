@@ -82,4 +82,22 @@ expectFailure(
   "symbolic links are not allowed",
 );
 
+expectFailure(
+  "operating-system metadata",
+  (root) => {
+    writeFileSync(join(root, ".DS_Store"), "fixture\n");
+    spawnSync("git", ["add", "-f", ".DS_Store"], { cwd: root });
+  },
+  "operating-system metadata is tracked",
+);
+
+expectFailure(
+  "oversized tracked file",
+  (root) => {
+    writeFileSync(join(root, "large-fixture.bin"), Buffer.alloc(5 * 1024 * 1024 + 1));
+    spawnSync("git", ["add", "large-fixture.bin"], { cwd: root });
+  },
+  "tracked file exceeds the 5 MiB repository limit",
+);
+
 console.log(`Repository hygiene mutation suite passed (${mutationCount} mutations).`);
