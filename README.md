@@ -32,6 +32,23 @@ The setup, operation, and development instructions below are for copyright holde
 
 ## Architecture
 
+### From a search to a paper
+
+```mermaid
+flowchart LR
+    Query["Enter topic and filters"] --> BFF["Next.js validates the request"]
+    BFF --> Search["Spring Boot search use case"]
+    Search --> Results["Reuse a search snapshot or query enabled metadata APIs"]
+    Results --> DB[("Normalize, merge, and save results in PostgreSQL")]
+    DB --> Cards["Show paper cards and citations"]
+    Cards --> Verify["Verify a legal PDF location when requested"]
+    Verify --> Read["Read in the browser or open the source site"]
+```
+
+The search box sends `POST /api/searches` to Next.js, which forwards a validated request to Spring Boot's `POST /api/v1/searches`. `LOCAL` mode searches only metadata already visible to the current owner; `AUTO` and `ONLINE` can reuse an exact saved provider snapshot or call the enabled discovery APIs. Search does not read PDF contents. A provider's PDF hint is not a legal-access guarantee: verification is a separate step before reading. See the [complete search flow](docs/ARCHITECTURE.md#search-request-flow).
+
+### Shared backend
+
 ```mermaid
 flowchart LR
     Reader["Reader"] --> Web["Next.js UI and BFF"]
@@ -89,13 +106,14 @@ Generate a local MCP key with `openssl rand -hex 32`. Never commit the generated
 
 Europe PMC is an opt-in metadata source, not a document source. Its adapter uses only the REST `/search` route, maps DOI/PMID/PMCID and bibliographic metadata, leaves `pdfUrl` null, and never calls full-text, supplementary-file, PDF, or bulk-download routes. Any provider-reported open-access value remains an unverified hint; legal-access verification continues through the separate exact-identifier pipeline.
 
-Its [provider-quality evaluation](docs/PROVIDER_QUALITY.md) is engineering-only. A deterministic synthetic PR gate exercises the real catalog/search-snapshot mechanics; one optional diagnostic samples already fused pages, and a separate opt-in Testcontainers evaluator fetches each provider once before replaying identical raw metadata through isolated and fused rollback-only scenarios. A manual offline workflow projects a verified capture into a blinded, packet-local review worksheet, verifies the exact reviewed packet during compilation and scoring, and scores only the resulting digest-bound judgments under the frozen evaluation policy; the repository includes no real labels. These paths retain no PDFs and expose no metrics to readers. Default enablement still requires clean reviewed captures, an independently authored holdout, time-separated live evidence, and an explicit maintainer decision.
+### Engineering evidence, not reader controls
 
-The [owner-scoped LOCAL search-quality baseline](docs/SEARCH_QUALITY.md#owner-scoped-local-topic-search-baseline) is also engineering-only. It uses synthetic metadata made visible through prior searches and collections, exercises the production LOCAL path on PostgreSQL, and measures Recall@10, nDCG@10, Precision@1, and MRR behind zero-leak and zero-provider-call gates. It performs no provider-network access, stores no PDFs, exposes no reader-facing metrics, and leaves production's explicit `english` text-search configuration unchanged.
+Quality scores and operational metrics are for maintainers, not people browsing papers. The UI focuses on search, reading, and collections. The detailed evaluation protocols live in:
 
-The [related-topic reuse development comparison](docs/SEARCH_QUALITY.md#related-topic-reuse-development-comparison) keeps that production LOCAL ranking as its control. An author-only control exposed feedback drift during label-visible development, so the resulting frozen regression policy admits only control results with `TITLE_EXACT`, `TITLE_PREFIX`, `TITLE_CONTAINS`, or `POSTGRES_FULL_TEXT` reasons as its first two seeds; an author-only query takes the exact ranking fallback when no eligible topic-signal seed remains. Bounded owner- and filter-scoped source-title feedback is fused with weighted reciprocal-rank fusion. On four judged synthetic queries, the focused reference run moved macro Recall@10 from `0.542` to `1.000` and macro nDCG@10 from `0.819` to `0.968`, added five relevant results absent from the control top ten, and improved all three opportunity queries. It recorded zero owner leaks, filter violations, rank-one adversaries, provider calls, or candidate-snapshot writes, but explicit adversary exposure at 10 moved from one in the control to three in the candidate. The two added owner-visible off-topic controls appeared at rank two, so this tuned development result is not activation evidence. The comparison calls neither the global related-paper endpoint nor a discovery provider, performs no PDF handling or external scholarly/provider call, and changes no product path, search-snapshot contract, UI, REST API, MCP tool, or runtime default; Testcontainers bootstrap can still pull its pinned Docker image. An independently authored blind holdout and target-deployment performance evidence remain required.
-
-The separate [multilingual lexical comparison](docs/SEARCH_QUALITY.md#multilingual-lexical-configuration-comparison) evaluates PostgreSQL `english`, `simple`, and an allowlisted language-aware profile over digest-bound English, German, French, Spanish, and Japanese synthetic metadata. It is an evaluation-only Testcontainers experiment, not a product feature or migration. The language-aware profile uses `simple` as its Japanese fallback, Japanese is reported as unsupported rather than claimed as covered, and production remains on `english` pending representative independent evidence and an indexing/migration design.
+- [Provider quality](docs/PROVIDER_QUALITY.md): synthetic mechanics gates and opt-in, blinded metadata evaluation. Europe PMC remains disabled by default pending independent evidence and maintainer approval.
+- [LOCAL search quality](docs/SEARCH_QUALITY.md#owner-scoped-local-topic-search-baseline): owner-scoped PostgreSQL retrieval with no provider calls or stored PDFs.
+- [Related-topic comparison](docs/SEARCH_QUALITY.md#related-topic-reuse-development-comparison): a development-only ranking experiment, not production activation evidence.
+- [Multilingual comparison](docs/SEARCH_QUALITY.md#multilingual-lexical-configuration-comparison): an evaluation-only experiment; production still uses PostgreSQL's `english` configuration, with no claimed Japanese coverage.
 
 ## Use it from an agent
 
