@@ -2,12 +2,13 @@
 
 ## Automated checks
 
-`.github/workflows/security.yml` adds layered dependency, static-analysis, source, and runtime-image gates:
+`.github/workflows/security.yml` adds layered dependency, static-analysis, source, and runtime-image checks while keeping pull-request feedback focused:
 
 - GitHub dependency review rejects newly introduced dependencies with known high/critical severity on pull requests.
-- CodeQL analyzes Java/Kotlin and JavaScript/TypeScript and publishes code-scanning findings.
-- Trivy scans the repository dependency manifests, lockfiles, secrets, and configuration; it uploads severity-limited SARIF and retains a CycloneDX JSON source SBOM for 30 days. The static supply-chain gate requires every SARIF scan to keep the action's output and exit status constrained to its declared high/critical policy.
-- On pull requests, main-branch pushes, the weekly schedule, and manual runs, CI builds and scans the final backend, frontend, project-owned Caddy, and project-owned blackbox-exporter runtime stages. It separately scans the exact digest-pinned PostgreSQL, Prometheus, and Alertmanager images. It generates a CycloneDX SBOM for every image, retains/uploads findings outside pull requests, and enforces the checked-in high/critical Trivy policy in every lane.
+- CodeQL analyzes Java/Kotlin and JavaScript/TypeScript and publishes code-scanning findings, including on pull requests.
+- Heavy Trivy source and image jobs do not run on pull requests. Main-branch pushes and manual runs scan the repository plus the final backend, frontend, project-owned Caddy, and project-owned blackbox-exporter runtime stages, and separately scan the exact digest-pinned PostgreSQL, Prometheus, and Alertmanager images. These lanes fail on unapproved high/critical findings.
+- The weekly Trivy run generates the same severity-limited SARIF and CycloneDX SBOM evidence and retains it for 30 days, but scanner findings are report-only in that scheduled lane. This prevents unchanged findings from producing a failing-run notification every week while keeping uploads available for review. Configuration, exception-expiry, build, and evidence-generation failures remain real failures; only the explicit scanner-outcome gates are skipped on the schedule.
+- The static supply-chain gate requires every SARIF scan to keep the action's output and exit status constrained to its declared high/critical policy and mutation-tests the event boundary described above.
 - On an exact stable release tag or an explicit manual retry from that same tag ref, a separate protected workflow can publish the four project-owned images. It uses a closed image-to-context/repository mapping, source-SHA-only tags, pre-push and exact-registry-digest Trivy gates, keyless Cosign signatures, and separate GitHub provenance and CycloneDX attestations. It produces evidence only and contains no deployment step.
 
 `.github/workflows/operations-validation.yml` runs `scripts/validate-supply-chain.sh` whenever workflows, Dockerfiles, Compose/deployment image references, the Maven Wrapper distribution, or validator scripts change. The portable static gate requires:
@@ -44,9 +45,9 @@ Two scoped exceptions currently expire on **2026-09-22**:
 
 These are not claims that the packages were fixed. Reproduce/review the evidence, replace the image or renew the narrowly scoped decision before expiry, and never use either VEX document for another digest, platform, component, or vulnerability set.
 
-`.github/dependabot.yml` proposes grouped weekly Maven, pnpm/npm, GitHub Actions, and Dockerfile updates. Coordinated production Compose/security-matrix digest bumps remain reviewed maintenance changes. Updates still require normal CI, security review, and domain tests; automatic proposal is not automatic deployment.
+`.github/dependabot.yml` keeps Maven, pnpm/npm, GitHub Actions, and Dockerfile ecosystems registered but sets their version-update pull-request limit to zero. This pauses routine version-update PR creation without disabling default-branch Dependabot security-update PRs when they are enabled in repository settings. Automatic rebasing is disabled for new bot PRs; GitHub may still rebase already-open PRs until 30 days after they were opened, so closing the old routine-update backlog is a separate cleanup. Maintainers can still rebase or recreate a selected update deliberately. To resume routine updates, choose a reviewed cadence, raise the applicable `open-pull-requests-limit` from zero, and update the automation-policy validator and its mutation tests in the same reviewed change. See the [GitHub Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference). Coordinated production Compose/security-matrix digest bumps remain reviewed maintenance changes, and every accepted update still requires normal CI, security review, and domain tests.
 
-`.github/CODEOWNERS` assigns the current repository owner to the full tree and repeats high-risk workflow, dependency, image, migration, deployment, backup, and security-policy paths. It becomes an enforcement boundary only after branch protection requires CODEOWNERS review; replace or extend the handle when maintainership changes.
+`.github/CODEOWNERS` intentionally has no catch-all owner. Automatic review requests are limited to release workflows, the security workflow and policy, vulnerability evidence, the production image boundary, and the scripts that enforce those controls. Routine application and dependency changes rely on required CI and deliberate reviewer assignment instead of emailing the repository owner for every pull request. CODEOWNERS becomes an enforcement boundary only after branch protection requires its review; replace or extend the handle when maintainership changes.
 
 The source SBOM describes dependencies discoverable in the checked-out repository. Image jobs inventory the four project-owned final runtimes and separately record each externally supplied production database/monitoring image. These checked-in jobs and VEX gates are reproducible controls, not evidence that an unpushed revision passed on GitHub, that a local image equals the later registry artifact, or that an expired exception remains acceptable.
 
@@ -72,10 +73,10 @@ Successful workers retain complete per-image evidence, including both gate SARIF
 
 ## Required repository settings
 
-- Branch protection with reviewed pull requests and required backend, frontend, E2E, MCP, operations/supply-chain, CodeQL, and Trivy checks.
+- Branch protection with reviewed pull requests and required backend, frontend, E2E, MCP, operations/supply-chain, dependency-review, and CodeQL checks. Heavy Trivy jobs are intentionally absent from pull requests and therefore must not be configured as required pull-request checks.
 - GitHub secret scanning/push protection and private vulnerability reporting where available.
 - Restricted Actions allow-list, read-only default token, protected `image-release` environment with required reviewers/ref restrictions and `IMAGE_RELEASE_ENABLED=true`, and no long-lived registry/cloud key.
-- CODEOWNERS review for workflows, Dockerfiles, dependency manifests/lockfiles, migrations, deploy files, and security policy.
+- CODEOWNERS review for release/security workflows, vulnerability policy and evidence, hardened runtime definitions, and the production image boundary; required CI plus deliberate reviewer assignment for other changes.
 - Renovation SLA based on exploitability and exposure, not only numeric severity.
 
 The checked-in workflows use immutable third-party action commits, but a commit pin does not establish publisher trust by itself. Configure the organization Actions allow-list, required checks, branch/CODEOWNERS protection, the protected release environment, GHCR policy, and artifact retention before treating a successful run as release evidence. Registry publication is automated; evidence review, manual promotion, deployment-time verification, and the broader hosted launch decision remain external release gates.

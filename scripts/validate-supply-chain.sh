@@ -339,6 +339,98 @@ validate_sarif_severity_gates() {
     || report_failure "${security_workflow}: every SARIF scan must limit output and exit status to its declared severity gate"
 }
 
+validate_automation_noise_policy() {
+  local dependabot='.github/dependabot.yml'
+  local codeowners='.github/CODEOWNERS'
+  local security_workflow='.github/workflows/security.yml'
+  local job job_section owned_path
+
+  [[ -f "${dependabot}" && ! -L "${dependabot}" ]] || {
+    report_failure "${dependabot} is missing or is not regular"
+    return
+  }
+  [[ "$(grep -Ec '^[[:space:]]+-[[:space:]]+package-ecosystem:' "${dependabot}")" -eq 6 \
+    && "$(grep -Ec '^[[:space:]]+open-pull-requests-limit:[[:space:]]+0([[:space:]#].*)?$' "${dependabot}")" -eq 6 ]] \
+    || report_failure "${dependabot}: every registered ecosystem must pause routine version-update pull requests"
+  [[ "$(grep -Ec '^[[:space:]]+rebase-strategy:[[:space:]]+disabled([[:space:]#].*)?$' "${dependabot}")" -eq 6 ]] \
+    || report_failure "${dependabot}: every registered ecosystem must disable automatic rebasing"
+  if grep -Eq '^[[:space:]]+target-branch:' "${dependabot}"; then
+    report_failure "${dependabot}: version-update configuration must not redirect away from the security-update default branch"
+  fi
+
+  [[ -f "${codeowners}" && ! -L "${codeowners}" ]] || {
+    report_failure "${codeowners} is missing or is not regular"
+    return
+  }
+  if grep -Eq '^[[:space:]]*(\*|/\*)[[:space:]]+' "${codeowners}"; then
+    report_failure "${codeowners}: a catch-all owner would request review on every pull request"
+  fi
+  for owned_path in \
+    '/.github/CODEOWNERS @peprick' \
+    '/.github/workflows/security.yml @peprick' \
+    '/.github/workflows/operations-validation.yml @peprick' \
+    '/.github/workflows/release-images.yml @peprick' \
+    '/.github/workflows/release-one-image.yml @peprick' \
+    '/security/ @peprick' \
+    '/deploy/production-images.lock @peprick' \
+    '/scripts/production-compose.sh @peprick'; do
+    grep -Fxq -- "${owned_path}" "${codeowners}" \
+      || report_failure "${codeowners}: required sensitive ownership is missing: ${owned_path}"
+  done
+
+  job_section="$(awk '
+    /^  dependency-review:$/ { in_job = 1 }
+    in_job && /^  [a-zA-Z0-9_-]+:$/ && !/^  dependency-review:$/ { exit }
+    in_job { print }
+  ' "${security_workflow}")"
+  if ! grep -Fxq -- '  pull_request:' "${security_workflow}" \
+    || ! grep -Fxq -- "    if: github.event_name == 'pull_request'" <<<"${job_section}" \
+    || ! grep -Fxq -- '          fail-on-severity: high' <<<"${job_section}" \
+    || grep -Eq '^[[:space:]]+continue-on-error:' <<<"${job_section}"; then
+    report_failure "${security_workflow}: pull requests must retain strict dependency review"
+  fi
+
+  job_section="$(awk '
+    /^  codeql:$/ { in_job = 1 }
+    in_job && /^  [a-zA-Z0-9_-]+:$/ && !/^  codeql:$/ { exit }
+    in_job { print }
+  ' "${security_workflow}")"
+  if [[ -z "${job_section}" ]] \
+    || grep -Eq '^    if:|^[[:space:]]+continue-on-error:' <<<"${job_section}"; then
+    report_failure "${security_workflow}: CodeQL must remain strict and available on pull requests"
+  fi
+
+  for job in filesystem-security container-security hardened-runtime-security third-party-runtime-security; do
+    job_section="$(awk -v job="${job}:" '
+      $0 == "  " job { in_job = 1 }
+      in_job && $0 ~ /^  [a-zA-Z0-9_-]+:$/ && $0 != "  " job { exit }
+      in_job { print }
+    ' "${security_workflow}")"
+    [[ -n "${job_section}" ]] \
+      || report_failure "${security_workflow}: heavy security job is missing: ${job}"
+    grep -Fxq -- "    if: github.event_name != 'pull_request'" <<<"${job_section}" \
+      || report_failure "${security_workflow}: heavy security job must not run on pull requests: ${job}"
+    grep -A1 -E '^      - name: Enforce .* vulnerability gate$' <<<"${job_section}" \
+      | grep -Fxq -- "        if: always() && github.event_name != 'schedule'" \
+      || report_failure "${security_workflow}: scheduled scanner findings must be report-only while four push/manual gates remain strict"
+    grep -Fq -- '      - name: Verify complete security evidence' <<<"${job_section}" \
+      || report_failure "${security_workflow}: every heavy scan must fail on missing or invalid security evidence"
+  done
+
+  [[ "$(grep -Fc -- "if: always() && github.event_name != 'schedule'" "${security_workflow}")" -eq 4 ]] \
+    || report_failure "${security_workflow}: scheduled scanner findings must be report-only while four push/manual gates remain strict"
+  awk '
+    /^        id: (trivy|backend_image_scan|frontend_image_scan|hardened_image_scan|third_party_image_scan)$/ {
+      scanner_count++
+      getline
+      if ($0 != "        continue-on-error: true") invalid = 1
+    }
+    END { exit(scanner_count == 5 && !invalid ? 0 : 1) }
+  ' "${security_workflow}" \
+    && [[ "$(grep -Ec '^[[:space:]]+continue-on-error:[[:space:]]+true([[:space:]#].*)?$' "${security_workflow}")" -eq 5 ]] \
+    || report_failure "${security_workflow}: scanner outcomes must be captured before event-specific enforcement"
+}
+
 validate_production_platform_policy() {
   local compose_file='deploy/compose.production.yaml'
   local security_workflow='.github/workflows/security.yml'
@@ -628,6 +720,7 @@ validate_locked_mcp_conformance_cli
 validate_production_image_preflight
 validate_runtime_scan_coverage
 validate_sarif_severity_gates
+validate_automation_noise_policy
 validate_production_platform_policy
 validate_hardened_runtime_builds
 validate_release_image_workflows

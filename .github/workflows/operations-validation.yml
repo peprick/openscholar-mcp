@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/**"
+      - ".github/CODEOWNERS"
       - ".github/dependabot.yml"
       - "**/Dockerfile*"
       - "**/*.Dockerfile"
@@ -21,6 +22,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/**"
+      - ".github/CODEOWNERS"
       - ".github/dependabot.yml"
       - "**/Dockerfile*"
       - "**/*.Dockerfile"

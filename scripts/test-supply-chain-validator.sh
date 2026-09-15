@@ -314,6 +314,84 @@ expect_failure \
 
 reset_fixture
 perl -0pi -e \
+  's/open-pull-requests-limit: 0/open-pull-requests-limit: 1/' \
+  "${fixture}/.github/dependabot.yml"
+expect_failure \
+  "routine Dependabot pull requests cannot be silently resumed" \
+  "every registered ecosystem must pause routine version-update pull requests"
+
+reset_fixture
+perl -0pi -e \
+  's/\n    rebase-strategy: disabled//' \
+  "${fixture}/.github/dependabot.yml"
+expect_failure \
+  "Dependabot automatic rebasing cannot be silently resumed" \
+  "every registered ecosystem must disable automatic rebasing"
+
+reset_fixture
+printf '%s\n' '* @peprick' >>"${fixture}/.github/CODEOWNERS"
+expect_failure \
+  "CODEOWNERS cannot regain a notification-heavy catch-all" \
+  "a catch-all owner would request review on every pull request"
+
+reset_fixture
+perl -0pi -e \
+  's#/[.]github/workflows/release-one-image[.]yml \@peprick\n##' \
+  "${fixture}/.github/CODEOWNERS"
+expect_failure \
+  "release publication controls retain deliberate owner review" \
+  "required sensitive ownership is missing: /.github/workflows/release-one-image.yml @peprick"
+
+reset_fixture
+perl -0pi -e \
+  's/(  filesystem-security:\n    name: Repository vulnerability scan and SBOM\n)    if: github[.]event_name != '\''pull_request'\''\n/$1/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "heavy repository scanning cannot return to pull requests" \
+  "heavy security job must not run on pull requests: filesystem-security"
+
+reset_fixture
+perl -0pi -e \
+  's/if: always\(\) && github[.]event_name != '\''schedule'\''/if: always()/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "weekly scanner findings remain report-only" \
+  "scheduled scanner findings must be report-only while four push/manual gates remain strict"
+
+reset_fixture
+perl -0pi -e \
+  's/(        id: trivy\n)        continue-on-error: true\n/$1/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "repository scanner outcome must be captured for event-specific enforcement" \
+  "scanner outcomes must be captured before event-specific enforcement"
+
+reset_fixture
+perl -0pi -e \
+  's/      - name: Verify complete security evidence/      - name: Skip security evidence validation/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "report-only scans cannot hide a missing or invalid report" \
+  "every heavy scan must fail on missing or invalid security evidence"
+
+reset_fixture
+perl -0pi -e \
+  's/(  codeql:\n)/$1    if: github.event_name != '\''pull_request'\''\n/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "CodeQL cannot be removed from pull requests" \
+  "CodeQL must remain strict and available on pull requests"
+
+reset_fixture
+perl -0pi -e \
+  's/fail-on-severity: high/fail-on-severity: critical/' \
+  "${fixture}/.github/workflows/security.yml"
+expect_failure \
+  "dependency review retains the high and critical pull-request gate" \
+  "pull requests must retain strict dependency review"
+
+reset_fixture
+perl -0pi -e \
   's#postgres\|exact\|pgvector/pgvector:[^\n]+#postgres|exact|postgres:latest#' \
   "${fixture}/deploy/production-images.lock"
 expect_failure \
