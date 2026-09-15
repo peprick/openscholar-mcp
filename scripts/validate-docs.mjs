@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, extname, resolve } from "node:path";
 
 const repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
   encoding: "utf8",
@@ -20,13 +20,64 @@ const markdownFiles = execFileSync(
 
 const failures = [];
 let checkedLinks = 0;
+let checkedAnchors = 0;
+const anchorsByFile = new Map();
+
+function outsideCodeFences(markdown) {
+  let fence = null;
+  return markdown
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .split(/\r?\n/)
+    .map((line) => {
+      const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+      if (marker) {
+        if (fence === null) {
+          fence = marker[1];
+        } else if (marker[1][0] === fence[0] && marker[1].length >= fence.length) {
+          fence = null;
+        }
+        return "";
+      }
+      return fence === null ? line : "";
+    })
+    .join("\n");
+}
+
+function headingAnchors(absoluteFile) {
+  if (anchorsByFile.has(absoluteFile)) return anchorsByFile.get(absoluteFile);
+  const markdown = outsideCodeFences(readFileSync(absoluteFile, "utf8"));
+  const anchors = new Set();
+  const lines = markdown.split("\n");
+  const counts = new Map();
+  for (let index = 0; index < lines.length; index += 1) {
+    const atx = lines[index].match(/^\s{0,3}#{1,6}\s+(.+?)(?:\s+#+\s*)?$/);
+    const setext = index + 1 < lines.length && /^\s{0,3}(?:=+|-+)\s*$/.test(lines[index + 1]);
+    const heading = atx?.[1] ?? (setext && lines[index].trim() ? lines[index].trim() : null);
+    if (heading === null) continue;
+    const slug = heading
+      .replace(/<[^>]+>/g, "")
+      .replace(/!?\[([^\]]*)]\([^)]*\)/g, "$1")
+      .replace(/\\([^\w\s])/g, "$1")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_\-\s]/gu, "")
+      .replace(/\s/g, "-");
+    let candidate = slug;
+    let suffix = counts.get(slug) ?? 0;
+    while (anchors.has(candidate)) candidate = `${slug}-${++suffix}`;
+    counts.set(slug, suffix);
+    anchors.add(candidate);
+    if (setext && !atx) index += 1;
+  }
+  for (const match of markdown.matchAll(/\b(?:id|name)=["']([^"']+)["']/g)) {
+    anchors.add(match[1]);
+  }
+  anchorsByFile.set(absoluteFile, anchors);
+  return anchors;
+}
 
 for (const relativeFile of markdownFiles) {
   const absoluteFile = resolve(repositoryRoot, relativeFile);
-  const markdown = readFileSync(absoluteFile, "utf8").replace(
-    /^(?:\x60{3}|~{3})[\s\S]*?^(?:\x60{3}|~{3})\s*$/gm,
-    "",
-  );
+  const markdown = outsideCodeFences(readFileSync(absoluteFile, "utf8"));
   const links = markdown.matchAll(/!?\[[^\]]*]\(([^)\n]+)\)/g);
 
   for (const match of links) {
@@ -44,13 +95,14 @@ for (const relativeFile of markdownFiles) {
     destination = destination.replace(/\\([\\ ()])/g, "$1");
     if (
       destination === "" ||
-      destination.startsWith("#") ||
-      /^(?:https?:|mailto:|tel:)/i.test(destination)
+      /^[a-z][a-z\d+.-]*:/i.test(destination)
     ) {
       continue;
     }
 
-    const pathPart = destination.split("#", 1)[0].split("?", 1)[0];
+    const hashIndex = destination.indexOf("#");
+    const pathPart = (hashIndex < 0 ? destination : destination.slice(0, hashIndex)).split("?", 1)[0];
+    const fragment = hashIndex < 0 ? "" : destination.slice(hashIndex + 1);
     let decodedPath;
     try {
       decodedPath = decodeURIComponent(pathPart);
@@ -60,7 +112,7 @@ for (const relativeFile of markdownFiles) {
     }
 
     checkedLinks += 1;
-    const target = resolve(dirname(absoluteFile), decodedPath);
+    const target = decodedPath === "" ? absoluteFile : resolve(dirname(absoluteFile), decodedPath);
     if (!existsSync(target)) {
       failures.push(relativeFile + ": missing local target " + destination);
       continue;
@@ -68,6 +120,19 @@ for (const relativeFile of markdownFiles) {
 
     if (destination.endsWith("/") && !statSync(target).isDirectory()) {
       failures.push(relativeFile + ": expected a directory at " + destination);
+    }
+    if (fragment !== "" && extname(target).toLowerCase() === ".md" && statSync(target).isFile()) {
+      let decodedFragment;
+      try {
+        decodedFragment = decodeURIComponent(fragment);
+      } catch {
+        failures.push(relativeFile + ": invalid anchor encoding in " + destination);
+        continue;
+      }
+      checkedAnchors += 1;
+      if (!headingAnchors(target).has(decodedFragment)) {
+        failures.push(relativeFile + ": missing heading anchor " + destination);
+      }
     }
   }
 }
@@ -82,7 +147,7 @@ if (failures.length > 0) {
   console.log(
     "Validated " +
       checkedLinks +
-      " local links across " +
+      " local links (" + checkedAnchors + " heading anchors) across " +
       markdownFiles.length +
       " Markdown files.",
   );
