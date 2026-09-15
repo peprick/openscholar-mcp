@@ -31,7 +31,7 @@ export function SearchPagination({
 
       const nextPage = searchResponseSchema.safeParse(body);
       if (!nextPage.success || nextPage.data.searchId === searchId) {
-        setMessage("OpenScholar received an unexpected response. Please try again.");
+        setMessage("More results could not be loaded right now. Please try again.");
         return;
       }
       router.push(`/searches/${nextPage.data.searchId}` as Route);

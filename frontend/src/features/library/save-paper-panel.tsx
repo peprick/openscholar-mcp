@@ -53,7 +53,7 @@ export function SavePaperPanel({
       const parsed = collectionListResponseSchema.safeParse(await response.json());
       if (!parsed.success) {
         setFailedCollectionPage(page);
-        setLoadError("The server returned an unexpected collection list.");
+        setLoadError("Your collections could not be loaded right now. Please try again.");
         return;
       }
       setCollections((current) => {
@@ -74,7 +74,7 @@ export function SavePaperPanel({
       setCollectionsLoaded(true);
     } catch {
       setFailedCollectionPage(page);
-      setLoadError("OpenScholar could not reach the library service.");
+      setLoadError("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }
@@ -125,14 +125,14 @@ export function SavePaperPanel({
       }
       const parsed = savedPaperSchema.safeParse(await response.json());
       if (!parsed.success || parsed.data.paperId !== paperId) {
-        setMessage("The server returned an unexpected saved-paper response.");
+        setMessage("This paper could not be saved right now. Please try again.");
         return;
       }
       setReadingStatus(parsed.data.readingStatus);
       setTagText(parsed.data.tags.join(", "));
       setMessage(`Saved to “${parsed.data.collectionName}”.`);
     } catch {
-      setMessage("OpenScholar could not reach the library service.");
+      setMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }
@@ -149,6 +149,7 @@ export function SavePaperPanel({
         </p>
       </div>
       <button
+        aria-controls={`save-paper-form-${paperId}`}
         aria-expanded={open}
         className="button button--primary"
         disabled={pending === "load"}
@@ -158,8 +159,11 @@ export function SavePaperPanel({
         {pending === "load" ? "Loading collections…" : open ? "Close" : "Save to collection"}
       </button>
 
-      {open ? (
-        <div className="savePaperForm">
+        <div
+          className="savePaperForm"
+          hidden={!open}
+          id={`save-paper-form-${paperId}`}
+        >
           {pending === "load" && !collectionsLoaded ? (
             <p aria-live="polite" className="libraryMessage" role="status">
               Loading your collection list…
@@ -257,7 +261,6 @@ export function SavePaperPanel({
             </>
           ) : null}
         </div>
-      ) : null}
       <p aria-live="polite" className="libraryMessage" role="status">
         {message}
       </p>

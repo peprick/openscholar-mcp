@@ -46,12 +46,39 @@ function requestFrom(form: HTMLFormElement, mode: SearchMode): unknown {
 }
 
 function formFieldFromPath(path: PropertyKey[]): string | null {
-  const field = path.at(-1);
+  const field = path.findLast((part) => typeof part === "string");
   return typeof field === "string" ? field : null;
 }
 
 function formFieldFromViolation(field: string): string {
-  return field.split(".").at(-1) ?? field;
+  return field
+    .replace(/\[\d+\]/g, "")
+    .split(".")
+    .findLast((part) => !/^\d+$/.test(part)) ?? field;
+}
+
+function validationMessage(field: string | null, message: string): string {
+  switch (field) {
+    case "query":
+      return "Research topic: Enter between 3 and 500 characters.";
+    case "yearFrom":
+      return "From year: Use a whole year between 1000 and 9999.";
+    case "yearTo":
+      return message === "Start year must not be after end year."
+        ? "To year: Start year must not be after end year."
+        : "To year: Use a whole year between 1000 and 9999.";
+    case "minimumCitations":
+      return "Minimum citations: Use a whole number of zero or more.";
+    case "languages":
+      return "Language: Choose one of the available languages.";
+    case "documentTypes":
+      return "Document types: Choose from the available types.";
+    case "openAccessOnly":
+    case "pdfAvailableOnly":
+      return "Access options: Review the selected filters.";
+    default:
+      return "Search values: Review the highlighted values and try again.";
+  }
 }
 
 export function SearchForm({
@@ -89,10 +116,9 @@ export function SearchForm({
     if (!parsedRequest.success) {
       setErrorMessage("Review the highlighted search values.");
       setViolations(
-        parsedRequest.error.issues.map((issue) => {
-          const path = issue.path.join(".");
-          return path === "" ? issue.message : `${path}: ${issue.message}`;
-        }),
+        parsedRequest.error.issues.map((issue) =>
+          validationMessage(formFieldFromPath(issue.path), issue.message),
+        ),
       );
       setInvalidFields(
         parsedRequest.error.issues
@@ -121,7 +147,11 @@ export function SearchForm({
         setViolations(
           problem.success
             ? (problem.data.violations?.map(
-                (violation) => `${violation.field}: ${violation.message}`,
+                (violation) =>
+                  validationMessage(
+                    formFieldFromViolation(violation.field),
+                    violation.message,
+                  ),
               ) ?? [])
             : [],
         );
@@ -137,7 +167,7 @@ export function SearchForm({
 
       const search = searchResponseSchema.safeParse(body);
       if (!search.success) {
-        setErrorMessage("OpenScholar received an unexpected response. Please try again.");
+        setErrorMessage("Search could not be completed right now. Please try again.");
         return;
       }
       router.push(`/searches/${search.data.searchId}` as Route);

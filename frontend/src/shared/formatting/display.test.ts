@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   identifierHref,
+  formatCitationCount,
   providerDisplayName,
 } from "@/shared/formatting/display";
 
@@ -26,9 +27,23 @@ describe("providerDisplayName", () => {
     expect(providerDisplayName("DOAJ")).toBe("DOAJ");
     expect(providerDisplayName("CORE")).toBe("CORE");
     expect(providerDisplayName("EUROPE_PMC")).toBe("Europe PMC");
+    expect(providerDisplayName("UNPAYWALL")).toBe("Unpaywall");
+    expect(providerDisplayName("ARXIV")).toBe("arXiv");
+    expect(providerDisplayName("CROSSREF")).toBe("Crossref");
   });
 
   it("humanizes an unknown future provider safely", () => {
     expect(providerDisplayName("FUTURE_INDEX")).toBe("Future Index");
+  });
+});
+
+describe("formatCitationCount", () => {
+  it.each([
+    [0, "0 citations"],
+    [1, "1 citation"],
+    [1250, "1,250 citations"],
+    [null, "Citation count unavailable"],
+  ])("formats %s without broken grammar", (count, label) => {
+    expect(formatCitationCount(count)).toBe(label);
   });
 });

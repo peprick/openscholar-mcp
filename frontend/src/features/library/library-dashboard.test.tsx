@@ -82,7 +82,7 @@ describe("LibraryDashboard", () => {
     if (typeof cleanupHandler === "function") cleanupHandler();
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:library-export");
     expect(
-      await screen.findByText("Exported 1 selected papers."),
+      await screen.findByText("Exported 1 selected paper."),
     ).toBeInTheDocument();
   });
 

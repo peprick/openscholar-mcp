@@ -101,7 +101,7 @@ describe("SearchPagination", () => {
 
     expect(
       await screen.findByText(
-        "OpenScholar received an unexpected response. Please try again.",
+        "More results could not be loaded right now. Please try again.",
       ),
     ).toBeVisible();
     expect(navigation.push).not.toHaveBeenCalled();

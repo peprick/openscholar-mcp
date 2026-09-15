@@ -61,6 +61,7 @@ describe("AccessPanel", () => {
         "This source does not currently have a link OpenScholar can safely open.",
       ),
     ).toBeVisible();
+    expect(screen.queryByText(/Opens from the original source/)).not.toBeInTheDocument();
     expect(document.querySelector(`[href="${unverifiedPdf}"]`)).toBeNull();
   });
 
@@ -98,6 +99,9 @@ describe("AccessPanel", () => {
     expect(externalLink).toHaveAttribute("href", verifiedPdf);
     expect(externalLink).toHaveAttribute("target", "_blank");
     expect(externalLink).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByText("Unpaywall")).toBeVisible();
+    expect(screen.queryByText("UNPAYWALL")).not.toBeInTheDocument();
+    expect(screen.getByText(/Opens from the original source/)).toBeVisible();
   });
 
   it("does not offer the reader for a verified landing-page-only location", () => {
@@ -293,7 +297,7 @@ describe("AccessPanel", () => {
 
     expect(
       await screen.findByText(
-        "OpenScholar received an unexpected response. Please try again.",
+        "Access could not be checked right now. Please try again.",
       ),
     ).toBeVisible();
     expect(

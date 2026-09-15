@@ -181,7 +181,7 @@ describe("SearchForm", () => {
     expect(localSearch).toBeEnabled();
   });
 
-  it("surfaces an RFC 9457 validation problem and its violations", async () => {
+  it("shows validation guidance with visible field labels rather than API paths", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(400, {
@@ -207,8 +207,10 @@ describe("SearchForm", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("One or more request fields are invalid.");
     expect(alert).toHaveTextContent(
-      "filters.yearFrom: must be greater than or equal to 1000",
+      "From year: Use a whole year between 1000 and 9999.",
     );
+    expect(alert).not.toHaveTextContent("filters.yearFrom");
+    expect(alert).toHaveFocus();
     expect(screen.getByLabelText("From year")).toHaveAttribute(
       "aria-invalid",
       "true",
@@ -229,12 +231,40 @@ describe("SearchForm", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Review the highlighted search values.");
-    expect(alert).toHaveTextContent("filters.yearTo:");
+    expect(alert).toHaveTextContent("To year:");
+    expect(alert).not.toHaveTextContent("filters.yearTo");
     expect(alert).toHaveTextContent("Start year must not be after end year.");
     expect(screen.getByLabelText("To year")).toHaveAttribute(
       "aria-invalid",
       "true",
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("explains a short topic without showing schema diagnostics", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderSearch("AI");
+
+    await user.click(screen.getByRole("button", { name: "Search papers" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Research topic: Enter between 3 and 500 characters.");
+    expect(alert).not.toHaveTextContent("Too small");
+    expect(screen.getByRole("searchbox", { name: "Research topic" })).toHaveAttribute("aria-invalid", "true");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uses actionable guidance for an invalid successful response", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, {})));
+    renderSearch("cancer treatments");
+    await user.click(screen.getByRole("button", { name: "Search papers" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Search could not be completed right now. Please try again.",
+    );
+    expect(navigation.push).not.toHaveBeenCalled();
   });
 });

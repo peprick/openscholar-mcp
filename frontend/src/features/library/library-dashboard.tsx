@@ -105,7 +105,7 @@ export function LibraryDashboard({
       }
       const parsed = collectionSummarySchema.safeParse(await response.json());
       if (!parsed.success) {
-        setCreateMessage("The server returned an unexpected collection response.");
+        setCreateMessage("The collection could not be created right now. Please try again.");
         return;
       }
       setCollectionOptions((current) => [
@@ -130,7 +130,7 @@ export function LibraryDashboard({
         router.push(collectionPageHref(query, 0));
       }
     } catch {
-      setCreateMessage("OpenScholar could not reach the library service.");
+      setCreateMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -151,7 +151,7 @@ export function LibraryDashboard({
       format,
     });
     if (!request.success) {
-      setExportMessage("Select between 1 and 100 distinct papers to export.");
+      setExportMessage("Select between 1 and 100 papers to export.");
       return;
     }
     setExporting(format);
@@ -185,9 +185,11 @@ export function LibraryDashboard({
           URL.revokeObjectURL(objectUrl);
         }, DOWNLOAD_CLEANUP_DELAY_MS);
       }
-      setExportMessage(`Exported ${selectedPaperIds.size} selected papers.`);
+      setExportMessage(
+        `Exported ${selectedPaperIds.size} selected ${selectedPaperIds.size === 1 ? "paper" : "papers"}.`,
+      );
     } catch {
-      setExportMessage("OpenScholar could not reach the citation service.");
+      setExportMessage("Citation export is temporarily unavailable. Please try again.");
     } finally {
       setExporting(null);
     }

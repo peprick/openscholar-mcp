@@ -67,7 +67,7 @@ function SavedPaperEditor({
       }
       const parsed = savedPaperSchema.safeParse(await response.json());
       if (!parsed.success) {
-        setMessage("The server returned an unexpected saved-paper response.");
+        setMessage("This paper could not be saved right now. Please try again.");
         return;
       }
       setStatus(parsed.data.readingStatus);
@@ -75,7 +75,7 @@ function SavedPaperEditor({
       onUpdated(parsed.data);
       setMessage("Reading status and tags saved.");
     } catch {
-      setMessage("OpenScholar could not reach the library service.");
+      setMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }
@@ -94,7 +94,7 @@ function SavedPaperEditor({
       }
       onRemoved(paper.paperId);
     } catch {
-      setMessage("OpenScholar could not reach the library service.");
+      setMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }
@@ -213,7 +213,7 @@ export function CollectionManager({
       }
       const parsed = collectionSummarySchema.safeParse(await response.json());
       if (!parsed.success) {
-        setMessage("The server returned an unexpected collection response.");
+        setMessage("The collection could not be updated right now. Please try again.");
         return;
       }
       setCollection((current) => ({ ...current, ...parsed.data }));
@@ -221,7 +221,7 @@ export function CollectionManager({
       setDescription(parsed.data.description ?? "");
       setMessage("Collection details saved.");
     } catch {
-      setMessage("OpenScholar could not reach the library service.");
+      setMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }
@@ -278,7 +278,7 @@ export function CollectionManager({
       router.push("/library" as Route);
       router.refresh();
     } catch {
-      setMessage("OpenScholar could not reach the library service.");
+      setMessage("Your library is temporarily unavailable. Please try again.");
     } finally {
       setPending(null);
     }

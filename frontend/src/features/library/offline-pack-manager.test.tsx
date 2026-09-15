@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +73,46 @@ afterEach(() => {
 });
 
 describe("OfflinePackManager", () => {
+  it("keeps preparation unavailable until device inspection finishes", async () => {
+    let finishInspection: (result: null) => void = () => undefined;
+    vi.mocked(runtime.inspect).mockReturnValue(new Promise((resolve) => {
+      finishInspection = resolve;
+    }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(authResponse()));
+    render(<OfflinePackManager collectionId={testIds.collection} />);
+    const prepare = screen.getByRole("button", { name: "Prepare offline copy" });
+    expect(prepare).toBeDisabled();
+    expect(prepare).toHaveAttribute("aria-describedby", "offline-pack-status");
+    expect(screen.getByRole("region", { name: "Encrypted device copy" })).toHaveAttribute("aria-busy", "true");
+
+    await waitFor(() => expect(runtime.inspect).toHaveBeenCalledOnce());
+    await act(async () => finishInspection(null));
+    await waitFor(() => expect(prepare).toBeEnabled());
+    expect(prepare).not.toHaveAttribute("aria-describedby");
+    expect(screen.getByRole("region", { name: "Encrypted device copy" })).toHaveAttribute("aria-busy", "false");
+  });
+
+  it("offers Retry and prevents preparing a copy after an inspection failure", async () => {
+    const user = userEvent.setup();
+    vi.mocked(runtime.inspect)
+      .mockRejectedValueOnce(new Error("storage blocked"))
+      .mockResolvedValueOnce(null);
+    vi.stubGlobal("fetch", vi.fn(async () => authResponse()));
+    render(<OfflinePackManager collectionId={testIds.collection} />);
+
+    const retry = await screen.findByRole("button", { name: "Retry offline access" });
+    const prepare = screen.getByRole("button", { name: "Prepare offline copy" });
+    expect(prepare).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("Retry before preparing a copy.");
+    await user.click(prepare);
+    expect(screen.queryByLabelText("Offline passphrase")).not.toBeInTheDocument();
+
+    await user.click(retry);
+    await waitFor(() => expect(prepare).toBeEnabled());
+    expect(runtime.inspect).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "Retry offline access" })).not.toBeInTheDocument();
+  });
+
   it("fetches the bounded export and saves it with an exact separate passphrase", async () => {
     const user = userEvent.setup();
     const payload = offlineCollectionPackFixture();
@@ -217,5 +257,23 @@ describe("OfflinePackManager", () => {
     expect(
       screen.getByText("Encrypted offline copy removed from this device."),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare offline copy" })).toBeEnabled();
+  });
+
+  it("explains the encryption length limit without byte terminology", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(authResponse()));
+    render(<OfflinePackManager collectionId={testIds.collection} />);
+    await waitFor(() => expect(runtime.inspect).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole("button", { name: "Prepare offline copy" }));
+    await user.type(screen.getByLabelText("Offline passphrase"), "🔐".repeat(65));
+    await user.type(screen.getByLabelText("Confirm offline passphrase"), "🔐".repeat(65));
+    await user.click(screen.getByRole("button", { name: "Save encrypted offline copy" }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This passphrase is too long for encryption. Shorten it or use fewer emoji or non-Latin characters.",
+    );
+    expect(screen.getByLabelText("Offline passphrase")).toHaveFocus();
+    expect(screen.queryByText(/UTF-8 bytes/)).not.toBeInTheDocument();
+    expect(runtime.save).not.toHaveBeenCalled();
   });
 });

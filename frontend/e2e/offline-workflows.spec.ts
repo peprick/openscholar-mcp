@@ -324,6 +324,6 @@ test("library creates collections and exports selected citations", async ({
   expect(await download.failure()).toBeNull();
   await expect(
     page.getByRole("region", { name: "Saved papers" }).getByRole("status"),
-  ).toContainText("Exported 1 selected papers.");
+  ).toContainText("Exported 1 selected paper.");
   await expectNoSeriousAccessibilityViolations(page);
 });

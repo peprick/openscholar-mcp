@@ -60,6 +60,21 @@ select {
   font: inherit;
 }
 
+input::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+h1,
+h2,
+h3 {
+  overflow-wrap: anywhere;
+}
+
+.savePaperForm[hidden] {
+  display: none;
+}
+
 button,
 summary {
   cursor: pointer;
@@ -385,7 +400,7 @@ button:disabled {
 }
 
 .searchBar input::placeholder {
-  color: #89928c;
+  color: var(--ink-faint);
 }
 
 .searchBar:has(input[aria-invalid="true"]),
@@ -646,7 +661,7 @@ button:disabled {
 }
 
 .identifierLookupControl input::placeholder {
-  color: #7a867e;
+  color: var(--ink-faint);
 }
 
 .identifierLookupControl input:focus {

@@ -102,7 +102,7 @@ export function IdentifierLookup(): React.JSX.Element {
       if (!resolution.success) {
         setLookupError({
           identifierInvalid: false,
-          message: "OpenScholar received an unexpected response. Please try again.",
+          message: "This paper could not be opened right now. Please try again.",
         });
         setPending(false);
         return;

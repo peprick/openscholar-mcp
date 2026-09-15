@@ -3,7 +3,7 @@ import type {
   RelatedPapersResponse,
 } from "@/shared/api/schemas";
 import {
-  formatInteger,
+  formatCitationCount,
   formatPublicationDate,
   humanizeEnum,
   identifierHref,
@@ -41,7 +41,7 @@ export function PaperDetails({
             {formatPublicationDate(paper.publicationDate, paper.publicationYear)}
           </span>
           <span>{paper.venueName ?? "Venue unavailable"}</span>
-          <span>{formatInteger(paper.citationCount)} citations</span>
+          <span>{formatCitationCount(paper.citationCount)}</span>
         </div>
       </header>
 
@@ -53,7 +53,7 @@ export function PaperDetails({
             {paper.abstractText !== null ? (
               <p className="abstractText">{paper.abstractText}</p>
             ) : (
-              <p className="inlineNotice">No abstract is stored for this paper.</p>
+              <p className="inlineNotice">An abstract is not available for this paper.</p>
             )}
           </section>
 
@@ -77,7 +77,7 @@ export function PaperDetails({
                 ))}
               </ol>
             ) : (
-              <p className="inlineNotice">No credited authors are stored.</p>
+              <p className="inlineNotice">Author details are not available.</p>
             )}
           </section>
 
@@ -87,7 +87,7 @@ export function PaperDetails({
             <span className="eyebrow">Where this came from</span>
             <h2 id="provenance-heading">Sources</h2>
             <p className="sectionDescription">
-              OpenScholar combines trusted research databases into one paper record.
+              OpenScholar combines information from trusted research sources.
             </p>
             <div className="provenanceList">
               {paper.provenance.map((record) => (
@@ -153,7 +153,7 @@ export function PaperDetails({
                 })}
               </ul>
             ) : (
-              <p>None stored</p>
+              <p>No identifiers available</p>
             )}
           </div>
         </aside>
