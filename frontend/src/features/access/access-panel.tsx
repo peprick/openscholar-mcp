@@ -75,10 +75,12 @@ function verifiedLocationHref(location: PaperAccessLocation): string | null {
 function AccessLocation({
   canonicalBest,
   location,
+  preferredReader,
   readerHref,
 }: {
   canonicalBest: boolean;
   location: PaperAccessLocation;
+  preferredReader: boolean;
   readerHref: Route | null;
 }): React.JSX.Element {
   const href = verifiedLocationHref(location);
@@ -111,21 +113,21 @@ function AccessLocation({
       </dl>
       {href !== null ? (
         <div className="buttonGroup accessLocationActions">
-          {readerHref !== null ? (
-            <Link className="button button--primary" href={readerHref}>
-              Read this PDF
+          {readerHref !== null && !preferredReader ? (
+            <Link className="button button--secondary" href={readerHref}>
+              Read this version
             </Link>
           ) : null}
           <ExternalLink
             className={
               readerHref === null
-                ? "button button--primary"
-                : "button button--ghost"
+                ? "button button--secondary"
+                : "textLink"
             }
             href={href}
           >
             {location.pdfUrl !== null
-              ? "Open original PDF"
+              ? "View original PDF"
               : "Open full-text page"}
           </ExternalLink>
         </div>
@@ -283,10 +285,18 @@ export function AccessPanel({
       </div>
 
       <div className="accessActions">
-        {preferredReaderHref !== null ? (
-          <Link className="button button--primary" href={preferredReaderHref}>
-            Read PDF
-          </Link>
+        {preferredReader !== null && preferredReaderHref !== null ? (
+          <>
+            <Link className="button button--primary" href={preferredReaderHref}>
+              View PDF
+            </Link>
+            <Link
+              className="button button--secondary"
+              href={`${preferredReaderHref}?download=1` as Route}
+            >
+              Download PDF
+            </Link>
+          </>
         ) : null}
         <button
           className={`button ${
@@ -314,6 +324,7 @@ export function AccessPanel({
               canonicalBest={location.id === access.bestLocationId}
               key={location.id}
               location={location}
+              preferredReader={location.id === preferredReader?.locationId}
               readerHref={
                 selectReaderSource(
                   access,

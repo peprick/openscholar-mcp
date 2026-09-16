@@ -1,10 +1,19 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SearchResults } from "@/features/search/search-results";
 import { searchResponseFixture } from "@/test/fixtures";
 
-afterEach(cleanup);
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigation,
+}));
+
+afterEach(() => {
+  cleanup();
+  navigation.push.mockReset();
+});
 
 describe("SearchResults", () => {
   it("shows useful results without exposing cache, provider, or ranking diagnostics", () => {
@@ -38,6 +47,16 @@ describe("SearchResults", () => {
     expect(screen.queryByText(/Score:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Fresh until/)).not.toBeInTheDocument();
     expect(screen.getByText("PDF link found")).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "View PDF: Graph neural networks for molecular property prediction",
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: "Download PDF: Graph neural networks for molecular property prediction",
+      }),
+    ).toBeVisible();
   });
 
   it("explains an intentional local search in plain language", () => {

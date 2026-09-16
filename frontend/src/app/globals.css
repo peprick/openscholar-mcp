@@ -25,6 +25,7 @@
   --radius: 14px;
   --radius-lg: 24px;
   --shell: 1180px;
+  --connectivity-height: 0px;
   color-scheme: light;
 }
 
@@ -480,6 +481,41 @@ button:disabled {
 
 .searchActions .button {
   white-space: nowrap;
+}
+
+.quickFilterRow {
+  border: 0;
+  display: flex;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.checkControl--prominent {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  border-radius: var(--radius-sm);
+  min-height: 50px;
+  padding: 8px 13px;
+}
+
+.checkControl--prominent > span {
+  display: grid;
+  gap: 1px;
+}
+
+.checkControl--prominent strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.checkControl--prominent small {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.checkControl--prominent:has(input:checked) strong,
+.checkControl--prominent:has(input:checked) small {
+  color: var(--green-dark);
 }
 
 .filterPanel {
@@ -1076,6 +1112,37 @@ button:disabled {
   margin-top: 20px;
 }
 
+.resultActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pdfResultActionGroup {
+  display: contents;
+}
+
+.pdfActionMessage {
+  color: var(--ink-faint);
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  margin: 0;
+  text-align: right;
+}
+
+.pdfActionMessage--error {
+  color: var(--danger);
+}
+
+.pdfSourceNote {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  margin: 10px 0 0;
+  text-align: right;
+}
+
 .identifierList {
   display: flex;
   flex-wrap: wrap;
@@ -1424,7 +1491,7 @@ button:disabled {
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   position: sticky;
-  top: 104px;
+  top: calc(104px + var(--connectivity-height));
 }
 
 .metadataCardHeader {
@@ -1636,7 +1703,7 @@ button:disabled {
 }
 
 .accessLocationActions {
-  align-items: stretch;
+  align-items: center;
 }
 
 .readerPage {
@@ -1684,6 +1751,20 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.readerSourceLink {
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+
+.readerDownloadStatus {
+  color: var(--danger);
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  margin: 0;
+  max-width: 360px;
+  text-align: right;
+}
+
 .readerProvenance {
   border-bottom: 1px solid var(--line);
   border-top: 1px solid var(--line);
@@ -1725,7 +1806,7 @@ button:disabled {
   margin-bottom: 12px;
   padding: 9px;
   position: sticky;
-  top: 78px;
+  top: calc(78px + var(--connectivity-height));
   z-index: 5;
 }
 
@@ -1816,8 +1897,9 @@ button:disabled {
   background-size: 100% 32px;
   border-radius: var(--radius-lg);
   display: grid;
-  justify-items: center;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 68vh;
+  min-width: 0;
   overflow: auto;
   padding: clamp(20px, 4vw, 52px);
   position: relative;
@@ -1827,6 +1909,7 @@ button:disabled {
   background: white;
   box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
   display: block;
+  margin-inline: auto;
   max-width: none;
 }
 
@@ -2712,6 +2795,14 @@ button:disabled {
   .readerExternalActions {
     justify-content: flex-start;
   }
+
+  .readerSourceLink {
+    justify-content: flex-start;
+  }
+
+  .readerDownloadStatus {
+    text-align: left;
+  }
 }
 
 @media (max-width: 680px) {
@@ -2891,6 +2982,18 @@ button:disabled {
   .resultFooter {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .resultActions {
+    justify-content: flex-start;
+  }
+
+  .pdfSourceNote {
+    text-align: left;
+  }
+
+  .pdfActionMessage {
+    text-align: left;
   }
 
   .paperHeader h1 {

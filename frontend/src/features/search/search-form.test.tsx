@@ -66,7 +66,7 @@ describe("SearchForm", () => {
       );
       await user.click(
         screen.getByRole("checkbox", {
-          name: "Only show results with a PDF link",
+          name: "PDF link reported only",
         }),
       );
       await user.click(screen.getByRole("button", { name: "Search papers" }));

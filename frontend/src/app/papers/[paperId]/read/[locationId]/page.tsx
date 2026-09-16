@@ -22,12 +22,17 @@ export const metadata: Metadata = {
 
 type ReaderPageProps = {
   params: Promise<{ paperId: string; locationId: string }>;
+  searchParams?: Promise<{ download?: string | string[] }>;
 };
 
 export default async function ReaderPage({
   params,
+  searchParams,
 }: ReaderPageProps): Promise<React.JSX.Element> {
   const { locationId, paperId } = await params;
+  const query: { download?: string | string[] } = await (
+    searchParams ?? Promise.resolve({})
+  );
   const uuid = z.string().uuid();
   if (!uuid.safeParse(paperId).success || !uuid.safeParse(locationId).success) {
     notFound();
@@ -89,12 +94,16 @@ export default async function ReaderPage({
               className="button button--ghost"
               href={verifiedLocation.pdfUrl}
             >
-              Open PDF in a new tab
+              View PDF
             </ExternalLink>
           </div>
         </section>
       ) : (
-        <PdfReader source={source} title={paper.title} />
+        <PdfReader
+          autoDownload={query.download === "1"}
+          source={source}
+          title={paper.title}
+        />
       )}
     </main>
   );

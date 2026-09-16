@@ -112,7 +112,21 @@ test("search keeps diagnostics private while preserving useful next-page context
   await page
     .getByRole("searchbox", { name: "Research topic" })
     .fill("graph neural networks for drug discovery");
+  const pdfFilter = page.getByRole("checkbox", {
+    name: "PDF link reported only",
+  });
+  await expect(pdfFilter).toBeVisible();
+  await pdfFilter.check();
+  const searchRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/searches") &&
+      request.method() === "POST",
+  );
   await page.getByRole("button", { name: "Search papers" }).click();
+
+  expect((await searchRequest).postDataJSON()).toMatchObject({
+    filters: { pdfAvailableOnly: true },
+  });
 
   await expect(page).toHaveURL(`/searches/${ids.search}`);
   await expect(
@@ -127,6 +141,16 @@ test("search keeps diagnostics private while preserving useful next-page context
   await expect(page.getByText("CROSSREF_SYNTHETIC_FAILURE")).toHaveCount(0);
   await expect(page.getByText("Exact Hit", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Provider coverage")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: "View PDF: Graph neural networks for molecular property prediction",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Download PDF: Graph neural networks for molecular property prediction",
+    }),
+  ).toBeVisible();
 
   await page.getByText("Why it matched").click();
   await expect(page.getByText(/Metadata from OpenAlex/)).toBeVisible();
@@ -191,8 +215,14 @@ test("paper sources distinguish readable links from restricted access", async ({
   await expect(page.getByText("Author details")).toBeVisible();
   await expect(page.getByText("Free PDF", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read PDF" }),
+    page.getByRole("link", { name: "View PDF" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Download PDF" }),
+  ).toHaveAttribute(
+    "href",
+    `/papers/${ids.verifiedPaper}/read/${ids.verifiedLocation}?download=1`,
+  );
   await expect(page.getByText("CC-BY-4.0")).toBeVisible();
   await expectNoSeriousAccessibilityViolations(page);
 
@@ -211,7 +241,7 @@ test("paper sources distinguish readable links from restricted access", async ({
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read PDF" }),
+    page.getByRole("link", { name: "View PDF" }),
   ).toHaveCount(0);
   await expect(page.getByText("Cache state")).toHaveCount(0);
   await expect(page.getByText("Access provider coverage")).toHaveCount(0);
@@ -268,6 +298,14 @@ test("reader supports the skip link, focus-preserving page keys, zoom, and visib
   await expect(
     page.getByRole("region", { name: "Accessible text for page 1" }),
   ).toContainText("verified research is readable without provider traffic");
+
+  const downloadReady = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF" }).click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe(
+    "Graph-neural-networks-for-molecular-property-prediction.pdf",
+  );
+  expect(await download.failure()).toBeNull();
   await expectNoSeriousAccessibilityViolations(page);
 });
 

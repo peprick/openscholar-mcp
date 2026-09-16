@@ -52,7 +52,13 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: ["compose-workflow.spec.ts", "reader-mobile.spec.ts"],
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: "reader-mobile.spec.ts",
+      use: { ...devices["Pixel 7"] },
     },
   ],
   webServer: [

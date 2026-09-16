@@ -34,7 +34,11 @@ const pageBoundary = vi.hoisted(() => ({
 vi.mock("@/shared/api/server", () => backend);
 vi.mock("next/navigation", () => ({ notFound: pageBoundary.notFound }));
 vi.mock("@/features/reader/pdf-reader", () => ({
-  PdfReader: (props: { source: ReaderSource; title: string }) => {
+  PdfReader: (props: {
+    autoDownload?: boolean;
+    source: ReaderSource;
+    title: string;
+  }) => {
     pageBoundary.renderReader(props);
     return <div data-testid="pdf-reader">{props.title}</div>;
   },
@@ -70,6 +74,7 @@ describe("ReaderPage", () => {
       "Graph neural networks for molecular property prediction",
     );
     expect(pageBoundary.renderReader).toHaveBeenCalledWith({
+      autoDownload: false,
       source: expect.objectContaining({
         locationId: testIds.location,
         paperId: testIds.paper,
@@ -96,13 +101,29 @@ describe("ReaderPage", () => {
       screen.getByRole("link", { name: "Check access on paper page" }),
     ).toHaveAttribute("href", `/papers/${testIds.paper}`);
     const externalFallback = screen.getByRole("link", {
-      name: /Open PDF in a new tab/,
+      name: /View PDF/,
     });
     expect(externalFallback).toHaveAttribute(
       "href",
       "https://repository.example.edu/items/paper-42.pdf",
     );
     expect(externalFallback).toHaveAttribute("rel", "noopener noreferrer");
+    expect(
+      screen.queryByRole("link", { name: /Download PDF/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("passes a requested download intent to the verified reader", async () => {
+    render(
+      await ReaderPage({
+        ...pageParams(),
+        searchParams: Promise.resolve({ download: "1" }),
+      }),
+    );
+
+    expect(pageBoundary.renderReader).toHaveBeenCalledWith(
+      expect.objectContaining({ autoDownload: true }),
+    );
   });
 
   it("returns not found for an unverified requested location", async () => {
