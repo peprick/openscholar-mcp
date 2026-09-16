@@ -296,6 +296,22 @@ expect_failure \
   "exact fail-closed upstream test command is required"
 
 reset_fixture
+perl -0pi -e \
+  's/github\.com\/quic-go\/quic-go\@v0\.59\.1/github.com\/quic-go\/quic-go\@v0.57.1/' \
+  "${fixture}/deploy/images/caddy/Dockerfile"
+expect_failure \
+  "hardened Caddy module floor cannot be downgraded" \
+  "hardened module graph must pin github.com/quic-go/quic-go@v0.59.1"
+
+reset_fixture
+perl -0pi -e \
+  's/google\.golang\.org\/grpc\@v1\.83\.2/google.golang.org\/grpc\@v1.82.1/' \
+  "${fixture}/deploy/images/blackbox-exporter/Dockerfile"
+expect_failure \
+  "hardened blackbox-exporter module floor cannot be downgraded" \
+  "hardened module graph must pin google.golang.org/grpc@v1.83.2"
+
+reset_fixture
 runtime_fetch_command='n''px --yes @modelcontextprotocol/conformance@0.1.16'
 RUNTIME_FETCH_COMMAND="${runtime_fetch_command}" perl -0pi -e \
   's/pnpm --dir tools\/mcp-conformance exec conformance/$ENV{RUNTIME_FETCH_COMMAND}/' \

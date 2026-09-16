@@ -467,11 +467,12 @@ validate_production_platform_policy() {
 }
 
 validate_hardened_runtime_builds() {
-  local dockerfile context local_ref runtime_user test_command
+  local dockerfile context local_ref runtime_user test_command binary_path image_version
+  local module_pin module module_version
   local security_workflow='.github/workflows/security.yml'
   local operations_validator='scripts/validate-operations.sh'
 
-  while IFS='|' read -r context local_ref runtime_user test_command; do
+  while IFS='|' read -r context local_ref runtime_user test_command binary_path image_version; do
     dockerfile="${context}/Dockerfile"
     [[ -f "${dockerfile}" && ! -L "${dockerfile}" ]] || {
       report_failure "${dockerfile}: hardened runtime Dockerfile is missing or is not regular"
@@ -491,13 +492,43 @@ validate_hardened_runtime_builds() {
       || report_failure "${dockerfile}: final scratch image must copy only the reviewed rootfs"
     grep -Fxq -- "USER ${runtime_user}" "${dockerfile}" \
       || report_failure "${dockerfile}: final runtime must declare USER ${runtime_user}"
+    for module_pin in \
+      'golang.org/x/net@v0.58.0' \
+      'golang.org/x/crypto@v0.55.0' \
+      'golang.org/x/text@v0.41.0' \
+      'google.golang.org/grpc@v1.83.2' \
+      'github.com/quic-go/quic-go@v0.59.1'; do
+      module="${module_pin%@*}"
+      module_version="${module_pin##*@}"
+      grep -Fq -- "${module_pin}" "${dockerfile}" \
+        || report_failure "${dockerfile}: hardened module graph must pin ${module_pin}"
+      grep -Fq -- "test \"\$(go list -m -f '{{.Version}}' ${module})\" = ${module_version}" "${dockerfile}" \
+        || report_failure "${dockerfile}: hardened source graph must prove ${module_pin}"
+      grep -Fq -- "go version -m ${binary_path} | grep -E 'dep[[:space:]]+${module}[[:space:]]+${module_version}'" "${dockerfile}" \
+        || report_failure "${dockerfile}: compiled binary must prove ${module_pin}"
+    done
+    if [[ "${context}" == 'deploy/images/caddy' ]]; then
+      module_pin='github.com/google/cel-go@v0.28.1'
+    else
+      module_pin='github.com/google/cel-go@v0.29.0'
+    fi
+    module="${module_pin%@*}"
+    module_version="${module_pin##*@}"
+    grep -Fq -- "${module_pin}" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened module graph must pin ${module_pin}"
+    grep -Fq -- "test \"\$(go list -m -f '{{.Version}}' ${module})\" = ${module_version}" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened source graph must prove ${module_pin}"
+    grep -Fq -- "go version -m ${binary_path} | grep -E 'dep[[:space:]]+${module}[[:space:]]+${module_version}'" "${dockerfile}" \
+      || report_failure "${dockerfile}: compiled binary must prove ${module_pin}"
+    grep -Fq -- "org.opencontainers.image.version=\"${image_version}\"" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened image version must be ${image_version}"
     grep -Fq -- "context: ${context}" "${security_workflow}" \
       || report_failure "${security_workflow}: ${dockerfile} is absent from the hardened build matrix"
     grep -Fq -- "local_ref: ${local_ref}" "${security_workflow}" \
       || report_failure "${security_workflow}: ${local_ref} is absent from the hardened scan matrix"
   done <<'EOF'
-deploy/images/caddy|openscholar-caddy:security|10001:10001|RUN go test -count=1 -p 1 ./...
-deploy/images/blackbox-exporter|openscholar-blackbox-exporter:security|65534:65534|RUN go test -count=1 ./...
+deploy/images/caddy|openscholar-caddy:security|10001:10001|RUN go test -count=1 -p 1 ./...|/out/rootfs/usr/bin/caddy|v2.11.4-hardened.2
+deploy/images/blackbox-exporter|openscholar-blackbox-exporter:security|65534:65534|RUN go test -count=1 ./...|/out/rootfs/bin/blackbox_exporter|0.28.0-hardened.2
 EOF
 
   grep -Fq -- "image-ref: \${{ matrix.local_ref }}" "${security_workflow}" \
