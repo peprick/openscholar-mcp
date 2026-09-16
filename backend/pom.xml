@@ -36,6 +36,15 @@
 		<postgresql.version>42.7.12</postgresql.version>
 		<spring-ai.version>2.0.0</spring-ai.version>
 		<spring-modulith.version>2.1.0</spring-modulith.version>
+		<!--
+			Spring Boot 4.1.0 manages Tomcat 11.0.22, while the first release
+			containing the fixes for CVE-2026-68525, CVE-2026-65905, and
+			CVE-2026-65182 is 11.0.25. Override only the supported Tomcat BOM
+			property so the application can take those fixes without an unrelated
+			Spring Boot upgrade. The Enforcer regression below keeps every embedded
+			Tomcat module on this reviewed version.
+		-->
+		<tomcat.version>11.0.25</tomcat.version>
 		<maven.compiler.parameters>true</maven.compiler.parameters>
 	</properties>
 	<dependencies>
@@ -179,6 +188,36 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>enforce-reviewed-tomcat-runtime</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireProperty>
+									<property>tomcat.version</property>
+									<regex>11\.0\.25</regex>
+									<regexMessage>tomcat.version must remain at the reviewed 11.0.25 security baseline</regexMessage>
+								</requireProperty>
+								<bannedDependencies>
+									<excludes>
+										<exclude>org.apache.tomcat.embed:*:(,11.0.25)</exclude>
+										<exclude>org.apache.tomcat.embed:*:(11.0.25,)</exclude>
+									</excludes>
+									<searchTransitive>true</searchTransitive>
+									<message>Every embedded Tomcat dependency must resolve to the reviewed 11.0.25 security baseline.</message>
+								</bannedDependencies>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
