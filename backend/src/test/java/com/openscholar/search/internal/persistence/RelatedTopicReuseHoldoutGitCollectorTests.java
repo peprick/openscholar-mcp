@@ -457,6 +457,7 @@ class RelatedTopicReuseHoldoutGitCollectorTests {
 		Path clone = temporaryDirectory.resolve(name);
 		gitSuccess(
 				temporaryDirectory,
+				"-c", "advice.detachedHead=false",
 				"clone", "--quiet", "--no-local", "--no-hardlinks", "--",
 				sourceRoot.toString(), clone.toString());
 		prepareFrozenCandidateEvaluatorCommit(clone);
