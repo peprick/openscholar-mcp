@@ -230,7 +230,7 @@ describe("CollectionManager", () => {
     await user.click(screen.getByRole("button", { name: "Delete collection" }));
 
     expect(
-      await screen.findByText("OpenScholar could not reach the library service."),
+      await screen.findByText("Your library is temporarily unavailable. Please try again."),
     ).toBeInTheDocument();
     expect(completeDeletion).not.toHaveBeenCalled();
     expect(navigation.push).not.toHaveBeenCalled();

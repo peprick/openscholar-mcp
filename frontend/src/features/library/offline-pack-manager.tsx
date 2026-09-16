@@ -29,7 +29,7 @@ async function currentStorageScope(): Promise<string | null> {
   }
   const parsed = authStatusSchema.safeParse(await response.json());
   if (!parsed.success) {
-    throw new Error("OpenScholar received an unexpected sign-in response.");
+    throw new Error("Your sign-in could not be checked. Please try again.");
   }
   return parsed.data.storageScope;
 }
@@ -43,7 +43,7 @@ function passphraseProblem(passphrase: string): string | null {
     return `Use ${MIN_PASSPHRASE_CHARACTERS}–${MAX_PASSPHRASE_CHARACTERS} characters.`;
   }
   if (new TextEncoder().encode(passphrase).byteLength > MAX_PASSPHRASE_BYTES) {
-    return `The passphrase must be at most ${MAX_PASSPHRASE_BYTES} UTF-8 bytes.`;
+    return "This passphrase is too long for encryption. Shorten it or use fewer emoji or non-Latin characters.";
   }
   return null;
 }
@@ -58,7 +58,10 @@ export function OfflinePackManager({
   const formRef = useRef<HTMLFormElement>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [stored, setStored] = useState<boolean | null>(null);
-  const [inspectionComplete, setInspectionComplete] = useState(false);
+  const [inspectionStatus, setInspectionStatus] = useState<
+    "pending" | "ready" | "failed"
+  >("pending");
+  const [inspectionAttempt, setInspectionAttempt] = useState(0);
   const [pending, setPending] = useState<"save" | "remove" | null>(null);
   const [message, setMessage] = useState(
     "Checking encrypted offline storage on this device…",
@@ -69,6 +72,9 @@ export function OfflinePackManager({
     let unsubscribe: () => void = () => undefined;
 
     async function inspectDeviceCopy(): Promise<void> {
+      setInspectionStatus("pending");
+      setStored(null);
+      setMessage("Checking encrypted offline storage on this device…");
       try {
         const [runtime, scope] = await Promise.all([
           loadOfflinePackRuntime(),
@@ -81,8 +87,10 @@ export function OfflinePackManager({
           await runtime.purgeMismatched(scope);
         }
         if (!active) return;
-        setStored((await runtime.inspect()) !== null);
-        setInspectionComplete(true);
+        const deviceCopy = await runtime.inspect();
+        if (!active) return;
+        setStored(deviceCopy !== null);
+        setInspectionStatus("ready");
         setMessage("");
         unsubscribe = runtime.subscribe((event) => {
           if (!active) return;
@@ -92,8 +100,8 @@ export function OfflinePackManager({
       } catch {
         if (!active) return;
         setStored(null);
-        setInspectionComplete(true);
-        setMessage("Encrypted offline storage is not available right now.");
+        setInspectionStatus("failed");
+        setMessage("Offline access could not be checked on this device. Retry before preparing a copy.");
       }
     }
 
@@ -102,10 +110,11 @@ export function OfflinePackManager({
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [inspectionAttempt]);
 
   async function saveOfflineCopy(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (inspectionStatus !== "ready" || pending !== null) return;
     const validationMessage = passphraseProblem(
       passphraseRef.current?.value ?? "",
     );
@@ -158,7 +167,7 @@ export function OfflinePackManager({
         parsed.data.collection.collectionId.toLowerCase() !==
           collectionId.toLowerCase()
       ) {
-        setMessage("The server returned an unexpected offline collection response.");
+        setMessage("The offline copy could not be prepared right now. Please try again.");
         return;
       }
 
@@ -206,6 +215,7 @@ export function OfflinePackManager({
       const runtime = await loadOfflinePackRuntime();
       await runtime.purge();
       setStored(false);
+      setInspectionStatus("ready");
       setMessage("Encrypted offline copy removed from this device.");
     } catch {
       setMessage("The encrypted offline copy could not be removed.");
@@ -215,15 +225,20 @@ export function OfflinePackManager({
   }
 
   return (
-    <section className="offlinePackSettings" aria-labelledby="offline-pack-heading">
+    <section
+      aria-busy={inspectionStatus === "pending" || pending !== null}
+      className="offlinePackSettings"
+      aria-labelledby="offline-pack-heading"
+    >
       <div className="offlinePackSummary">
         <span className="eyebrow">Offline access</span>
         <h2 id="offline-pack-heading">Encrypted device copy</h2>
         <p>
-          Save this collection’s citation and reading metadata for a read-only
-          offline view. PDFs are not included. Only one encrypted collection is
+          Save this collection’s paper details, reading progress, and tags for a
+          read-only offline view. PDFs are not included. Only one encrypted collection is
           kept on this device, so saving replaces the previous copy. It is a
-          manual snapshot that can become out of date, and the browser may evict it.
+          manual copy that can become out of date. Your browser may remove it to
+          free up space.
         </p>
         {stored === true ? (
           <p className="offlinePackStored">An encrypted collection is stored.</p>
@@ -233,14 +248,27 @@ export function OfflinePackManager({
         {!formOpen ? (
           <div className="offlinePackButtons">
             <button
+              aria-describedby={
+                inspectionStatus !== "ready" ? "offline-pack-status" : undefined
+              }
               className="button button--primary"
-              disabled={pending !== null}
+              disabled={pending !== null || inspectionStatus !== "ready"}
               onClick={() => setFormOpen(true)}
               type="button"
             >
               {stored ? "Replace offline copy" : "Prepare offline copy"}
             </button>
-            {stored === true || (inspectionComplete && stored === null) ? (
+            {inspectionStatus === "failed" ? (
+              <button
+                className="button button--secondary"
+                disabled={pending !== null}
+                onClick={() => setInspectionAttempt((attempt) => attempt + 1)}
+                type="button"
+              >
+                Retry offline access
+              </button>
+            ) : null}
+            {stored === true || inspectionStatus === "failed" ? (
               <>
                 {stored === true ? (
                   <a className="button button--secondary" href="/offline.html">
@@ -280,7 +308,7 @@ export function OfflinePackManager({
                 type="password"
               />
               <small>
-                12–128 characters (at most 256 UTF-8 bytes). This is separate
+                Use 12–128 characters. This passphrase is separate
                 from sign-in and cannot be recovered.
               </small>
             </div>
@@ -321,7 +349,7 @@ export function OfflinePackManager({
             </div>
           </form>
         )}
-        <p aria-live="polite" className="libraryMessage" role="status">
+        <p aria-live="polite" className="libraryMessage" id="offline-pack-status" role="status">
           {message}
         </p>
       </div>

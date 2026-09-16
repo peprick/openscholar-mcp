@@ -15,7 +15,7 @@ import {
   type PaperAccessLocation,
   type PaperAccessResponse,
 } from "@/shared/api/schemas";
-import { humanizeEnum } from "@/shared/formatting/display";
+import { humanizeEnum, providerDisplayName } from "@/shared/formatting/display";
 import { Badge } from "@/shared/ui/badge";
 import { ExternalLink } from "@/shared/ui/external-link";
 
@@ -102,7 +102,7 @@ function AccessLocation({
         </div>
         <div>
           <dt>Found through</dt>
-          <dd>{location.source}</dd>
+          <dd>{providerDisplayName(location.source)}</dd>
         </div>
         <div>
           <dt>License</dt>
@@ -142,9 +142,11 @@ function AccessLocation({
           Check access again to open this PDF in the reader.
         </p>
       ) : null}
-      <p className="linkOnlyNote">
-        Opens from the original source. OpenScholar does not store this document.
-      </p>
+      {href !== null ? (
+        <p className="linkOnlyNote">
+          Opens from the original source. OpenScholar does not store this document.
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -211,7 +213,7 @@ export function AccessPanel({
 
       const parsed = paperAccessResponseSchema.safeParse(body);
       if (!parsed.success || parsed.data.paperId !== paperId) {
-        setMessage("OpenScholar received an unexpected response. Please try again.");
+        setMessage("Access could not be checked right now. Please try again.");
         return;
       }
       setReaderSelectionTime(new Date(logicalNow()));

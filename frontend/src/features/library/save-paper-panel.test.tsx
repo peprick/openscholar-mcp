@@ -23,6 +23,29 @@ afterEach(() => {
 });
 
 describe("SavePaperPanel", () => {
+  it("links the disclosure button to a persistent hidden panel", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(collectionListFixture())));
+    render(<SavePaperPanel paperId={testIds.paper} />);
+    const toggle = screen.getByRole("button", { name: "Save to collection" });
+    const panelId = `save-paper-form-${testIds.paper}`;
+    const panel = document.getElementById(panelId);
+    expect(toggle).toHaveAttribute("aria-controls", panelId);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveAttribute("hidden");
+    expect(screen.queryByLabelText("Collection")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    await screen.findByRole("option", { name: "Thesis foundations" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(panel).not.toHaveAttribute("hidden");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveAttribute("hidden");
+    expect(screen.queryByRole("combobox", { name: "Collection" })).not.toBeInTheDocument();
+  });
+
   it("loads collections and sends a normalized, idempotent paper upsert", async () => {
     const user = userEvent.setup();
     const saved = savedPaperFixture({

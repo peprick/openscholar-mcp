@@ -28,7 +28,7 @@ describe("RelatedPapers", () => {
     expect(within(section).queryByText("Postgres Full Text")).not.toBeInTheDocument();
   });
 
-  it("explains when the local catalog has no related matches", () => {
+  it("explains when no related papers have been found", () => {
     render(
       <RelatedPapers
         related={relatedPapersResponseFixture({ results: [] })}
@@ -38,7 +38,7 @@ describe("RelatedPapers", () => {
     const section = screen.getByRole("region", { name: "Related papers" });
     expect(
       within(section).getByText(
-        "No related papers are available in the local catalog yet.",
+        "OpenScholar has not found related papers yet.",
       ),
     ).toBeVisible();
     expect(within(section).queryByRole("list")).not.toBeInTheDocument();
@@ -58,8 +58,19 @@ describe("RelatedPapers", () => {
     );
     expect(
       within(section).queryByText(
-        "No related papers are available in the local catalog yet.",
+        "OpenScholar has not found related papers yet.",
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [1, "1 citation"],
+    [null, "Citation count unavailable"],
+  ])("formats a %s citation count for readers", (citationCount, label) => {
+    const related = relatedPapersResponseFixture();
+    related.results[0]!.citationCount = citationCount;
+    render(<RelatedPapers related={related} />);
+    expect(screen.getByText(label)).toBeVisible();
+    expect(screen.queryByText("Not available citations")).not.toBeInTheDocument();
   });
 });

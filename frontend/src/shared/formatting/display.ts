@@ -35,6 +35,12 @@ export function providerDisplayName(value: string): string {
       return "CORE";
     case "EUROPE_PMC":
       return "Europe PMC";
+    case "UNPAYWALL":
+      return "Unpaywall";
+    case "ARXIV":
+      return "arXiv";
+    case "CROSSREF":
+      return "Crossref";
     default:
       return humanizeEnum(value);
   }
@@ -42,6 +48,11 @@ export function providerDisplayName(value: string): string {
 
 export function formatInteger(value: number | null): string {
   return value === null ? "Not available" : integerFormatter.format(value);
+}
+
+export function formatCitationCount(value: number | null): string {
+  if (value === null) return "Citation count unavailable";
+  return `${integerFormatter.format(value)} ${value === 1 ? "citation" : "citations"}`;
 }
 
 export function formatInstant(value: string | null): string {

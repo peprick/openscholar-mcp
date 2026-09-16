@@ -7,8 +7,8 @@ export default function NotFound(): React.JSX.Element {
         <span className="eyebrow">Not found</span>
         <h1>This research record is not available.</h1>
         <p>
-          The link may be incomplete, or the saved search or paper no longer
-          exists in this database.
+          The link may be incomplete, or the saved search or paper is no longer
+          available in OpenScholar.
         </p>
         <Link className="button button--primary" href="/">
           Start a new search

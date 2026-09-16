@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { RelatedPapersResponse } from "@/shared/api/schemas";
 import {
   authorSummary,
-  formatInteger,
+  formatCitationCount,
   formatPublicationDate,
   humanizeEnum,
 } from "@/shared/formatting/display";
@@ -37,7 +37,7 @@ export function RelatedPapers({
         </p>
       ) : related.results.length === 0 ? (
         <p className="inlineNotice">
-          No related papers are available in the local catalog yet.
+          OpenScholar has not found related papers yet.
         </p>
       ) : (
         <ol className="relatedPaperList">
@@ -63,7 +63,7 @@ export function RelatedPapers({
                     )}
                   </span>
                   <span>{result.venue ?? "Venue unavailable"}</span>
-                  <span>{formatInteger(result.citationCount)} citations</span>
+                  <span>{formatCitationCount(result.citationCount)}</span>
                 </p>
                 <p className="relatedPaperReason">
                   {matchDescription(result.rankingReasons[0]?.feature)}
