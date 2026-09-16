@@ -80,6 +80,27 @@ function outsideCodeFences(markdown) {
     .join("\n");
 }
 
+function withoutInlineHtmlTags(text) {
+  // Consume each tag span once; repeated replacement can join fragments into a new tag.
+  let output = "";
+  let cursor = 0;
+  while (cursor < text.length) {
+    const opening = text.indexOf("<", cursor);
+    if (opening < 0) {
+      output += text.slice(cursor);
+      break;
+    }
+    const closing = text.indexOf(">", opening + 1);
+    if (closing < 0) {
+      output += text.slice(cursor);
+      break;
+    }
+    output += text.slice(cursor, opening);
+    cursor = closing + 1;
+  }
+  return output;
+}
+
 function headingAnchors(absoluteFile) {
   if (anchorsByFile.has(absoluteFile)) return anchorsByFile.get(absoluteFile);
   const markdown = withoutHtmlComments(
@@ -94,8 +115,7 @@ function headingAnchors(absoluteFile) {
     const setext = index + 1 < lines.length && /^\s{0,3}(?:=+|-+)\s*$/.test(lines[index + 1]);
     const heading = atx?.[1] ?? (setext && lines[index].trim() ? lines[index].trim() : null);
     if (heading === null) continue;
-    const slug = heading
-      .replace(/<[^>]+>/g, "")
+    const slug = withoutInlineHtmlTags(heading)
       .replace(/!?\[([^\]]*)]\([^)]*\)/g, "$1")
       .replace(/\\([^\w\s])/g, "$1")
       .toLowerCase()
