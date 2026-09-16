@@ -17,6 +17,7 @@ on:
       - "**/package.json"
       - "backend/pom.xml"
       - "scripts/validate-docs.mjs"
+      - "scripts/test-validate-docs.mjs"
       - "scripts/validate-license-metadata.mjs"
       - "scripts/test-license-metadata.mjs"
       - "scripts/capture-europe-pmc-quality.mjs"
@@ -38,6 +39,7 @@ on:
       - "**/package.json"
       - "backend/pom.xml"
       - "scripts/validate-docs.mjs"
+      - "scripts/test-validate-docs.mjs"
       - "scripts/validate-license-metadata.mjs"
       - "scripts/test-license-metadata.mjs"
       - "scripts/capture-europe-pmc-quality.mjs"
@@ -71,6 +73,9 @@ jobs:
 
       - name: Validate local documentation links
         run: node scripts/validate-docs.mjs
+
+      - name: Mutation-test documentation links and heading anchors
+        run: node scripts/test-validate-docs.mjs
 
       - name: Validate repository licensing metadata
         run: node scripts/validate-license-metadata.mjs

@@ -66,6 +66,7 @@ Documentation changes should validate local targets from the repository root:
 
 ```bash
 node scripts/validate-docs.mjs
+node scripts/test-validate-docs.mjs
 node scripts/validate-license-metadata.mjs
 node scripts/test-license-metadata.mjs
 ```
