@@ -17,11 +17,48 @@ function read(path) {
   return readFileSync(resolve(repositoryRoot, path), "utf8");
 }
 
+function withoutHtmlComments(content, path) {
+  let output = "";
+  let cursor = 0;
+  let depth = 0;
+  let unclosedReported = false;
+  while (cursor < content.length) {
+    const opening = content.indexOf("<!--", cursor);
+    const closing = content.indexOf("-->", cursor);
+    if (depth === 0) {
+      if (opening < 0) {
+        output += content.slice(cursor);
+        break;
+      }
+      output += content.slice(cursor, opening);
+      depth = 1;
+      cursor = opening + 4;
+      continue;
+    }
+    if (opening >= 0 && (closing < 0 || opening < closing)) {
+      depth += 1;
+      cursor = opening + 4;
+      continue;
+    }
+    if (closing < 0) {
+      failures.push(`${path}: malformed HTML comment is not closed`);
+      unclosedReported = true;
+      break;
+    }
+    depth -= 1;
+    cursor = closing + 3;
+    if (depth === 0) output += "\n";
+  }
+  if (depth > 0 && !unclosedReported) {
+    failures.push(`${path}: malformed HTML comment is not closed`);
+  }
+  return output;
+}
+
 function effectiveMarkdown(path) {
-  const withoutComments = read(path).replace(/<!--[\s\S]*?-->/g, "\n");
   const visible = [];
   let fence = null;
-  for (const line of withoutComments.split("\n")) {
+  for (const line of read(path).split("\n")) {
     const marker = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
     if (fence === null && marker !== undefined) {
       fence = { character: marker[0], length: marker.length };
@@ -38,7 +75,11 @@ function effectiveMarkdown(path) {
     }
     visible.push(line);
   }
-  return visible.join("\n");
+  const result = withoutHtmlComments(visible.join("\n"), path);
+  if (result.includes("<!--") || result.includes("-->")) {
+    failures.push(`${path}: unexpected HTML comment marker outside a complete comment`);
+  }
+  return result;
 }
 
 function normalizedVisibleMarkdown(path) {
@@ -212,7 +253,10 @@ function markdownSection(path, heading) {
 }
 
 function directChildXmlBlocks(xml, parentName, childName) {
-  const effectiveXml = xml.replace(/<!--[\s\S]*?-->/g, "");
+  const effectiveXml = withoutHtmlComments(xml, "backend/pom.xml");
+  if (effectiveXml.includes("<!--") || effectiveXml.includes("-->")) {
+    failures.push("backend/pom.xml: unexpected HTML comment marker outside a complete comment");
+  }
   const tokens = /<\/?([A-Za-z_][\w:.-]*)(?:\s[^<>]*?)?\/?>/g;
   const stack = [];
   const blocks = [];

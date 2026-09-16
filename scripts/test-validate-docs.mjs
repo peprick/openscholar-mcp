@@ -82,5 +82,7 @@ expectFailure("renamed target heading", (root) => replace(root, "docs/guide.md",
 expectFailure("fenced heading is not an anchor", (root) => replace(root, "README.md", "(#introduction)", "(docs/guide.md#fenced-heading)"), "missing heading anchor docs/guide.md#fenced-heading");
 expectFailure("missing target file", (root) => replace(root, "README.md", "docs/guide.md#setup", "docs/missing.md#setup"), "missing local target docs/missing.md#setup");
 expectFailure("malformed fragment encoding", (root) => replace(root, "README.md", "(#introduction)", "(#%ZZ)"), "invalid anchor encoding in #%ZZ");
+expectFailure("unterminated HTML comment", (root) => replace(root, "README.md", "<!-- [Ignored comment](missing.md) -->", "<!-- [Ignored comment](missing.md)"), "malformed HTML comment is not closed");
+expectFailure("nested comment smuggling", (root) => replace(root, "README.md", "<!-- [Ignored comment](missing.md) -->", "<!<!-- [Ignored comment](missing.md) -->-->"), "unexpected HTML comment marker outside a complete comment");
 
 console.log(`Documentation link mutation suite passed (${mutationCount} mutations).`);

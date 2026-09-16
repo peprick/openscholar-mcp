@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 
 const repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
   encoding: "utf8",
@@ -23,10 +23,47 @@ let checkedLinks = 0;
 let checkedAnchors = 0;
 const anchorsByFile = new Map();
 
+function withoutHtmlComments(markdown, relativeFile) {
+  let output = "";
+  let cursor = 0;
+  let depth = 0;
+  let unclosedReported = false;
+  while (cursor < markdown.length) {
+    const opening = markdown.indexOf("<!--", cursor);
+    const closing = markdown.indexOf("-->", cursor);
+    if (depth === 0) {
+      if (opening < 0) {
+        output += markdown.slice(cursor);
+        break;
+      }
+      output += markdown.slice(cursor, opening);
+      depth = 1;
+      cursor = opening + 4;
+      continue;
+    }
+    if (opening >= 0 && (closing < 0 || opening < closing)) {
+      depth += 1;
+      cursor = opening + 4;
+      continue;
+    }
+    if (closing < 0) {
+      failures.push(`${relativeFile}: malformed HTML comment is not closed`);
+      unclosedReported = true;
+      break;
+    }
+    depth -= 1;
+    cursor = closing + 3;
+    if (depth === 0) output += "\n";
+  }
+  if (depth > 0 && !unclosedReported) {
+    failures.push(`${relativeFile}: malformed HTML comment is not closed`);
+  }
+  return output;
+}
+
 function outsideCodeFences(markdown) {
   let fence = null;
   return markdown
-    .replace(/<!--[\s\S]*?-->/g, "")
     .split(/\r?\n/)
     .map((line) => {
       const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
@@ -45,7 +82,10 @@ function outsideCodeFences(markdown) {
 
 function headingAnchors(absoluteFile) {
   if (anchorsByFile.has(absoluteFile)) return anchorsByFile.get(absoluteFile);
-  const markdown = outsideCodeFences(readFileSync(absoluteFile, "utf8"));
+  const markdown = withoutHtmlComments(
+    outsideCodeFences(readFileSync(absoluteFile, "utf8")),
+    relative(repositoryRoot, absoluteFile),
+  );
   const anchors = new Set();
   const lines = markdown.split("\n");
   const counts = new Map();
@@ -77,7 +117,13 @@ function headingAnchors(absoluteFile) {
 
 for (const relativeFile of markdownFiles) {
   const absoluteFile = resolve(repositoryRoot, relativeFile);
-  const markdown = outsideCodeFences(readFileSync(absoluteFile, "utf8"));
+  const markdown = withoutHtmlComments(
+    outsideCodeFences(readFileSync(absoluteFile, "utf8")),
+    relativeFile,
+  );
+  if (markdown.includes("<!--") || markdown.includes("-->")) {
+    failures.push(`${relativeFile}: unexpected HTML comment marker outside a complete comment`);
+  }
   const links = markdown.matchAll(/!?\[[^\]]*]\(([^)\n]+)\)/g);
 
   for (const match of links) {

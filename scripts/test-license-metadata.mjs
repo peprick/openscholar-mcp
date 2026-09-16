@@ -213,6 +213,26 @@ expectMutationFailure(
   "standalone line",
 );
 expectMutationFailure(
+  "unterminated README comment",
+  (root) => replace(
+    root,
+    "README.md",
+    "[![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-6b7280.svg)](LICENSE)",
+    "<!--[![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-6b7280.svg)](LICENSE)",
+  ),
+  "malformed HTML comment is not closed",
+);
+expectMutationFailure(
+  "nested README comment smuggling",
+  (root) => replace(
+    root,
+    "README.md",
+    "[![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-6b7280.svg)](LICENSE)",
+    "<!<!-- hidden -->-->[![License: all rights reserved](https://img.shields.io/badge/license-all%20rights%20reserved-6b7280.svg)](LICENSE)",
+  ),
+  "unexpected HTML comment marker outside a complete comment",
+);
+expectMutationFailure(
   "HTML-hidden contribution terms",
   (root) => replace(
     root,
