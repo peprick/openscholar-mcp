@@ -29,11 +29,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.annotation.Transactional;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @Transactional
+@Sql(
+		statements = "TRUNCATE TABLE paper, embedding_profile CASCADE",
+		executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 class PostgresPaperEmbeddingStoreTests {
 
 	private static final Instant NOW = Instant.parse("2026-08-19T12:00:00Z");

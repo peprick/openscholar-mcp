@@ -2,12 +2,13 @@
 
 ## Automated checks
 
-`.github/workflows/security.yml` adds layered dependency, static-analysis, source, and runtime-image gates:
+`.github/workflows/security.yml` adds layered dependency, static-analysis, source, and runtime-image checks while keeping pull-request feedback focused:
 
 - GitHub dependency review rejects newly introduced dependencies with known high/critical severity on pull requests.
-- CodeQL analyzes Java/Kotlin and JavaScript/TypeScript and publishes code-scanning findings.
-- Trivy scans the repository dependency manifests, lockfiles, secrets, and configuration; it uploads severity-limited SARIF and retains a CycloneDX JSON source SBOM for 30 days. The static supply-chain gate requires every SARIF scan to keep the action's output and exit status constrained to its declared high/critical policy.
-- On pull requests, main-branch pushes, the weekly schedule, and manual runs, CI builds and scans the final backend, frontend, project-owned Caddy, and project-owned blackbox-exporter runtime stages. It separately scans the exact digest-pinned PostgreSQL, Prometheus, and Alertmanager images. It generates a CycloneDX SBOM for every image, retains/uploads findings outside pull requests, and enforces the checked-in high/critical Trivy policy in every lane.
+- CodeQL analyzes Java/Kotlin and JavaScript/TypeScript and publishes code-scanning findings, including on pull requests.
+- Heavy Trivy source and image jobs do not run on pull requests. Main-branch pushes and manual runs scan the repository plus the final backend, frontend, project-owned Caddy, and project-owned blackbox-exporter runtime stages, and separately scan the exact digest-pinned PostgreSQL, Prometheus, and Alertmanager images. These lanes fail on unapproved high/critical findings.
+- The weekly Trivy run generates the same severity-limited SARIF and CycloneDX SBOM evidence and retains it for 30 days, but scanner findings are report-only in that scheduled lane. This prevents unchanged findings from producing a failing-run notification every week while keeping uploads available for review. Configuration, exception-expiry, build, and evidence-generation failures remain real failures; only the explicit scanner-outcome gates are skipped on the schedule.
+- The static supply-chain gate requires every SARIF scan to keep the action's output and exit status constrained to its declared high/critical policy and mutation-tests the event boundary described above.
 - On an exact stable release tag or an explicit manual retry from that same tag ref, a separate protected workflow can publish the four project-owned images. It uses a closed image-to-context/repository mapping, source-SHA-only tags, pre-push and exact-registry-digest Trivy gates, keyless Cosign signatures, and separate GitHub provenance and CycloneDX attestations. It produces evidence only and contains no deployment step.
 
 `.github/workflows/operations-validation.yml` runs `scripts/validate-supply-chain.sh` whenever workflows, Dockerfiles, Compose/deployment image references, the Maven Wrapper distribution, or validator scripts change. The portable static gate requires:
@@ -27,11 +28,56 @@ The documentation workflow and clean-source verifier also run `scripts/validate-
 
 `scripts/production-compose.sh` resolves the minimum and observability profiles before every delegated deployment command. It rejects an unexpected service set, a service outside the reviewed `linux/amd64` target, floating or digest-only references, unreviewed third-party substitutions, project-owned images outside the approved repositories, the checked-in `replace-me` values, Compose-global configuration injection, dangerous volume-deleting `down` options, and ambient shell overrides that do not satisfy `deploy/production-images.lock`. The frontend's secret-reading entrypoint is the image default and is also explicit in production Compose, so executable deployment behavior is covered by that image's digest and later signature/attestation.
 
+## Reviewed JavaScript security patches
+
+The 2026-09-15 dependency review keeps the application and conformance toolchain on their existing release lines rather than taking unrelated major upgrades. Next.js and `eslint-config-next` are deliberately aligned at **16.3.4**. The remaining transitive pins live in each package's `pnpm-workspace.yaml`, which pnpm **11.19.0** records in the corresponding lockfile:
+
+| Package | Reviewed version | Why the pin is needed |
+|---|---|---|
+| `next` / `eslint-config-next` | 16.3.4 | Next 16.3.1 is below the 16.3.3 fixes for [Windows-hosted remote code execution](https://github.com/advisories/GHSA-p293-qw3h-jr36) and [AVIF image-optimization remote code execution](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4). Keep the framework and lint configuration on the same patch. |
+| `sharp` | 0.35.4 | Next's optional image dependency must include the [libheif vulnerability fixes](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c). Its platform binaries and libvips dependencies are regenerated together, not edited by hand. |
+| `js-yaml` | 4.3.2 | ESLint's dependency needs the [empty-merge-source CPU exhaustion fix](https://github.com/advisories/GHSA-2883-xcg3-v3hh), even though it is development tooling rather than the serving application. |
+| `hono` | 4.13.5 | The MCP SDK's transitive HTTP framework needs fixes for [static-output traversal](https://github.com/advisories/GHSA-gqvv-2mrq-wpjv), [unbounded body nesting](https://github.com/advisories/GHSA-g6gw-c38x-mqfc), and [fragment/query interpretation differences](https://github.com/advisories/GHSA-crvj-82cr-hjcx). |
+| `fast-uri` | 3.1.6 | The SDK's AJV dependency needs the [IDN canonicalization](https://github.com/advisories/GHSA-5jgf-p345-68v8), [IPv6 normalization](https://github.com/advisories/GHSA-f65p-4m7j-42xc), [repeated percent-decoding](https://github.com/advisories/GHSA-fph4-wmhf-6fwf), and [encoded-scheme normalization](https://github.com/advisories/GHSA-jqff-g426-hqxp) fixes. |
+| `qs` | 6.16.0 | The additional audit found Express's transitive parser below the [array-limit fix](https://github.com/advisories/GHSA-x5fp-wj9c-mxmx) and [attacker-controlled `isBuffer` denial-of-service fix](https://github.com/advisories/GHSA-4mjr-xmp4-gh2g). This compatible 6.x update removes both findings. |
+
+The conformance CLI **0.1.16** and SDK **1.30.0** themselves remain unchanged. These overrides are reproducible security constraints, not vulnerability suppressions. Review and remove an override only when the upstream dependency graph naturally selects a fixed version, regenerate the lockfile with the pinned pnpm release, and rerun the frontend check, dependency audits, and MCP compatibility/conformance lanes. Do not delete an override merely because the installed graph audits clean: the override may be the reason it is clean.
+
+Validation commands:
+
+```bash
+pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+pnpm --dir frontend check
+pnpm --dir frontend audit --audit-level low
+pnpm --dir tools/mcp-conformance install --frozen-lockfile --ignore-scripts
+pnpm --dir tools/mcp-conformance audit --audit-level low
+```
+
+Both dependency graphs reported no known npm advisories after these patches. This is a point-in-time registry result, not a guarantee against unknown vulnerabilities or a substitute for image scanning. Rebuild/redeploy the frontend image to use the patches: updating repository lockfiles does not alter an already running container.
+
+## Reviewed JVM runtime patch
+
+Spring Boot **4.1.0** manages embedded Tomcat **11.0.22**, while the reviewed fixes for CVE-2026-68525, CVE-2026-65905, and CVE-2026-65182 begin at **11.0.25**. The backend therefore overrides only Boot's supported `tomcat.version` property instead of taking an unrelated framework upgrade. A validate-phase Maven Enforcer rule requires the exact reviewed property value and rejects every direct or transitive `org.apache.tomcat.embed` artifact below or above 11.0.25, preventing a mixed or silently drifting runtime.
+
+The effective dependency graph resolves `tomcat-embed-core`, `tomcat-embed-el`, and `tomcat-embed-websocket` to 11.0.25. A negative regression run with `-Dtomcat.version=11.0.24` is expected to fail both the property and dependency constraints. The normal-clone backend verification passed 1,044 tests with 11 intentional skips, and the packaged application JAR was rebuilt successfully. Rebuild and redeploy the backend image to consume this change; changing the POM cannot patch an already running container.
+
 ## Hardened proxy and probe images
 
 The official Caddy and blackbox-exporter runtime images currently fail this repository's high/critical runtime-image policy, so they are not production defaults and have no vulnerability exception. The checked-in [Caddy Dockerfile](../deploy/images/caddy/Dockerfile), [blackbox-exporter Dockerfile](../deploy/images/blackbox-exporter/Dockerfile), and [build notes](../deploy/images/README.md) produce minimal scratch final stages from checksum-pinned source commits and reviewed module graphs. The security workflow's `hardened-runtime-security` matrix runs the complete upstream tests in mandatory build ancestry, validates each checked-in runtime configuration under the intended restrictions, generates an SBOM, and Trivy-scans both local outputs. The protected release workflow repeats the local gate before publishing, then pulls, inspects, and rescans the exact returned digest before signing and attesting it. A successful workflow still does not promote or deploy that digest: an operator must review the retained evidence and manually place all four approved `tag@sha256` references in the ignored `deploy/production.env`. Until then, the example placeholders deliberately block the edge and observability deployment.
 
+The 2026-09-16 hardened.2 review pins and proves `x/net` 0.58.0, `x/crypto` 0.55.0, `x/text` 0.41.0, gRPC 1.83.2, and quic-go 0.59.1 in both compiled binaries. Blackbox-exporter uses cel-go 0.29.0; Caddy remains on compatible cel-go 0.28.1 because 0.29.0 changes the interpreter API used by the reviewed Caddy source commit. Source-module hashes, `go list -m` checks, compiled `go version -m` evidence, image labels, and mutation-tested downgrade guards bind those decisions. Both final scratch images passed their upstream test ancestry and a fresh Trivy 0.70.0 scan with zero fix-available high/critical findings.
+
 Blackbox-exporter `0.28.0` uses an unsigned upstream tag/commit. Its exact commit, source-archive checksum, module-graph hashes, toolchain image, and compiled dependency versions prevent silent drift relative to the reviewed values, but they do not independently authenticate the upstream publisher. Retain that evidence with the release, record this limitation in approval, and prefer signed upstream provenance if it becomes available.
+
+## Known upstream runtime-image blockers
+
+The **2026-09-16** `linux/amd64` review found no safe, all-stable upstream replacement for three externally supplied runtime images. These findings are not hidden by a broad ignore rule, and a strict main/manual/release scan may remain red until upstream publishes a fixed stable artifact or this repository adds a separately reviewed project-owned build:
+
+- The current pgvector PostgreSQL 17 image has two fix-available Debian `libpcre2` findings in addition to the already documented, binary-scoped `gosu` exception. The official `0.8.6-pg17-trixie` alternative is not a remediation: its base still precedes Debian's fixed `libpcre2` revision and its fresh scan contains more high/critical findings.
+- Prometheus stable `v3.13.3` still embeds gRPC `v1.82.1` in both `prometheus` and `promtool`. Only `v3.15.0-rc.0` scanned clean during this review, and a release candidate is not accepted as an automatic production replacement for the stable line.
+- Alertmanager `v0.34.0` remains the latest stable release and embeds vulnerable `x/crypto` and gRPC versions in the production `/bin/alertmanager` binary. The existing OpenVEX statement applies only to the separately scoped `x/mod` findings in unused `/bin/amtool`; it must not suppress findings in the executed service.
+
+Recheck the official [pgvector repository](https://github.com/pgvector/pgvector), [Prometheus releases](https://github.com/prometheus/prometheus/releases), and [Alertmanager releases](https://github.com/prometheus/alertmanager/releases) before changing a pin. Do not move to a prerelease, expand VEX scope, or convert these scans into report-only release gates merely to make CI green. The weekly scheduled lane is already report-only to avoid repetitive failure notifications; protected release evidence remains fail-closed.
 
 ## Scoped vulnerability exceptions
 
@@ -44,9 +90,9 @@ Two scoped exceptions currently expire on **2026-09-22**:
 
 These are not claims that the packages were fixed. Reproduce/review the evidence, replace the image or renew the narrowly scoped decision before expiry, and never use either VEX document for another digest, platform, component, or vulnerability set.
 
-`.github/dependabot.yml` proposes grouped weekly Maven, pnpm/npm, GitHub Actions, and Dockerfile updates. Coordinated production Compose/security-matrix digest bumps remain reviewed maintenance changes. Updates still require normal CI, security review, and domain tests; automatic proposal is not automatic deployment.
+`.github/dependabot.yml` keeps Maven, pnpm/npm, GitHub Actions, and Dockerfile ecosystems registered but sets their version-update pull-request limit to zero. This pauses routine version-update PR creation without disabling default-branch Dependabot security-update PRs when they are enabled in repository settings. Automatic rebasing is disabled for new bot PRs; GitHub may still rebase already-open PRs until 30 days after they were opened, so closing the old routine-update backlog is a separate cleanup. Maintainers can still rebase or recreate a selected update deliberately. To resume routine updates, choose a reviewed cadence, raise the applicable `open-pull-requests-limit` from zero, and update the automation-policy validator and its mutation tests in the same reviewed change. See the [GitHub Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference). Coordinated production Compose/security-matrix digest bumps remain reviewed maintenance changes, and every accepted update still requires normal CI, security review, and domain tests.
 
-`.github/CODEOWNERS` assigns the current repository owner to the full tree and repeats high-risk workflow, dependency, image, migration, deployment, backup, and security-policy paths. It becomes an enforcement boundary only after branch protection requires CODEOWNERS review; replace or extend the handle when maintainership changes.
+`.github/CODEOWNERS` intentionally has no catch-all owner. Automatic review requests are limited to release workflows, the security workflow and policy, vulnerability evidence, the production image boundary, and the scripts that enforce those controls. Routine application and dependency changes rely on required CI and deliberate reviewer assignment instead of emailing the repository owner for every pull request. CODEOWNERS becomes an enforcement boundary only after branch protection requires its review; replace or extend the handle when maintainership changes.
 
 The source SBOM describes dependencies discoverable in the checked-out repository. Image jobs inventory the four project-owned final runtimes and separately record each externally supplied production database/monitoring image. These checked-in jobs and VEX gates are reproducible controls, not evidence that an unpushed revision passed on GitHub, that a local image equals the later registry artifact, or that an expired exception remains acceptable.
 
@@ -72,10 +118,10 @@ Successful workers retain complete per-image evidence, including both gate SARIF
 
 ## Required repository settings
 
-- Branch protection with reviewed pull requests and required backend, frontend, E2E, MCP, operations/supply-chain, CodeQL, and Trivy checks.
+- Branch protection with reviewed pull requests and required backend, frontend, E2E, MCP, operations/supply-chain, dependency-review, and CodeQL checks. Heavy Trivy jobs are intentionally absent from pull requests and therefore must not be configured as required pull-request checks.
 - GitHub secret scanning/push protection and private vulnerability reporting where available.
 - Restricted Actions allow-list, read-only default token, protected `image-release` environment with required reviewers/ref restrictions and `IMAGE_RELEASE_ENABLED=true`, and no long-lived registry/cloud key.
-- CODEOWNERS review for workflows, Dockerfiles, dependency manifests/lockfiles, migrations, deploy files, and security policy.
+- CODEOWNERS review for release/security workflows, vulnerability policy and evidence, hardened runtime definitions, and the production image boundary; required CI plus deliberate reviewer assignment for other changes.
 - Renovation SLA based on exploitability and exposure, not only numeric severity.
 
 The checked-in workflows use immutable third-party action commits, but a commit pin does not establish publisher trust by itself. Configure the organization Actions allow-list, required checks, branch/CODEOWNERS protection, the protected release environment, GHCR policy, and artifact retention before treating a successful run as release evidence. Registry publication is automated; evidence review, manual promotion, deployment-time verification, and the broader hosted launch decision remain external release gates.

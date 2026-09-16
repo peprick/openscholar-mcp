@@ -82,6 +82,7 @@ jobs:
 
   filesystem-security:
     name: Repository vulnerability scan and SBOM
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -109,6 +110,7 @@ jobs:
 
       - name: Scan dependencies, secrets, and configuration
         id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
@@ -120,6 +122,12 @@ jobs:
           limit-severities-for-sarif: true
           output: security-reports/trivy-results.sarif
           exit-code: "1"
+
+      - name: Verify complete security evidence
+        if: always()
+        run: |
+          jq --exit-status '.bomFormat == "CycloneDX"' security-reports/openscholar-source.cdx.json >/dev/null
+          jq --exit-status '.version == "2.1.0" and (.runs | type == "array" and length > 0)' security-reports/trivy-results.sarif >/dev/null
 
       - name: Upload Trivy results to code scanning
         if: always() && hashFiles('security-reports/trivy-results.sarif') != ''
@@ -137,8 +145,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Enforce repository vulnerability gate
+        if: always() && github.event_name != 'schedule'
+        env:
+          REPOSITORY_SCAN_OUTCOME: ${{ steps.trivy.outcome }}
+        run: |
+          if [[ "${REPOSITORY_SCAN_OUTCOME}" != "success" ]]; then
+            echo "The repository contains an unapproved high/critical finding." >&2
+            exit 1
+          fi
+
   container-security:
     name: Runtime image scans and SBOMs
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -210,6 +229,14 @@ jobs:
           output: security-reports/frontend-image.sarif
           exit-code: "1"
 
+      - name: Verify complete security evidence
+        if: always()
+        run: |
+          for image in backend frontend; do
+            jq --exit-status '.bomFormat == "CycloneDX"' "security-reports/openscholar-${image}.cdx.json" >/dev/null
+            jq --exit-status '.version == "2.1.0" and (.runs | type == "array" and length > 0)' "security-reports/${image}-image.sarif" >/dev/null
+          done
+
       - name: Upload backend image findings
         if: always() && github.event_name != 'pull_request' && hashFiles('security-reports/backend-image.sarif') != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
@@ -234,7 +261,7 @@ jobs:
           retention-days: 30
 
       - name: Enforce runtime vulnerability gate
-        if: always()
+        if: always() && github.event_name != 'schedule'
         env:
           BACKEND_SCAN_OUTCOME: ${{ steps.backend_image_scan.outcome }}
           FRONTEND_SCAN_OUTCOME: ${{ steps.frontend_image_scan.outcome }}
@@ -246,6 +273,7 @@ jobs:
 
   hardened-runtime-security:
     name: Hardened runtime scan (${{ matrix.name }})
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -339,6 +367,14 @@ jobs:
           output: security-reports/${{ matrix.name }}-hardened.sarif
           exit-code: "1"
 
+      - name: Verify complete security evidence
+        if: always()
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+        run: |
+          jq --exit-status '.bomFormat == "CycloneDX"' "security-reports/${IMAGE_NAME}-hardened.cdx.json" >/dev/null
+          jq --exit-status '.version == "2.1.0" and (.runs | type == "array" and length > 0)' "security-reports/${IMAGE_NAME}-hardened.sarif" >/dev/null
+
       - name: Upload hardened runtime findings
         if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}-hardened.sarif', matrix.name)) != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
@@ -356,7 +392,7 @@ jobs:
           retention-days: 30
 
       - name: Enforce hardened runtime vulnerability gate
-        if: always()
+        if: always() && github.event_name != 'schedule'
         env:
           IMAGE_SCAN_OUTCOME: ${{ steps.hardened_image_scan.outcome }}
         run: |
@@ -367,6 +403,7 @@ jobs:
 
   third-party-runtime-security:
     name: Third-party runtime scan (${{ matrix.name }})
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -444,6 +481,14 @@ jobs:
           output: security-reports/${{ matrix.name }}.sarif
           exit-code: "1"
 
+      - name: Verify complete security evidence
+        if: always()
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+        run: |
+          jq --exit-status '.bomFormat == "CycloneDX"' "security-reports/${IMAGE_NAME}.cdx.json" >/dev/null
+          jq --exit-status '.version == "2.1.0" and (.runs | type == "array" and length > 0)' "security-reports/${IMAGE_NAME}.sarif" >/dev/null
+
       - name: Upload third-party image findings
         if: always() && github.event_name != 'pull_request' && hashFiles(format('security-reports/{0}.sarif', matrix.name)) != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
@@ -461,7 +506,7 @@ jobs:
           retention-days: 30
 
       - name: Enforce third-party runtime vulnerability gate
-        if: always()
+        if: always() && github.event_name != 'schedule'
         env:
           IMAGE_SCAN_OUTCOME: ${{ steps.third_party_image_scan.outcome }}
         run: |

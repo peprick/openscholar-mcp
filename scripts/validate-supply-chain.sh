@@ -339,6 +339,98 @@ validate_sarif_severity_gates() {
     || report_failure "${security_workflow}: every SARIF scan must limit output and exit status to its declared severity gate"
 }
 
+validate_automation_noise_policy() {
+  local dependabot='.github/dependabot.yml'
+  local codeowners='.github/CODEOWNERS'
+  local security_workflow='.github/workflows/security.yml'
+  local job job_section owned_path
+
+  [[ -f "${dependabot}" && ! -L "${dependabot}" ]] || {
+    report_failure "${dependabot} is missing or is not regular"
+    return
+  }
+  [[ "$(grep -Ec '^[[:space:]]+-[[:space:]]+package-ecosystem:' "${dependabot}")" -eq 6 \
+    && "$(grep -Ec '^[[:space:]]+open-pull-requests-limit:[[:space:]]+0([[:space:]#].*)?$' "${dependabot}")" -eq 6 ]] \
+    || report_failure "${dependabot}: every registered ecosystem must pause routine version-update pull requests"
+  [[ "$(grep -Ec '^[[:space:]]+rebase-strategy:[[:space:]]+disabled([[:space:]#].*)?$' "${dependabot}")" -eq 6 ]] \
+    || report_failure "${dependabot}: every registered ecosystem must disable automatic rebasing"
+  if grep -Eq '^[[:space:]]+target-branch:' "${dependabot}"; then
+    report_failure "${dependabot}: version-update configuration must not redirect away from the security-update default branch"
+  fi
+
+  [[ -f "${codeowners}" && ! -L "${codeowners}" ]] || {
+    report_failure "${codeowners} is missing or is not regular"
+    return
+  }
+  if grep -Eq '^[[:space:]]*(\*|/\*)[[:space:]]+' "${codeowners}"; then
+    report_failure "${codeowners}: a catch-all owner would request review on every pull request"
+  fi
+  for owned_path in \
+    '/.github/CODEOWNERS @peprick' \
+    '/.github/workflows/security.yml @peprick' \
+    '/.github/workflows/operations-validation.yml @peprick' \
+    '/.github/workflows/release-images.yml @peprick' \
+    '/.github/workflows/release-one-image.yml @peprick' \
+    '/security/ @peprick' \
+    '/deploy/production-images.lock @peprick' \
+    '/scripts/production-compose.sh @peprick'; do
+    grep -Fxq -- "${owned_path}" "${codeowners}" \
+      || report_failure "${codeowners}: required sensitive ownership is missing: ${owned_path}"
+  done
+
+  job_section="$(awk '
+    /^  dependency-review:$/ { in_job = 1 }
+    in_job && /^  [a-zA-Z0-9_-]+:$/ && !/^  dependency-review:$/ { exit }
+    in_job { print }
+  ' "${security_workflow}")"
+  if ! grep -Fxq -- '  pull_request:' "${security_workflow}" \
+    || ! grep -Fxq -- "    if: github.event_name == 'pull_request'" <<<"${job_section}" \
+    || ! grep -Fxq -- '          fail-on-severity: high' <<<"${job_section}" \
+    || grep -Eq '^[[:space:]]+continue-on-error:' <<<"${job_section}"; then
+    report_failure "${security_workflow}: pull requests must retain strict dependency review"
+  fi
+
+  job_section="$(awk '
+    /^  codeql:$/ { in_job = 1 }
+    in_job && /^  [a-zA-Z0-9_-]+:$/ && !/^  codeql:$/ { exit }
+    in_job { print }
+  ' "${security_workflow}")"
+  if [[ -z "${job_section}" ]] \
+    || grep -Eq '^    if:|^[[:space:]]+continue-on-error:' <<<"${job_section}"; then
+    report_failure "${security_workflow}: CodeQL must remain strict and available on pull requests"
+  fi
+
+  for job in filesystem-security container-security hardened-runtime-security third-party-runtime-security; do
+    job_section="$(awk -v job="${job}:" '
+      $0 == "  " job { in_job = 1 }
+      in_job && $0 ~ /^  [a-zA-Z0-9_-]+:$/ && $0 != "  " job { exit }
+      in_job { print }
+    ' "${security_workflow}")"
+    [[ -n "${job_section}" ]] \
+      || report_failure "${security_workflow}: heavy security job is missing: ${job}"
+    grep -Fxq -- "    if: github.event_name != 'pull_request'" <<<"${job_section}" \
+      || report_failure "${security_workflow}: heavy security job must not run on pull requests: ${job}"
+    grep -A1 -E '^      - name: Enforce .* vulnerability gate$' <<<"${job_section}" \
+      | grep -Fxq -- "        if: always() && github.event_name != 'schedule'" \
+      || report_failure "${security_workflow}: scheduled scanner findings must be report-only while four push/manual gates remain strict"
+    grep -Fq -- '      - name: Verify complete security evidence' <<<"${job_section}" \
+      || report_failure "${security_workflow}: every heavy scan must fail on missing or invalid security evidence"
+  done
+
+  [[ "$(grep -Fc -- "if: always() && github.event_name != 'schedule'" "${security_workflow}")" -eq 4 ]] \
+    || report_failure "${security_workflow}: scheduled scanner findings must be report-only while four push/manual gates remain strict"
+  awk '
+    /^        id: (trivy|backend_image_scan|frontend_image_scan|hardened_image_scan|third_party_image_scan)$/ {
+      scanner_count++
+      getline
+      if ($0 != "        continue-on-error: true") invalid = 1
+    }
+    END { exit(scanner_count == 5 && !invalid ? 0 : 1) }
+  ' "${security_workflow}" \
+    && [[ "$(grep -Ec '^[[:space:]]+continue-on-error:[[:space:]]+true([[:space:]#].*)?$' "${security_workflow}")" -eq 5 ]] \
+    || report_failure "${security_workflow}: scanner outcomes must be captured before event-specific enforcement"
+}
+
 validate_production_platform_policy() {
   local compose_file='deploy/compose.production.yaml'
   local security_workflow='.github/workflows/security.yml'
@@ -375,11 +467,12 @@ validate_production_platform_policy() {
 }
 
 validate_hardened_runtime_builds() {
-  local dockerfile context local_ref runtime_user test_command
+  local dockerfile context local_ref runtime_user test_command binary_path image_version
+  local module_pin module module_version
   local security_workflow='.github/workflows/security.yml'
   local operations_validator='scripts/validate-operations.sh'
 
-  while IFS='|' read -r context local_ref runtime_user test_command; do
+  while IFS='|' read -r context local_ref runtime_user test_command binary_path image_version; do
     dockerfile="${context}/Dockerfile"
     [[ -f "${dockerfile}" && ! -L "${dockerfile}" ]] || {
       report_failure "${dockerfile}: hardened runtime Dockerfile is missing or is not regular"
@@ -399,13 +492,43 @@ validate_hardened_runtime_builds() {
       || report_failure "${dockerfile}: final scratch image must copy only the reviewed rootfs"
     grep -Fxq -- "USER ${runtime_user}" "${dockerfile}" \
       || report_failure "${dockerfile}: final runtime must declare USER ${runtime_user}"
+    for module_pin in \
+      'golang.org/x/net@v0.58.0' \
+      'golang.org/x/crypto@v0.55.0' \
+      'golang.org/x/text@v0.41.0' \
+      'google.golang.org/grpc@v1.83.2' \
+      'github.com/quic-go/quic-go@v0.59.1'; do
+      module="${module_pin%@*}"
+      module_version="${module_pin##*@}"
+      grep -Fq -- "${module_pin}" "${dockerfile}" \
+        || report_failure "${dockerfile}: hardened module graph must pin ${module_pin}"
+      grep -Fq -- "test \"\$(go list -m -f '{{.Version}}' ${module})\" = ${module_version}" "${dockerfile}" \
+        || report_failure "${dockerfile}: hardened source graph must prove ${module_pin}"
+      grep -Fq -- "go version -m ${binary_path} | grep -E 'dep[[:space:]]+${module}[[:space:]]+${module_version}'" "${dockerfile}" \
+        || report_failure "${dockerfile}: compiled binary must prove ${module_pin}"
+    done
+    if [[ "${context}" == 'deploy/images/caddy' ]]; then
+      module_pin='github.com/google/cel-go@v0.28.1'
+    else
+      module_pin='github.com/google/cel-go@v0.29.0'
+    fi
+    module="${module_pin%@*}"
+    module_version="${module_pin##*@}"
+    grep -Fq -- "${module_pin}" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened module graph must pin ${module_pin}"
+    grep -Fq -- "test \"\$(go list -m -f '{{.Version}}' ${module})\" = ${module_version}" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened source graph must prove ${module_pin}"
+    grep -Fq -- "go version -m ${binary_path} | grep -E 'dep[[:space:]]+${module}[[:space:]]+${module_version}'" "${dockerfile}" \
+      || report_failure "${dockerfile}: compiled binary must prove ${module_pin}"
+    grep -Fq -- "org.opencontainers.image.version=\"${image_version}\"" "${dockerfile}" \
+      || report_failure "${dockerfile}: hardened image version must be ${image_version}"
     grep -Fq -- "context: ${context}" "${security_workflow}" \
       || report_failure "${security_workflow}: ${dockerfile} is absent from the hardened build matrix"
     grep -Fq -- "local_ref: ${local_ref}" "${security_workflow}" \
       || report_failure "${security_workflow}: ${local_ref} is absent from the hardened scan matrix"
   done <<'EOF'
-deploy/images/caddy|openscholar-caddy:security|10001:10001|RUN go test -count=1 -p 1 ./...
-deploy/images/blackbox-exporter|openscholar-blackbox-exporter:security|65534:65534|RUN go test -count=1 ./...
+deploy/images/caddy|openscholar-caddy:security|10001:10001|RUN go test -count=1 -p 1 ./...|/out/rootfs/usr/bin/caddy|v2.11.4-hardened.2
+deploy/images/blackbox-exporter|openscholar-blackbox-exporter:security|65534:65534|RUN go test -count=1 ./...|/out/rootfs/bin/blackbox_exporter|0.28.0-hardened.2
 EOF
 
   grep -Fq -- "image-ref: \${{ matrix.local_ref }}" "${security_workflow}" \
@@ -628,6 +751,7 @@ validate_locked_mcp_conformance_cli
 validate_production_image_preflight
 validate_runtime_scan_coverage
 validate_sarif_severity_gates
+validate_automation_noise_policy
 validate_production_platform_policy
 validate_hardened_runtime_builds
 validate_release_image_workflows

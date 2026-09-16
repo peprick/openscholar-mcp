@@ -1,0 +1,7 @@
+# The upstream conformance CLI and SDK remain on their reviewed versions.
+# Patch only these vulnerable transitive dependencies; see
+# docs/SUPPLY_CHAIN_SECURITY.md for rationale and removal criteria.
+overrides:
+  hono: 4.13.5
+  fast-uri: 3.1.6
+  qs: 6.16.0

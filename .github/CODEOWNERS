@@ -1,1 +1,22 @@
-* @peprick
+# Keep automatic review requests focused on controls that can publish artifacts,
+# change the production image boundary, or weaken security enforcement. Routine
+# application and dependency updates are protected by required CI instead of a
+# repository-wide review request.
+/.github/CODEOWNERS @peprick
+/.github/SECURITY.md @peprick
+/.github/dependabot.yml @peprick
+/.github/workflows/security.yml @peprick
+/.github/workflows/operations-validation.yml @peprick
+/.github/workflows/release-images.yml @peprick
+/.github/workflows/release-one-image.yml @peprick
+/security/ @peprick
+/deploy/compose.production.yaml @peprick
+/deploy/production-images.lock @peprick
+/deploy/images/ @peprick
+/scripts/validate-supply-chain.sh @peprick
+/scripts/test-supply-chain-validator.sh @peprick
+/scripts/production-compose.sh @peprick
+/scripts/test-production-compose.sh @peprick
+/scripts/validate-operations.sh @peprick
+/scripts/validate-vulnerability-exceptions.sh @peprick
+/scripts/verify-vulnerability-exception-runtime.sh @peprick
